@@ -1,0 +1,78 @@
+---
+- name: get secrets from 1password
+  hosts: localhost
+  become: no
+  gather_facts: no
+  tasks:
+    - name: sign in to a 1password account
+      ansible.builtin.shell:
+        cmd: |
+          export OP_DEVICE={{ vault_1password_device_id }}
+          echo {{ vault_1password_master_password }} | op account add \
+            --address {{ vault_1password_subdomain }}.1password.com \
+            --email {{ vault_1password_email_address }} \
+            --secret-key {{ vault_1password_secret_key }} \
+            --signin --raw
+      register: op_session_token
+      changed_when: false
+      no_log: true
+
+    - name: get an ip-address
+      ansible.builtin.shell:
+        cmd: |
+          export OP_SESSION_{{ vault_1password_subdomain }}={{ op_session_token.stdout }}
+          op item get 'Account root' --vault 'Local server' --fields label=IP-address
+      register: ip_address
+      changed_when: false
+      no_log: true
+
+    - name: get a password
+      ansible.builtin.shell:
+        cmd: |
+          export OP_SESSION_{{ vault_1password_subdomain }}={{ op_session_token.stdout }}
+          op item get 'Account root' --vault 'Local server' --fields label=password
+      register: password
+      changed_when: false
+      no_log: true
+
+    - name: add a host to the ansible-playbook in-memory inventory
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ ip_address.stdout }}"
+        ansible_user: root
+        ansible_password: "{{ password.stdout }}"
+      changed_when: false
+      no_log: true
+
+- name: install requirements for ansible
+  hosts: server
+  gather_facts: no
+  tasks:
+    - name: install python3
+      ansible.builtin.raw: |
+        cat > /etc/nixos/python.nix << EOF
+        { pkgs, ... }:
+
+        {
+          environment.systemPackages = with pkgs; [
+            (let
+              my-python-packages = python-packages: with python-packages; [
+              ];
+              python-with-my-packages = python3.withPackages my-python-packages;
+            in
+            python-with-my-packages)
+          ];
+        }
+        EOF
+
+        grep -qxF '      ./python.nix' /etc/nixos/configuration.nix || sed -i '/.\/hardware-configuration.nix/a \      ./python.nix' /etc/nixos/configuration.nix
+
+        nixos-rebuild switch
+      changed_when: false
+
+- name: check connection
+  hosts: server
+  gather_facts: yes
+  tasks:
+    - name: ping host
+      ansible.builtin.ping:
