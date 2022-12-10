@@ -1,2 +1,5 @@
 .vault_password
 host_vars/localhost/vault.yml
+
+id_ed25519*
+hosts

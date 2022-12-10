@@ -28,7 +28,10 @@ USER $USER
 RUN python3 -m pip install ansible-core==$ANSIBLE_CORE_VERSION && \
     find /usr/lib/ -name '__pycache__' -print0 | xargs -0 -n1 sudo rm -rf
 ENV PATH=$PATH:/home/$USER/.local/bin
-RUN ansible-galaxy collection install community.general
+RUN ansible-galaxy collection install \
+      community.general \
+      community.crypto
 ENV ANSIBLE_VAULT_PASSWORD_FILE=.vault_password \
-    ANSIBLE_HOST_KEY_CHECKING=False
+    ANSIBLE_HOST_KEY_CHECKING=False \
+    ANSIBLE_INVENTORY=hosts
 WORKDIR /etc/ansible

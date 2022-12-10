@@ -5,32 +5,34 @@
   gather_facts: no
   tasks:
     - name: sign in to a 1password account
-      ansible.builtin.shell:
-        cmd: |
-          export OP_DEVICE={{ vault_1password_device_id }}
-          echo {{ vault_1password_master_password }} | op account add \
-            --address {{ vault_1password_subdomain }}.1password.com \
-            --email {{ vault_1password_email_address }} \
-            --secret-key {{ vault_1password_secret_key }} \
-            --signin --raw
+      ansible.builtin.shell: |
+        echo {{ vault_1password_master_password }} | op account add \
+          --address {{ vault_1password_subdomain }}.1password.com \
+          --email {{ vault_1password_email_address }} \
+          --secret-key {{ vault_1password_secret_key }} \
+          --signin --raw
+      environment:
+        OP_DEVICE: "{{ vault_1password_device_id }}"
       register: op_session_token
       changed_when: false
       no_log: true
 
     - name: get an ip-address
-      ansible.builtin.shell:
-        cmd: |
-          export OP_SESSION_{{ vault_1password_subdomain }}={{ op_session_token.stdout }}
-          op item get 'Account root' --vault 'Local server' --fields label=IP-address
+      ansible.builtin.command: |
+        op item get 'Account root' \
+          --vault 'Local server' \
+          --fields label=ip-address \
+          --session {{ op_session_token.stdout }}
       register: ip_address
       changed_when: false
       no_log: true
 
     - name: get a password
-      ansible.builtin.shell:
-        cmd: |
-          export OP_SESSION_{{ vault_1password_subdomain }}={{ op_session_token.stdout }}
-          op item get 'Account root' --vault 'Local server' --fields label=password
+      ansible.builtin.command: |
+        op item get 'Account root' \
+          --vault 'Local server' \
+          --fields label=password \
+          --session {{ op_session_token.stdout }}
       register: password
       changed_when: false
       no_log: true
@@ -46,6 +48,7 @@
 
 - name: install requirements for ansible
   hosts: server
+  ignore_unreachable: yes
   gather_facts: no
   tasks:
     - name: install python3
@@ -69,6 +72,145 @@
 
         nixos-rebuild switch
       changed_when: false
+
+- name: configure connection parameters
+  hosts: server
+  gather_facts: no
+  tasks:
+    - name: load localhost variables to define technical account username
+      ansible.builtin.include_vars:
+        file: host_vars/localhost/vault.yml
+
+    # https://github.com/ansible/ansible/issues/77217
+    #- name: generate an openssh keypair
+    #  community.crypto.openssh_keypair:
+    #    type: ed25519
+    #    path: id_ed25519
+    #    comment: "{{ vault_tech_account_name }}"
+    #  delegate_to: localhost
+    #  become: no
+
+    - name: generate an openssh keypair
+      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ vault_tech_account_name }} -q -N ""
+      args:
+        creates: id_ed25519
+      delegate_to: localhost
+      become: no
+
+    - name: read content of a public key
+      ansible.builtin.command: cat id_ed25519.pub
+      register: id_ed25519_pub
+      delegate_to: localhost
+      changed_when: false
+      become: no
+
+    - name: create technical account
+      ansible.builtin.copy:
+        content: |
+          { ... }:
+
+          {
+            users.groups.{{ vault_tech_account_name }} = {};
+            users.users.{{ vault_tech_account_name }} = {
+              isSystemUser = true;
+              group = "{{ vault_tech_account_name }}";
+              extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
+              openssh.authorizedKeys.keys = [ "{{ id_ed25519_pub.stdout }}" ];
+              createHome = true;
+              home = "/home/{{ vault_tech_account_name }}";
+              useDefaultShell = true;
+            };
+          }
+        dest: /etc/nixos/technical-account.nix
+      notify: apply config
+      ignore_unreachable: yes
+
+    - name: allow group wheel to run commands without a password
+      ansible.builtin.blockinfile:
+        path: /etc/nixos/configuration.nix
+        insertbefore: "# List packages"
+        block: |2
+            # Allow people in group wheel to run all commands without a password
+            security.sudo.wheelNeedsPassword = false;
+        marker: "  # {mark} ANSIBLE MANAGED BLOCK WHEEL"
+        backup: yes
+      notify: apply config
+      ignore_unreachable: yes
+
+    - name: insert an empty line after the marker line
+      ansible.builtin.replace:
+        path: /etc/nixos/configuration.nix
+        regexp: "(?<=.\n)  # List packages"
+        replace: "\n  # List packages"
+      ignore_unreachable: yes
+
+    - name: import config
+      ansible.builtin.lineinfile:
+        path: /etc/nixos/configuration.nix
+        insertafter: ".\/python.nix"
+        line: "      ./technical-account.nix"
+      notify: apply config
+      ignore_unreachable: yes
+
+    - name: forbid root login
+      ansible.builtin.replace:
+        path: /etc/nixos/configuration.nix
+        regexp: '(permitRootLogin = ").*(";)'
+        replace: '\1no\2'
+      notify: apply config
+      ignore_unreachable: yes
+
+    - name: check that everything compiles cleanly
+      ansible.builtin.command: nixos-rebuild build
+      changed_when: false
+      ignore_unreachable: yes
+
+    - name: check if item in 1password has been created
+      ansible.builtin.command: |
+        op item get 'Account tech' \
+          --vault 'Local server' \
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
+      register: item_created
+      delegate_to: localhost
+      failed_when: false
+      changed_when: false
+      become: no
+      no_log: true
+
+    - name: create an item in 1password with credentials for technical account
+      ansible.builtin.shell: |
+        op item template get Server --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
+          --title 'Account {{ vault_tech_account_name }}' \
+          username={{ vault_tech_account_name }} \
+          command[text]="ssh {{ vault_tech_account_name }}@{{ hostvars['localhost']['ip_address']['stdout'] }} -i id_ed25519" \
+          [file]=id_ed25519 \
+          [file]=id_ed25519.pub \
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
+      delegate_to: localhost
+      become: no
+      no_log: true
+      when: item_created.rc != 0
+
+    - name: create inventory file
+      ansible.builtin.copy:
+        content: server ansible_host={{ hostvars['localhost']['ip_address']['stdout'] }} ansible_user={{ vault_tech_account_name }} ansible_ssh_private_key_file=id_ed25519
+        dest: hosts
+      delegate_to: localhost
+      become: no
+
+  handlers:
+    - name: apply config
+      ansible.builtin.command: nixos-rebuild switch
+
+  post_tasks:
+    - name: reconfigure in-memory inventory
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ hostvars['localhost']['ip_address']['stdout'] }}"
+        ansible_user: "{{ vault_tech_account_name }}"
+        ansible_ssh_private_key_file: id_ed25519
+      changed_when: false
+      no_log: true
 
 - name: check connection
   hosts: server
