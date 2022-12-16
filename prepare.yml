@@ -1,8 +1,8 @@
 ---
 - name: get secrets from 1password
   hosts: localhost
-  become: no
-  gather_facts: no
+  become: false
+  gather_facts: false
   tasks:
     - name: sign in to a 1password account
       ansible.builtin.shell: |
@@ -37,7 +37,7 @@
       changed_when: false
       no_log: true
 
-    - name: add a host to the ansible-playbook in-memory inventory
+    - name: add a host to the ansible-playbook in-memory inventory (root)
       ansible.builtin.add_host:
         name: server
         ansible_host: "{{ ip_address.stdout }}"
@@ -46,10 +46,27 @@
       changed_when: false
       no_log: true
 
+    - name: check connection to server under root
+      ansible.builtin.ping:
+      delegate_to: server
+      register: root_available
+      ignore_unreachable: true
+
+    - name: add a host to the ansible-playbook in-memory inventory (technical account)
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ ip_address.stdout }}"
+        ansible_user: "{{ vault_tech_account_name }}"
+        ansible_ssh_private_key_file: id_ed25519
+      changed_when: false
+      no_log: true
+      when: root_available.unreachable is defined and
+            root_available.unreachable == true
+
 - name: install requirements for ansible
   hosts: server
-  ignore_unreachable: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   tasks:
     - name: install python3
       ansible.builtin.raw: |
@@ -75,7 +92,8 @@
 
 - name: configure connection parameters
   hosts: server
-  gather_facts: no
+  become: true
+  gather_facts: false
   tasks:
     - name: load localhost variables to define technical account username
       ansible.builtin.include_vars:
@@ -88,26 +106,26 @@
     #    path: id_ed25519
     #    comment: "{{ vault_tech_account_name }}"
     #  delegate_to: localhost
-    #  become: no
+    #  become: false
 
     - name: generate an openssh keypair
       ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ vault_tech_account_name }} -q -N ""
       args:
         creates: id_ed25519
       delegate_to: localhost
-      become: no
+      become: false
 
     - name: read content of a public key
       ansible.builtin.command: cat id_ed25519.pub
       register: id_ed25519_pub
       delegate_to: localhost
       changed_when: false
-      become: no
+      become: false
 
     - name: create technical account
       ansible.builtin.copy:
         content: |
-          { ... }:
+          { pkgs, ... }:
 
           {
             users.groups.{{ vault_tech_account_name }} = {};
@@ -119,11 +137,13 @@
               createHome = true;
               home = "/home/{{ vault_tech_account_name }}";
               useDefaultShell = true;
+              packages = with pkgs; [
+                parted
+              ];
             };
           }
         dest: /etc/nixos/technical-account.nix
       notify: apply config
-      ignore_unreachable: yes
 
     - name: allow group wheel to run commands without a password
       ansible.builtin.blockinfile:
@@ -135,14 +155,12 @@
         marker: "  # {mark} ANSIBLE MANAGED BLOCK WHEEL"
         backup: yes
       notify: apply config
-      ignore_unreachable: yes
 
     - name: insert an empty line after the marker line
       ansible.builtin.replace:
         path: /etc/nixos/configuration.nix
         regexp: "(?<=.\n)  # List packages"
         replace: "\n  # List packages"
-      ignore_unreachable: yes
 
     - name: import config
       ansible.builtin.lineinfile:
@@ -150,7 +168,6 @@
         insertafter: ".\/python.nix"
         line: "      ./technical-account.nix"
       notify: apply config
-      ignore_unreachable: yes
 
     - name: forbid root login
       ansible.builtin.replace:
@@ -158,12 +175,10 @@
         regexp: '(permitRootLogin = ").*(";)'
         replace: '\1no\2'
       notify: apply config
-      ignore_unreachable: yes
 
     - name: check that everything compiles cleanly
       ansible.builtin.command: nixos-rebuild build
       changed_when: false
-      ignore_unreachable: yes
 
     - name: check if item in 1password has been created
       ansible.builtin.command: |
@@ -174,7 +189,7 @@
       delegate_to: localhost
       failed_when: false
       changed_when: false
-      become: no
+      become: false
       no_log: true
 
     - name: create an item in 1password with credentials for technical account
@@ -187,7 +202,7 @@
           [file]=id_ed25519.pub \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       delegate_to: localhost
-      become: no
+      become: false
       no_log: true
       when: item_created.rc != 0
 
@@ -196,25 +211,99 @@
         content: server ansible_host={{ hostvars['localhost']['ip_address']['stdout'] }} ansible_user={{ vault_tech_account_name }} ansible_ssh_private_key_file=id_ed25519
         dest: hosts
       delegate_to: localhost
-      become: no
+      become: false
 
   handlers:
     - name: apply config
       ansible.builtin.command: nixos-rebuild switch
 
-  post_tasks:
-    - name: reconfigure in-memory inventory
-      ansible.builtin.add_host:
-        name: server
-        ansible_host: "{{ hostvars['localhost']['ip_address']['stdout'] }}"
-        ansible_user: "{{ vault_tech_account_name }}"
-        ansible_ssh_private_key_file: id_ed25519
-      changed_when: false
-      no_log: true
-
-- name: check connection
+- name: configure disks
   hosts: server
-  gather_facts: yes
+  become: true
+  gather_facts: true
   tasks:
-    - name: ping host
-      ansible.builtin.ping:
+    - name: find names of all disks
+      ansible.builtin.set_fact:
+        disks_names: "{{ ansible_facts.devices | dict2items |
+                         rejectattr('key', 'match', '^loop.*') |
+                         map(attribute='key') | list }}"
+
+    - name: find ssd root disk
+      ansible.builtin.set_fact:
+        ssd_root_disk: "{{ ansible_facts.devices | dict2items |
+                           selectattr('key', 'match', item) |
+                           selectattr('value.size', 'match', '^111.79 GB') |
+                           map(attribute='key') | join() }}"
+      when: "{{ ansible_facts.devices | dict2items |
+                selectattr('key', 'match', item) |
+                json_query('[*].value.partitions.*.links[].labels[]') | select('match', 'nixos|swap|boot') }}"
+      loop: "{{ disks_names }}"
+
+    - name: find ssd data disk
+      ansible.builtin.set_fact:
+        ssd_data_disk: "{{ ansible_facts.devices | dict2items |
+                           rejectattr('key', 'match', '^loop.*') |
+                           rejectattr('key', 'match', ssd_root_disk) |
+                           selectattr('value.size', 'match', '^111.79 GB') |
+                           map(attribute='key') | join() }}"
+
+    - name: find hdd data disk
+      ansible.builtin.set_fact:
+        hdd_data_disk: "{{ ansible_facts.devices | dict2items |
+                           rejectattr('key', 'match', '^loop.*') |
+                           selectattr('key', 'match', '^sd.*') |
+                           selectattr('value.size', 'match', '^3.64 TB') |
+                           map(attribute='key') | join() }}"
+
+    - name: create gpt partition table
+      community.general.parted:
+        device: "/dev/{{ item }}"
+        label: gpt
+        number: 1
+        state: present
+      loop:
+        - "{{ ssd_data_disk }}"
+        - "{{ hdd_data_disk }}"
+
+    - name: create a ext4 filesystem and add label
+      community.general.filesystem:
+        fstype: ext4
+        dev: "/dev/{{ item.dev }}1"
+        opts: "-L {{ item.label }}"
+      loop:
+        - { dev: "{{ ssd_data_disk }}", label: ssd }
+        - { dev: "{{ hdd_data_disk }}", label: hdd }
+
+    - name: create mount point
+      ansible.builtin.copy:
+        content: |
+          {
+          {%- for i in labels +%}
+            fileSystems."/mnt/{{ i }}" = {
+              device = "/dev/disk/by-label/{{ i }}";
+              fsType = "ext4";
+              options = [ "nofail" ];
+            };
+          {% endfor %}
+          }
+        dest: /etc/nixos/disk.nix
+      vars:
+        labels:
+          - ssd
+          - hdd
+      notify: apply config
+
+    - name: import config
+      ansible.builtin.lineinfile:
+        path: /etc/nixos/configuration.nix
+        insertafter: ".\/technical-account.nix"
+        line: "      ./disk.nix"
+      notify: apply config
+
+    - name: check that everything compiles cleanly
+      ansible.builtin.command: nixos-rebuild build
+      changed_when: false
+
+  handlers:
+    - name: apply config
+      ansible.builtin.command: nixos-rebuild switch

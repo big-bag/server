@@ -25,7 +25,9 @@ RUN apk add --update --no-cache \
     wget https://downloads.1password.com/linux/keys/alpinelinux/support@1password.com-61ddfc31.rsa.pub -P /etc/apk/keys && \
     apk add --update --no-cache 1password-cli
 USER $USER
-RUN python3 -m pip install ansible-core==$ANSIBLE_CORE_VERSION && \
+RUN python3 -m pip install \
+      ansible-core==$ANSIBLE_CORE_VERSION \
+      jmespath==1.0.1 && \
     find /usr/lib/ -name '__pycache__' -print0 | xargs -0 -n1 sudo rm -rf
 ENV PATH=$PATH:/home/$USER/.local/bin
 RUN ansible-galaxy collection install \
