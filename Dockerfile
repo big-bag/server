@@ -11,7 +11,8 @@ RUN apk add --update --no-cache \
       python3 \
       py3-pip \
       sshpass \
-      openssh-client && \
+      openssh-client \
+      git && \
     \
     addgroup -g $GID $GROUP && \
     adduser -h /home/$USER -s /bin/sh -G $GROUP -D -u $UID $USER && \

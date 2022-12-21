@@ -153,3 +153,11 @@ docker run --rm -t \
   ansible:2.14.0 \
     ansible-playbook prepare.yml
 ```
+
+Run a playbook to upgrade NixOS to the latest version
+```fish
+docker run --rm -t \
+  --volume=(pwd):/etc/ansible \
+  ansible:2.14.0 \
+    ansible-playbook prepare.yml --tags upgrade
+```

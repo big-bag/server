@@ -16,6 +16,7 @@
       register: op_session_token
       changed_when: false
       no_log: true
+      tags: always
 
     - name: get an ip-address
       ansible.builtin.command: |
@@ -26,6 +27,7 @@
       register: ip_address
       changed_when: false
       no_log: true
+      tags: always
 
     - name: get a password
       ansible.builtin.command: |
@@ -36,6 +38,7 @@
       register: password
       changed_when: false
       no_log: true
+      tags: always
 
     - name: add a host to the ansible-playbook in-memory inventory (root)
       ansible.builtin.add_host:
@@ -45,12 +48,14 @@
         ansible_password: "{{ password.stdout }}"
       changed_when: false
       no_log: true
+      tags: always
 
     - name: check connection to server under root
       ansible.builtin.ping:
       delegate_to: server
       register: root_available
       ignore_unreachable: true
+      tags: always
 
     - name: add a host to the ansible-playbook in-memory inventory (technical account)
       ansible.builtin.add_host:
@@ -62,6 +67,7 @@
       no_log: true
       when: root_available.unreachable is defined and
             root_available.unreachable == true
+      tags: always
 
 - name: install requirements for ansible
   hosts: server
@@ -89,6 +95,54 @@
 
         nixos-rebuild switch
       changed_when: false
+      tags: always
+
+- name: upgrade nixos
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: find the current version of nixos
+      ansible.builtin.shell: nixos-version | cut -f 1-2 -d "."
+      register: current_version
+      changed_when: false
+      tags: [ never, upgrade ]
+
+    - name: find the latest version of nixos
+      ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
+      register: latest_version
+      delegate_to: localhost
+      changed_when: false
+      become: false
+      tags: [ never, upgrade ]
+
+    - name: try to upgrade without switching to the latest nixos channel
+      ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ latest_nixos_version.stdout }}.tar.gz build
+      register: build_result
+      when: "{{ current_version.stdout < latest_version.stdout }}"
+      tags: [ never, upgrade ]
+
+    - name: display output if warning occurs
+      ansible.builtin.debug:
+        msg: "{{ build_result }}"
+      when:
+        - build_result.changed
+        - "'warning' in build_result.stderr"
+      tags: [ never, upgrade ]
+
+    - name: switch to the latest stable nixos channel for servers
+      ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ latest_nixos_version.stdout }}-small nixos
+      when:
+        - build_result.changed
+        - "'warning' not in build_result.stderr"
+      tags: [ never, upgrade ]
+
+    - name: upgrade nixos to the latest version
+      ansible.builtin.command: nixos-rebuild switch --upgrade
+      when:
+        - build_result.changed
+        - "'warning' not in build_result.stderr"
+      tags: [ never, upgrade ]
 
 - name: configure connection parameters
   hosts: server
@@ -220,8 +274,11 @@
 - name: configure disks
   hosts: server
   become: true
-  gather_facts: true
+  gather_facts: false
   tasks:
+    - name: gathers facts
+      ansible.builtin.setup:
+
     - name: find names of all disks
       ansible.builtin.set_fact:
         disks_names: "{{ ansible_facts.devices | dict2items |
