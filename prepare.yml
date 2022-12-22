@@ -364,3 +364,22 @@
   handlers:
     - name: apply config
       ansible.builtin.command: nixos-rebuild switch
+
+- name: download config
+  hosts: server
+  become: false
+  gather_facts: false
+  tasks:
+    - name: create a directory
+      ansible.builtin.file:
+        path: templates
+        state: directory
+      delegate_to: localhost
+      become: false
+
+    - name: copy config from server to local machine
+      ansible.posix.synchronize:
+        mode: pull
+        src: /etc/nixos/configuration.nix
+        dest: templates
+        rsync_opts: "--ignore-existing"

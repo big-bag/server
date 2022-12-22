@@ -1,5 +1,13 @@
 # Installing NixOS
 
+Server specification
+
+| Hardware  | Configuration                  |
+| :---      | :---                           |
+| Processor | Intel Core i7-4790, 4x3600 MHz |
+| Memory    | 32 GB DDR3 1600 MHz            |
+| Disks     | 120 GB SSD x 2, 4 TB HDD x 1   |
+
 Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
 1. set a password for the `nixos` user
@@ -160,4 +168,13 @@ docker run --rm -t \
   --volume=(pwd):/etc/ansible \
   ansible:2.14.0 \
     ansible-playbook prepare.yml --tags upgrade
+```
+
+# Configuring a server
+
+```fish
+docker run --rm -t \
+  --volume=(pwd):/etc/ansible \
+  ansible:2.14.0 \
+    ansible-playbook site.yml
 ```

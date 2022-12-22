@@ -1,0 +1,21 @@
+---
+- name: configure server
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: upload config
+      ansible.builtin.template:
+        src: "templates/{{ item }}"
+        dest: "/etc/nixos/{{ item }}"
+      notify: apply config
+      loop:
+        - configuration.nix
+
+    - name: check that everything compiles cleanly
+      ansible.builtin.command: nixos-rebuild build
+      changed_when: false
+
+  handlers:
+    - name: apply config
+      ansible.builtin.command: nixos-rebuild switch

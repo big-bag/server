@@ -12,7 +12,8 @@ RUN apk add --update --no-cache \
       py3-pip \
       sshpass \
       openssh-client \
-      git && \
+      git \
+      rsync && \
     \
     addgroup -g $GID $GROUP && \
     adduser -h /home/$USER -s /bin/sh -G $GROUP -D -u $UID $USER && \
@@ -33,7 +34,8 @@ RUN python3 -m pip install \
 ENV PATH=$PATH:/home/$USER/.local/bin
 RUN ansible-galaxy collection install \
       community.general \
-      community.crypto
+      community.crypto \
+      ansible.posix
 ENV ANSIBLE_VAULT_PASSWORD_FILE=.vault_password \
     ANSIBLE_HOST_KEY_CHECKING=False \
     ANSIBLE_INVENTORY=hosts
