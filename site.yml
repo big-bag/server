@@ -4,18 +4,88 @@
   become: true
   gather_facts: false
   tasks:
+    - name: load localhost variables to sign in to a 1password
+      ansible.builtin.include_vars:
+        file: host_vars/localhost/vault.yml
+
+    - name: sign in to a 1password account
+      ansible.builtin.shell: |
+        echo {{ vault_1password_master_password }} | op account add \
+          --address {{ vault_1password_subdomain }}.1password.com \
+          --email {{ vault_1password_email_address }} \
+          --secret-key {{ vault_1password_secret_key }} \
+          --signin --raw
+      environment:
+        OP_DEVICE: "{{ vault_1password_device_id }}"
+      register: op_session_token
+      delegate_to: localhost
+      changed_when: false
+      become: false
+      no_log: true
+
+    - name: get an internal domain name
+      ansible.builtin.command: |
+        op item get 'DNS' \
+          --vault 'Local server' \
+          --fields label='internal domain name' \
+          --session {{ op_session_token.stdout }}
+      register: internal_domain_name
+      delegate_to: localhost
+      changed_when: false
+      become: false
+      no_log: true
+
+    - name: create random but idempotent password
+      ansible.builtin.set_fact:
+        prometheus_basic_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=inventory_hostname) }}"
+
+    - name: create a basic auth password file
+      community.general.htpasswd:
+        path: /root/.basicAuthPasswdFile
+        name: "{{ vault_prometheus_basic_auth_user }}"
+        password: "{{ prometheus_basic_auth_password }}"
+        mode: 0600
+
     - name: upload config
       ansible.builtin.template:
         src: "templates/{{ item }}"
         dest: "/etc/nixos/{{ item }}"
+      register: config
       notify: apply config
       loop:
         - configuration.nix
+        - monitoring.nix
 
     - name: check that everything compiles cleanly
       ansible.builtin.command: nixos-rebuild build
-      changed_when: false
+      when: config.changed
 
   handlers:
     - name: apply config
       ansible.builtin.command: nixos-rebuild switch
+
+  post_tasks:
+    - name: check if item in 1password has been created
+      ansible.builtin.command: |
+        op item get 'Monitoring' \
+          --vault 'Local server' \
+          --session {{ op_session_token.stdout }}
+      register: item_created
+      delegate_to: localhost
+      failed_when: false
+      changed_when: false
+      become: false
+      no_log: true
+
+    - name: create an item in 1password with credentials for monitoring
+      ansible.builtin.shell: |
+        op item template get Login --session {{ op_session_token.stdout }} | op item create --vault 'Local server' - \
+          --title 'Monitoring' \
+          Prometheus.website[url]=http://{{ internal_domain_name.stdout }}/prometheus \
+          Prometheus.username[text]={{ vault_prometheus_basic_auth_user }} \
+          Prometheus.password[password]="{{ prometheus_basic_auth_password }}" \
+          --session {{ op_session_token.stdout }}
+      delegate_to: localhost
+      become: false
+      no_log: true
+      when: item_created.rc != 0

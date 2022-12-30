@@ -137,7 +137,7 @@ docker build --rm --file Dockerfile --tag ansible:2.14.0 .
 
 Create a Vault password file named `.vault_password` and add a password into it
 
-Create encrypted file
+Create an encrypted file
 ```fish
 docker run --rm -ti \
   --volume=(pwd):/etc/ansible \
@@ -152,7 +152,7 @@ Write credentials to access 1Password into variables:
   - `vault_1password_email_address: email@example.com`
   - `vault_1password_secret_key: <value>`
 
-Write a username for a technical account into a variable `vault_tech_account_name`
+Write username for a technical account into a variable `vault_technical_account_name`
 
 Run a playbook to do an initial configuration on a server and configure a local environment
 ```fish
@@ -171,6 +171,16 @@ docker run --rm -t \
 ```
 
 # Configuring a server
+
+Edit an encrypted file
+```fish
+docker run --rm -ti \
+  --volume=(pwd):/etc/ansible \
+  ansible:2.14.0 \
+    ansible-vault edit host_vars/localhost/vault.yml
+```
+
+Write username for a prometheus basic auth user into a variable `vault_prometheus_basic_auth_user`
 
 ```fish
 docker run --rm -t \
