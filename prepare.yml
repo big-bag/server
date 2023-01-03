@@ -105,13 +105,13 @@
   tasks:
     - name: find the current version of nixos
       ansible.builtin.shell: nixos-version | cut -f 1-2 -d "."
-      register: current_version
+      register: nixos_current_version
       changed_when: false
       tags: [ never, upgrade ]
 
     - name: find the latest version of nixos
       ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
-      register: latest_version
+      register: nixos_latest_version
       delegate_to: localhost
       changed_when: false
       become: false
@@ -120,7 +120,7 @@
     - name: try to upgrade without switching to the latest nixos channel
       ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ latest_nixos_version.stdout }}.tar.gz build
       register: build_result
-      when: "{{ current_version.stdout < latest_version.stdout }}"
+      when: nixos_current_version.stdout < nixos_latest_version.stdout
       tags: [ never, upgrade ]
 
     - name: display output if warning occurs
@@ -193,7 +193,9 @@
               home = "/home/{{ vault_technical_account_name }}";
               useDefaultShell = true;
               packages = with pkgs; [
-                parted
+                parted  # for community.general.parted ansible module
+                expect  # to generate ca and self-signed certificate
+                openssl # to generate ca and self-signed certificate
               ];
             };
           }
@@ -297,9 +299,9 @@
                            selectattr('key', 'match', item) |
                            selectattr('value.size', 'match', '^111.79 GB') |
                            map(attribute='key') | join() }}"
-      when: "{{ ansible_facts.devices | dict2items |
-                selectattr('key', 'match', item) |
-                json_query('[*].value.partitions.*.links[].labels[]') | select('match', 'nixos|swap|boot') }}"
+      when: ansible_facts.devices | dict2items |
+            selectattr('key', 'match', item) |
+            json_query('[*].value.partitions.*.links[].labels[]') | select('match', 'nixos|swap|boot')
       loop: "{{ disks_names }}"
 
     - name: find ssd data disk

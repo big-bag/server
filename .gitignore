@@ -3,3 +3,5 @@ host_vars/localhost/vault.yml
 
 id_ed25519*
 hosts
+
+ca.crt

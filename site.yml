@@ -4,6 +4,11 @@
   become: true
   gather_facts: false
   tasks:
+    - name: create a directory
+      ansible.builtin.file:
+        path: /mnt/hdd/src
+        state: directory
+
     - name: load localhost variables to sign in to a 1password
       ansible.builtin.include_vars:
         file: host_vars/localhost/vault.yml
@@ -35,6 +40,107 @@
       become: false
       no_log: true
 
+    - name: check if ca certificate exists on local machine
+      ansible.builtin.stat:
+        path: ca.crt
+      register: ca_crt
+      delegate_to: localhost
+      become: false
+
+    - name: issue a self-signed certificate
+      block:
+        - name: find the latest version of easy-rsa
+          ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/OpenVPN/easy-rsa.git '*[0-9].[0-9].[0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
+          register: easy_rsa_latest_version
+          delegate_to: localhost
+          changed_when: false
+          become: false
+
+        - name: download and extract easy-rsa archive
+          ansible.builtin.unarchive:
+            src: https://github.com/OpenVPN/easy-rsa/releases/download/{{ easy_rsa_latest_version.stdout }}/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}.tgz
+            dest: /mnt/hdd/src
+            remote_src: true
+            owner: root
+            group: root
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
+
+        - name: create easy-rsa vars
+          ansible.builtin.copy:
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars.example
+            dest: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars
+            remote_src: true
+            force: false
+
+        - name: set easy-rsa parameters
+          ansible.builtin.replace:
+            path: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars
+            regexp: "{{ item.regexp }}"
+            replace: "{{ item.replace }}"
+          loop:
+            - { regexp: '#(set_var\sEASYRSA_DN\s+"cn_only")',    replace: '\1'                                   }
+            - { regexp: '#(set_var\sEASYRSA_KEY_SIZE\s+2048)',   replace: '\1'                                   }
+            - { regexp: '#(set_var\sEASYRSA_ALGO\s+rsa)',        replace: '\1'                                   }
+            - { regexp: '#(set_var\sEASYRSA_CA_EXPIRE\s+3650)',  replace: '\1'                                   }
+            - { regexp: '#set_var\sEASYRSA_CERT_EXPIRE\s+825',   replace: 'set_var EASYRSA_CERT_EXPIRE     3650' }
+            - { regexp: '#(set_var\sEASYRSA_CRL_DAYS\s+180)',    replace: '\1'                                   }
+            - { regexp: '#(set_var\sEASYRSA_DIGEST\s+"sha256")', replace: '\1'                                   }
+
+        - name: init pki
+          ansible.builtin.command: ./easyrsa init-pki
+          args:
+            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki
+
+        - name: create a certificate authority
+          ansible.builtin.shell: |
+            spawn ./easyrsa build-ca nopass
+            expect -exact "Common Name (eg: your user, host, or server name) \[Easy-RSA CA\]:"
+            send -- "{{ internal_domain_name.stdout | replace('.',' ') | title }} Root CA\r"
+            expect eof
+          args:
+            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
+            executable: /etc/profiles/per-user/{{ vault_technical_account_name }}/bin/expect
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
+
+        - name: issue an ssl certificate
+          ansible.builtin.command: ./easyrsa --batch build-server-full {{ internal_domain_name.stdout }} nopass
+          args:
+            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name.stdout }}.crt
+
+        - name: copy an ssl certificate to /var folder
+          ansible.builtin.copy:
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name.stdout }}.crt
+            dest: /var/{{ internal_domain_name.stdout }}.crt
+            remote_src: true
+          register: certificate
+
+        - name: copy a private key to /var folder
+          ansible.builtin.copy:
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ internal_domain_name.stdout }}.key
+            dest: /var/{{ internal_domain_name.stdout }}.key
+            remote_src: true
+          register: key
+
+        - name: populate service facts
+          ansible.builtin.service_facts:
+
+        - name: reload service nginx
+          ansible.builtin.systemd:
+            name: nginx.service
+            state: reloaded
+          when:
+            - certificate.changed or key.changed
+            - "'nginx.service' in ansible_facts.services"
+
+        - name: copy ca certificate from server to local machine
+          ansible.posix.synchronize:
+            mode: pull
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
+            dest: ./
+      when: ca_crt.stat.exists == false
+
     - name: create random but idempotent password
       ansible.builtin.set_fact:
         prometheus_basic_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=inventory_hostname) }}"
@@ -48,13 +154,11 @@
 
     - name: upload config
       ansible.builtin.template:
-        src: "templates/{{ item }}"
-        dest: "/etc/nixos/{{ item }}"
+        src: "{{ item }}"
+        dest: "/etc/nixos/"
       register: config
       notify: apply config
-      loop:
-        - configuration.nix
-        - monitoring.nix
+      with_fileglob: templates/*
 
     - name: check that everything compiles cleanly
       ansible.builtin.command: nixos-rebuild build
@@ -81,7 +185,7 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ op_session_token.stdout }} | op item create --vault 'Local server' - \
           --title 'Monitoring' \
-          Prometheus.website[url]=http://{{ internal_domain_name.stdout }}/prometheus \
+          Prometheus.website[url]=https://{{ internal_domain_name.stdout }}/prometheus \
           Prometheus.username[text]={{ vault_prometheus_basic_auth_user }} \
           Prometheus.password[password]="{{ prometheus_basic_auth_password }}" \
           --session {{ op_session_token.stdout }}

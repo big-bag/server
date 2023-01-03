@@ -47,8 +47,6 @@
 
     nginx = {
       virtualHosts."{{ internal_domain_name.stdout }}" = {
-        listen = [ { addr = "*"; port = 80; } ];
-
         locations."/prometheus" = {
           proxyPass = "http://127.0.0.1:${toString config.services.prometheus.port}";
           basicAuthFile = /root/.basicAuthPasswdFile;

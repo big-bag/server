@@ -99,7 +99,30 @@
     permitRootLogin = "no";
   };
 
-  services.nginx.enable = true;
+  security.dhparams = {
+    enable = true;
+    path = "/var/lib/dhparams";
+    stateful = true;
+    defaultBitSize = 2048;
+    params = {
+      nginx = {};
+    };
+  };
+
+  services.nginx = {
+    enable = true;
+    sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
+    virtualHosts."{{ internal_domain_name.stdout }}" = {
+      listen = [
+        { addr = "*"; port = 80; }
+        { addr = "*"; port = 443; ssl = true; }
+      ];
+      kTLS = true;
+      forceSSL = true;
+      sslCertificate = "/var/{{ internal_domain_name.stdout }}.crt";
+      sslCertificateKey = "/var/{{ internal_domain_name.stdout }}.key";
+    };
+  };
 
   # Open ports in the firewall.
   networking.firewall.allowedTCPPorts = [

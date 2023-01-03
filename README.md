@@ -124,9 +124,9 @@ Installing OS:
 9. save credentials into 1Password
    * vault: `Local server`
      * item: `Account root`
-       * username: root
-       * password: [ROOT_USER_PASSWORD]
-       * ip-address: [SERVER_IP_ADDRESS]
+       * username[text]: root
+       * password[password]: [ROOT_USER_PASSWORD]
+       * ip-address[text]: [SERVER_IP_ADDRESS]
 
 # Setting up a local environment and preparing a server
 
@@ -172,6 +172,11 @@ docker run --rm -t \
 
 # Configuring a server
 
+Save internal domain name into 1Password
+* vault: `Local server`
+  * item: `DNS`
+    * internal domain name[text]: example.com
+
 Edit an encrypted file
 ```fish
 docker run --rm -ti \
@@ -188,3 +193,7 @@ docker run --rm -t \
   ansible:2.14.0 \
     ansible-playbook site.yml
 ```
+
+Import certificate authority in browser
+
+For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
