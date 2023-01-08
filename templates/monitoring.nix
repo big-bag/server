@@ -11,7 +11,7 @@
       enable = true;
       listenAddress = "127.0.0.1";
       port = 9090;
-      webExternalUrl = "http://{{ internal_domain_name.stdout }}/prometheus";
+      webExternalUrl = "http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus";
       stateDir = "prometheus2";
       retentionTime = "15d";
       checkConfig = true;
@@ -70,12 +70,12 @@
           protocol = "http";
           http_addr = "127.0.0.1";
           http_port = 3000;
-          domain = "{{ internal_domain_name.stdout }}";
+          domain = "{{ hostvars['localhost']['internal_domain_name'] }}";
           root_url = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
           enable_gzip = true;
         };
         security = {
-          admin_user = "{{ vault_grafana_admin_user }}";
+          admin_user = "{{ hostvars['localhost']['grafana_auth_user'] }}";
           admin_password = "$__file{/var/.grafanaAdminPassword}";
         };
         database = {
@@ -126,7 +126,7 @@
         servers = { "127.0.0.1:${toString config.services.grafana.settings.server.http_port}" = {}; };
       };
 
-      virtualHosts."{{ internal_domain_name.stdout }}" = {
+      virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
         locations."/prometheus" = {
           proxyPass     = "http://127.0.0.1:${toString config.services.prometheus.port}";
           basicAuthFile = /root/.prometheusBasicAuthPasswordFile;

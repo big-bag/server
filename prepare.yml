@@ -1,5 +1,5 @@
 ---
-- name: get secrets from 1password
+- name: get secrets from 1password and configure in-memory inventory
   hosts: localhost
   become: false
   gather_facts: false
@@ -18,34 +18,34 @@
       no_log: true
       tags: always
 
-    - name: get an ip-address
+    - name: get secrets from 1password (1/2)
       ansible.builtin.command: |
-        op item get 'Account root' \
+        op item get 'Secrets (manually)' \
           --vault 'Local server' \
-          --fields label=ip-address \
+          --fields label={{ item }} \
           --session {{ op_session_token.stdout }}
-      register: ip_address
+      loop:
+        - "'Root account'.ip-address"
+        - "'Root account'.password"
+        - "'Technical accounts'.'nixos technical account name'"
+      register: secrets
       changed_when: false
       no_log: true
       tags: always
 
-    - name: get a password
-      ansible.builtin.command: |
-        op item get 'Account root' \
-          --vault 'Local server' \
-          --fields label=password \
-          --session {{ op_session_token.stdout }}
-      register: password
-      changed_when: false
-      no_log: true
+    - name: get secrets from 1password (2/2)
+      ansible.builtin.set_fact:
+        server_ip_address: "{{ secrets.results[0].stdout }}"
+        nixos_root_password: "{{ secrets.results[1].stdout }}"
+        nixos_technical_account_name: "{{ secrets.results[2].stdout }}"
       tags: always
 
     - name: add a host to the ansible-playbook in-memory inventory (root)
       ansible.builtin.add_host:
         name: server
-        ansible_host: "{{ ip_address.stdout }}"
+        ansible_host: "{{ server_ip_address }}"
         ansible_user: root
-        ansible_password: "{{ password.stdout }}"
+        ansible_password: "{{ nixos_root_password }}"
       changed_when: false
       no_log: true
       tags: always
@@ -60,8 +60,8 @@
     - name: add a host to the ansible-playbook in-memory inventory (technical account)
       ansible.builtin.add_host:
         name: server
-        ansible_host: "{{ ip_address.stdout }}"
-        ansible_user: "{{ vault_technical_account_name }}"
+        ansible_host: "{{ server_ip_address }}"
+        ansible_user: "{{ nixos_technical_account_name }}"
         ansible_ssh_private_key_file: id_ed25519
         ansible_python_interpreter: /run/current-system/sw/bin/python
       changed_when: false
@@ -151,21 +151,17 @@
   become: true
   gather_facts: false
   tasks:
-    - name: load localhost variables to define technical account username
-      ansible.builtin.include_vars:
-        file: host_vars/localhost/vault.yml
-
     # https://github.com/ansible/ansible/issues/77217
     #- name: generate an openssh keypair
     #  community.crypto.openssh_keypair:
     #    type: ed25519
     #    path: id_ed25519
-    #    comment: "{{ vault_technical_account_name }}"
+    #    comment: "{{ hostvars['localhost']['nixos_technical_account_name'] }}"
     #  delegate_to: localhost
     #  become: false
 
     - name: generate an openssh keypair
-      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ vault_technical_account_name }} -q -N ""
+      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ hostvars['localhost']['nixos_technical_account_name'] }} -q -N ""
       args:
         creates: id_ed25519
       delegate_to: localhost
@@ -184,14 +180,14 @@
           { pkgs, ... }:
 
           {
-            users.groups.{{ vault_technical_account_name }} = {};
-            users.users.{{ vault_technical_account_name }} = {
+            users.groups.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {};
+            users.users.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {
               isSystemUser = true;
-              group = "{{ vault_technical_account_name }}";
+              group = "{{ hostvars['localhost']['nixos_technical_account_name'] }}";
               extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
               openssh.authorizedKeys.keys = [ "{{ id_ed25519_pub.stdout }}" ];
               createHome = true;
-              home = "/home/{{ vault_technical_account_name }}";
+              home = "/home/{{ hostvars['localhost']['nixos_technical_account_name'] }}";
               useDefaultShell = true;
               packages = with pkgs; [
                 parted  # for community.general.parted ansible module
@@ -249,7 +245,7 @@
   post_tasks:
     - name: check if item in 1password has been created
       ansible.builtin.command: |
-        op item get 'Account tech' \
+        op item get 'NixOS technical account (generated)' \
           --vault 'Local server' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       register: item_created
@@ -262,9 +258,8 @@
     - name: create an item in 1password with credentials for technical account
       ansible.builtin.shell: |
         op item template get Server --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
-          --title 'Account {{ vault_technical_account_name }}' \
-          username={{ vault_technical_account_name }} \
-          command[text]="ssh {{ vault_technical_account_name }}@{{ hostvars['localhost']['ip_address']['stdout'] }} -i id_ed25519" \
+          --title 'NixOS technical account (generated)' \
+          command[text]="ssh {{ hostvars['localhost']['nixos_technical_account_name'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
           [file]=id_ed25519 \
           [file]=id_ed25519.pub \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -277,8 +272,8 @@
       ansible.builtin.copy:
         content: >
           server
-          ansible_host={{ hostvars['localhost']['ip_address']['stdout'] }}
-          ansible_user={{ vault_technical_account_name }}
+          ansible_host={{ hostvars['localhost']['server_ip_address'] }}
+          ansible_user={{ hostvars['localhost']['nixos_technical_account_name'] }}
           ansible_ssh_private_key_file=id_ed25519
           ansible_python_interpreter=/run/current-system/sw/bin/python
         dest: hosts

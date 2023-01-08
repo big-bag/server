@@ -1,4 +1,44 @@
 ---
+- name: get secrets from 1password
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+    - name: sign in to a 1password account
+      ansible.builtin.shell: |
+        echo {{ vault_1password_master_password }} | op account add \
+          --address {{ vault_1password_subdomain }}.1password.com \
+          --email {{ vault_1password_email_address }} \
+          --secret-key {{ vault_1password_secret_key }} \
+          --signin --raw
+      environment:
+        OP_DEVICE: "{{ vault_1password_device_id }}"
+      register: op_session_token
+      changed_when: false
+      no_log: true
+
+    - name: get secrets from 1password (1/2)
+      ansible.builtin.command: |
+        op item get 'Secrets (manually)' \
+          --vault 'Local server' \
+          --fields label={{ item }} \
+          --session {{ op_session_token.stdout }}
+      loop:
+        - "Domains.'internal domain name'"
+        - "'Technical accounts'.'nixos technical account name'"
+        - "'Technical accounts'.'prometheus auth user'"
+        - "'Technical accounts'.'grafana auth user'"
+      register: secrets
+      changed_when: false
+      no_log: true
+
+    - name: get secrets from 1password (2/2)
+      ansible.builtin.set_fact:
+        internal_domain_name: "{{ secrets.results[0].stdout }}"
+        nixos_technical_account_name: "{{ secrets.results[1].stdout }}"
+        prometheus_auth_user: "{{ secrets.results[2].stdout }}"
+        grafana_auth_user: "{{ secrets.results[3].stdout }}"
+
 - name: configure server
   hosts: server
   become: true
@@ -11,37 +51,6 @@
       loop:
         - /mnt/hdd/src
         - /mnt/ssd/monitoring
-
-    - name: load localhost variables to sign in to a 1password
-      ansible.builtin.include_vars:
-        file: host_vars/localhost/vault.yml
-
-    - name: sign in to a 1password account
-      ansible.builtin.shell: |
-        echo {{ vault_1password_master_password }} | op account add \
-          --address {{ vault_1password_subdomain }}.1password.com \
-          --email {{ vault_1password_email_address }} \
-          --secret-key {{ vault_1password_secret_key }} \
-          --signin --raw
-      environment:
-        OP_DEVICE: "{{ vault_1password_device_id }}"
-      register: op_session_token
-      delegate_to: localhost
-      changed_when: false
-      become: false
-      no_log: true
-
-    - name: get an internal domain name
-      ansible.builtin.command: |
-        op item get 'DNS' \
-          --vault 'Local server' \
-          --fields label='internal domain name' \
-          --session {{ op_session_token.stdout }}
-      register: internal_domain_name
-      delegate_to: localhost
-      changed_when: false
-      become: false
-      no_log: true
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -101,30 +110,30 @@
           ansible.builtin.shell: |
             spawn ./easyrsa build-ca nopass
             expect -exact "Common Name (eg: your user, host, or server name) \[Easy-RSA CA\]:"
-            send -- "{{ internal_domain_name.stdout | replace('.',' ') | title }} Root CA\r"
+            send -- "{{ hostvars['localhost']['internal_domain_name'] | replace('.',' ') | title }} Root CA\r"
             expect eof
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            executable: /etc/profiles/per-user/{{ vault_technical_account_name }}/bin/expect
+            executable: /etc/profiles/per-user/{{ hostvars['localhost']['nixos_technical_account_name'] }}/bin/expect
             creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
 
         - name: issue an ssl certificate
-          ansible.builtin.command: ./easyrsa --batch build-server-full {{ internal_domain_name.stdout }} nopass
+          ansible.builtin.command: ./easyrsa --batch build-server-full {{ hostvars['localhost']['internal_domain_name'] }} nopass
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name.stdout }}.crt
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
 
         - name: copy an ssl certificate to /var folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name.stdout }}.crt
-            dest: /var/{{ internal_domain_name.stdout }}.crt
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
+            dest: /var/{{ hostvars['localhost']['internal_domain_name'] }}.crt
             remote_src: true
           register: certificate
 
         - name: copy a private key to /var folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ internal_domain_name.stdout }}.key
-            dest: /var/{{ internal_domain_name.stdout }}.key
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ hostvars['localhost']['internal_domain_name'] }}.key
+            dest: /var/{{ hostvars['localhost']['internal_domain_name'] }}.key
             remote_src: true
           register: key
 
@@ -163,7 +172,7 @@
     - name: create a basic auth password file to access prometheus
       community.general.htpasswd:
         path: /root/.prometheusBasicAuthPasswordFile
-        name: "{{ vault_prometheus_basic_auth_user }}"
+        name: "{{ hostvars['localhost']['prometheus_auth_user'] }}"
         password: "{{ prometheus_auth_password }}"
         mode: 0600
 
@@ -254,9 +263,9 @@
   post_tasks:
     - name: check if item in 1password has been created
       ansible.builtin.command: |
-        op item get 'Monitoring' \
+        op item get 'Monitoring (generated)' \
           --vault 'Local server' \
-          --session {{ op_session_token.stdout }}
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       register: item_created
       delegate_to: localhost
       failed_when: false
@@ -266,15 +275,15 @@
 
     - name: create an item in 1password with credentials for monitoring
       ansible.builtin.shell: |
-        op item template get Login --session {{ op_session_token.stdout }} | op item create --vault 'Local server' - \
-          --title 'Monitoring' \
-          Prometheus.website[url]=https://{{ internal_domain_name.stdout }}/prometheus \
-          Prometheus.username[text]={{ vault_prometheus_basic_auth_user }} \
+        op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
+          --title 'Monitoring (generated)' \
+          Prometheus.website[url]=https://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus \
+          Prometheus.username[text]={{ hostvars['localhost']['prometheus_auth_user'] }} \
           Prometheus.password[password]='{{ prometheus_auth_password }}' \
-          Grafana.website[url]=https://{{ internal_domain_name.stdout }}/grafana \
-          Grafana.username[text]={{ vault_grafana_admin_user }} \
+          Grafana.website[url]=https://{{ hostvars['localhost']['internal_domain_name'] }}/grafana \
+          Grafana.username[text]={{ hostvars['localhost']['grafana_auth_user'] }} \
           Grafana.password[password]='{{ grafana_auth_password }}' \
-          --session {{ op_session_token.stdout }}
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       delegate_to: localhost
       become: false
       no_log: true

@@ -121,91 +121,79 @@ Installing OS:
    ssh root@[SERVER_IP_ADDRESS]
    ```
 
-9. save credentials into 1Password
-   * vault: `Local server`
-     * item: `Account root`
-       * username[text]: root
-       * password[password]: [ROOT_USER_PASSWORD]
-       * ip-address[text]: [SERVER_IP_ADDRESS]
-
 # Setting up a local environment and preparing a server
 
-Build an image
-```fish
-docker build --rm --file Dockerfile --tag ansible:2.14.0 .
-```
+1. save secrets in 1Password
+   * vault: `Local server`
+     * item: `Secrets (manually)`
+       * section: `Root account`
+         * username[text]: root
+         * password[password]: [ROOT_USER_PASSWORD]
+         * ip-address[text]: [SERVER_IP_ADDRESS]
+       * section: `Technical accounts`
+         * nixos technical account name[text]: [USERNAME]
+         * prometheus auth user[text]: [USERNAME]
+         * grafana auth user[text]: [USERNAME]
+       * section: `Domains`
+         * internal domain name[text]: example.com
 
-Create a Vault password file named `.vault_password` and add a password into it
+2. build an image
+   ```fish
+   docker build --rm --file Dockerfile --tag ansible:2.14.0 .
+   ```
 
-Create an encrypted file
-```fish
-docker run --rm -ti \
-  --volume=(pwd):/etc/ansible \
-  ansible:2.14.0 \
-    ansible-vault create host_vars/localhost/vault.yml
-```
+3. create a Vault password file named `.vault_password` and add a password in it
 
-Write credentials to access 1Password into variables:
-  - `vault_1password_device_id: <value>` - value can be found in `~/.config/op/config` on Alpine linux
-  - `vault_1password_master_password: 'S0me P@ssword'`
-  - `vault_1password_subdomain: my`
-  - `vault_1password_email_address: email@example.com`
-  - `vault_1password_secret_key: <value>`
+4. create an encrypted file
+   ```fish
+   docker run --rm -ti \
+     --volume=(pwd):/etc/ansible \
+     ansible:2.14.0 \
+       ansible-vault create host_vars/localhost/vault.yml
+   ```
 
-Write username for a technical account into a variable `vault_technical_account_name`
+5. write credentials to access 1Password into variables:
+   - vault_1password_device_id: `<value>`, value can be found in `~/.config/op/config` on Alpine linux
+   - vault_1password_master_password: `'S0me P@ssword'`
+   - vault_1password_subdomain: `my`
+   - vault_1password_email_address: `email@example.com`
+   - vault_1password_secret_key: `<value>`
 
-Run a playbook to do an initial configuration on a server and configure a local environment
-```fish
-docker run --rm -t \
-  --volume=(pwd):/etc/ansible \
-  ansible:2.14.0 \
-    ansible-playbook prepare.yml
-```
+6. run a playbook to do an initial configuration on a server and configure a local environment
+   ```fish
+   docker run --rm -t \
+     --volume=(pwd):/etc/ansible \
+     ansible:2.14.0 \
+       ansible-playbook prepare.yml
+   ```
 
-Run a playbook to upgrade NixOS to the latest version
-```fish
-docker run --rm -t \
-  --volume=(pwd):/etc/ansible \
-  ansible:2.14.0 \
-    ansible-playbook prepare.yml --tags upgrade
-```
+7. run a playbook to upgrade NixOS to the latest version
+   ```fish
+   docker run --rm -t \
+     --volume=(pwd):/etc/ansible \
+     ansible:2.14.0 \
+       ansible-playbook prepare.yml --tags upgrade
+   ```
 
 # Configuring a server
 
-Save internal domain name into 1Password
-* vault: `Local server`
-  * item: `DNS`
-    * internal domain name[text]: example.com
+1. run a playbook to configure a server
+   ```fish
+   docker run --rm -t \
+     --volume=(pwd):/etc/ansible \
+     ansible:2.14.0 \
+       ansible-playbook site.yml
+   ```
 
-Edit an encrypted file
-```fish
-docker run --rm -ti \
-  --volume=(pwd):/etc/ansible \
-  ansible:2.14.0 \
-    ansible-vault edit host_vars/localhost/vault.yml
-```
+2. import certificate authority in browser
 
-Write username for a prometheus basic auth user into a variable `vault_prometheus_basic_auth_user`
+   For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
 
-Write username for a grafana admin user into a variable `vault_grafana_admin_user`
+3. grafana dashboard sources
 
-Run a playbook to configure a server
-```fish
-docker run --rm -t \
-  --volume=(pwd):/etc/ansible \
-  ansible:2.14.0 \
-    ansible-playbook site.yml
-```
-
-Import certificate authority in browser
-
-For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
-
-Grafana dashboard sources
-
-| Dashboard | Source (based on) |
-| :--- | :--- |
-| Prometheus Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
-| Prometheus 2.0 Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
-| Grafana metrics.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
-| Node Exporter.json | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ and https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
+   | Dashboard | Source (based on) |
+   | :--- | :--- |
+   | Prometheus Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
+   | Prometheus 2.0 Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
+   | Grafana metrics.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+   | Node Exporter.json | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ and https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
