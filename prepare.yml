@@ -63,6 +63,7 @@
         ansible_host: "{{ ip_address.stdout }}"
         ansible_user: "{{ vault_technical_account_name }}"
         ansible_ssh_private_key_file: id_ed25519
+        ansible_python_interpreter: /run/current-system/sw/bin/python
       changed_when: false
       no_log: true
       when: root_available.unreachable is defined and
@@ -274,7 +275,12 @@
 
     - name: create inventory file
       ansible.builtin.copy:
-        content: server ansible_host={{ hostvars['localhost']['ip_address']['stdout'] }} ansible_user={{ vault_technical_account_name }} ansible_ssh_private_key_file=id_ed25519
+        content: >
+          server
+          ansible_host={{ hostvars['localhost']['ip_address']['stdout'] }}
+          ansible_user={{ vault_technical_account_name }}
+          ansible_ssh_private_key_file=id_ed25519
+          ansible_python_interpreter=/run/current-system/sw/bin/python
         dest: hosts
       delegate_to: localhost
       become: false
@@ -351,7 +357,7 @@
             };
           {% endfor %}
           }
-        dest: /etc/nixos/disk.nix
+        dest: /etc/nixos/disks.nix
       vars:
         labels:
           - ssd
@@ -363,7 +369,7 @@
       ansible.builtin.lineinfile:
         path: /etc/nixos/configuration.nix
         insertafter: ".\/technical-account.nix"
-        line: "      ./disk.nix"
+        line: "      ./disks.nix"
       register: config
       notify: apply config
 

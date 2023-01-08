@@ -10,7 +10,7 @@
       ./hardware-configuration.nix
       ./python.nix
       ./technical-account.nix
-      ./disk.nix
+      ./disks.nix
       ./monitoring.nix
     ];
 

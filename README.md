@@ -2,11 +2,11 @@
 
 Server specification
 
-| Hardware  | Configuration                  |
-| :---      | :---                           |
+| Hardware | Configuration |
+| :--- | :--- |
 | Processor | Intel Core i7-4790, 4x3600 MHz |
-| Memory    | 32 GB DDR3 1600 MHz            |
-| Disks     | 120 GB SSD x 2, 4 TB HDD x 1   |
+| Memory | 32 GB DDR3 1600 MHz |
+| Disks | 120 GB SSD x 2, 4 TB HDD x 1 |
 
 Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
@@ -187,6 +187,9 @@ docker run --rm -ti \
 
 Write username for a prometheus basic auth user into a variable `vault_prometheus_basic_auth_user`
 
+Write username for a grafana admin user into a variable `vault_grafana_admin_user`
+
+Run a playbook to configure a server
 ```fish
 docker run --rm -t \
   --volume=(pwd):/etc/ansible \
@@ -197,3 +200,12 @@ docker run --rm -t \
 Import certificate authority in browser
 
 For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
+
+Grafana dashboard sources
+
+| Dashboard | Source (based on) |
+| :--- | :--- |
+| Prometheus Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
+| Prometheus 2.0 Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
+| Grafana metrics.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+| Node Exporter.json | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ and https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
