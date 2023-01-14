@@ -44,13 +44,19 @@
   become: true
   gather_facts: false
   tasks:
-    - name: create a directory
+    - name: create directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
       loop:
         - /mnt/hdd/src
         - /mnt/ssd/monitoring
+
+    - name: create a directory for promtail
+      ansible.builtin.file:
+        path: /mnt/ssd/monitoring/promtail
+        state: directory
+        mode: 0777
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -162,12 +168,14 @@
         prometheus_auth_seed: prometheus_auth
         grafana_auth_seed: grafana_auth
         prometheus_datasource_seed: prometheus_datasource
+        loki_datasource_seed: loki_datasource
 
     - name: create random but idempotent passwords and uid
       ansible.builtin.set_fact:
         prometheus_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_auth_seed) }}"
         grafana_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_auth_seed) }}"
-        prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_uppercase,digits length=17', seed=prometheus_datasource_seed) }}"
+        prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=prometheus_datasource_seed) }}"
+        loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_seed) }}"
 
     - name: create a basic auth password file to access prometheus
       community.general.htpasswd:
@@ -277,10 +285,10 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Monitoring (generated)' \
-          Prometheus.website[url]=https://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus \
+          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus \
           Prometheus.username[text]={{ hostvars['localhost']['prometheus_auth_user'] }} \
           Prometheus.password[password]='{{ prometheus_auth_password }}' \
-          Grafana.website[url]=https://{{ hostvars['localhost']['internal_domain_name'] }}/grafana \
+          Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/grafana \
           Grafana.username[text]={{ hostvars['localhost']['grafana_auth_user'] }} \
           Grafana.password[password]='{{ grafana_auth_password }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}

@@ -62,6 +62,103 @@
       ];
     };
 
+    loki = {
+      enable = true;
+      dataDir = "/mnt/ssd/monitoring/loki";
+      user = "loki";
+      group = "loki";
+      extraFlags = [
+        "-log-config-reverse-order"
+      ];
+      configuration = {
+        auth_enabled = false;
+        server = {
+          http_listen_address = "127.0.0.1";
+          http_listen_port = 3100;
+          grpc_listen_address = "0.0.0.0";
+          grpc_listen_port = 9095;
+        };
+        ingester = {
+          lifecycler = {
+            address = "127.0.0.1";
+            ring = {
+              kvstore = {
+                store = "inmemory";
+              };
+              replication_factor = 1;
+            };
+            final_sleep = "0s";
+          };
+          chunk_idle_period = "5m";
+          chunk_retain_period = "30s";
+        };
+        storage_config = {
+          boltdb = {
+            directory = "${config.services.loki.dataDir}/index";
+          };
+          filesystem = {
+            directory = "${config.services.loki.dataDir}/chunks";
+          };
+        };
+        schema_config = {
+          configs = [{
+            from = "2023-01-14";
+            store = "boltdb";
+            object_store = "filesystem";
+            schema = "v11";
+            index = {
+              prefix = "index_";
+              period = "168h";
+            };
+          }];
+        };
+        limits_config = {
+          enforce_metric_name = false;
+          reject_old_samples = true;
+          reject_old_samples_max_age = "168h";
+        };
+      };
+    };
+
+    promtail = {
+      enable = true;
+      extraFlags = [
+        "-log-config-reverse-order"
+      ];
+      configuration = {
+        server = {
+          disable = false;
+          http_listen_address = "127.0.0.1";
+          http_listen_port = 9080;
+          grpc_listen_address = "127.0.0.1";
+          grpc_listen_port = 9096;
+        };
+        clients = [{
+          url = "http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+        }];
+        positions = {
+          filename = "/mnt/ssd/monitoring/promtail/positions.yaml";
+        };
+        scrape_configs = [
+          {
+            job_name = "journal";
+            journal = {
+              json = false;
+              max_age = "12h";
+              labels = {
+                job = "systemd-journal";
+              };
+              path = "/var/log/journal";
+            };
+            relabel_configs = [{
+              source_labels = ["__journal__systemd_unit"];
+              target_label = "unit";
+            }];
+          }
+        ];
+      };
+    };
+
     grafana = {
       enable = true;
       dataDir = "/mnt/ssd/monitoring/grafana";
@@ -96,12 +193,24 @@
               orgId: 1
               uid: {{ prometheus_datasource_uid }}
               url: http://127.0.0.1:${toString config.services.prometheus.port}/prometheus
-              isDefault: true
+              isDefault: false
               jsonData:
                 manageAlerts: true
                 timeInterval: ${toString config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
                 httpMethod: POST
                 prometheusType: Prometheus
+              editable: true
+
+            - name: Loki
+              type: loki
+              access: proxy
+              orgId: 1
+              uid: {{ loki_datasource_uid }}
+              url: http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}
+              isDefault: true
+              jsonData:
+                manageAlerts: true
+                maxLines: 1000
               editable: true
         '';
         dashboards.path = pkgs.writeText "dashboards.yml" ''
