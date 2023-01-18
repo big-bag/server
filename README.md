@@ -197,3 +197,4 @@ Installing OS:
    | Prometheus 2.0 Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
    | Grafana metrics.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
    | Node Exporter.json | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ and https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
+   | MinIO Dashboard.json | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
