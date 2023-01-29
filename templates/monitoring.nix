@@ -14,7 +14,7 @@
       webExternalUrl = "http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus";
       stateDir = "prometheus2";
       retentionTime = "15d";
-      checkConfig = true;
+      checkConfig = "syntax-only";
       enableReload = true;
       globalConfig = {
         scrape_interval = "1m";
@@ -58,6 +58,7 @@
             targets = [ "${toString config.services.minio.listenAddress}" ];
           }];
           metrics_path = "/minio/v2/metrics/cluster";
+          bearer_token_file = "/mnt/ssd/storages/.minioScrapeBearerToken";
         }
         {
           job_name = "grafana";
@@ -69,25 +70,41 @@
         }
       ];
     };
+  };
 
+  services = {
     minio = {
       enable = true;
       listenAddress = "127.0.0.1:9000";
       consoleAddress = "127.0.0.1:9001";
-      dataDir = [ "/mnt/ssd/databases/minio/data" ];
-      configDir = "/mnt/ssd/databases/minio/config";
+      dataDir = [ "/mnt/ssd/storages/minio/data" ];
+      configDir = "/mnt/ssd/storages/minio/config";
       region = "eu-west-3";
       browser = true;
-      rootCredentialsFile = pkgs.writeText "minio-environment-variable-file" ''
-        MINIO_ROOT_USER={{ minio_access_key }}
-        MINIO_ROOT_PASSWORD={{ minio_secret_key }}
-        MINIO_PROMETHEUS_URL=http://127.0.0.1:${toString config.services.prometheus.port}/prometheus
-        MINIO_PROMETHEUS_JOB_ID=minio-job
-        MINIO_BROWSER_REDIRECT_URL=http://{{ hostvars['localhost']['internal_domain_name'] }}/minio
-        MINIO_PROMETHEUS_AUTH_TYPE=public
-      '';
+      rootCredentialsFile = "/mnt/ssd/storages/.minioEnvironmentVariables";
     };
+  };
 
+  virtualisation.oci-containers.containers = {
+    minio-client = {
+      image = "minio/mc:RELEASE.2023-01-11T03-14-16Z";
+      autoStart = true;
+      extraOptions = [ "--network=host" ];
+      volumes = [ "/mnt/ssd/storages/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken" ];
+      environment = { ALIAS = "local"; };
+      entrypoint = "/bin/sh";
+      cmd = [
+        "-c" "
+          mc alias set $ALIAS http://${toString config.services.minio.listenAddress} {{ minio_access_key }} {{ minio_secret_key }}
+          mc admin prometheus generate $ALIAS | grep bearer_token | awk '{ print $2 }' | tr -d '\n' > /mnt/.minioScrapeBearerToken
+          mc mb --ignore-existing $ALIAS/loki
+          mc anonymous set public $ALIAS/loki
+        "
+      ];
+    };
+  };
+
+  services = {
     loki = {
       enable = true;
       dataDir = "/mnt/ssd/monitoring/loki";
@@ -106,7 +123,6 @@
         };
         ingester = {
           lifecycler = {
-            address = "127.0.0.1";
             ring = {
               kvstore = {
                 store = "inmemory";
@@ -115,8 +131,11 @@
             };
             final_sleep = "0s";
           };
-          chunk_idle_period = "5m";
           chunk_retain_period = "30s";
+          chunk_idle_period = "5m";
+          wal = {
+            dir = "${config.services.loki.dataDir}/wal";
+          };
         };
         storage_config = {
           boltdb = {
@@ -125,23 +144,55 @@
           filesystem = {
             directory = "${config.services.loki.dataDir}/chunks";
           };
+          aws = {
+            s3forcepathstyle = true;
+            bucketnames = "loki";
+            endpoint = "http://${toString config.services.minio.listenAddress}";
+            region = "eu-west-3";
+            access_key_id = "{{ minio_access_key }}";
+            secret_access_key = "{{ minio_secret_key }}";
+            insecure = true;
+            http_config = {
+              insecure_skip_verify = true;
+            };
+          };
+          boltdb_shipper = {
+            active_index_directory = "${config.services.loki.dataDir}/index";
+            shared_store = "s3";
+            cache_location = "${config.services.loki.dataDir}/cache";
+            resync_interval = "5s";
+          };
         };
         schema_config = {
-          configs = [{
-            from = "2023-01-14";
-            store = "boltdb";
-            object_store = "filesystem";
-            schema = "v11";
-            index = {
-              prefix = "index_";
-              period = "168h";
-            };
-          }];
+          configs = [
+            {
+              from = "2023-01-14";
+              store = "boltdb";
+              object_store = "filesystem";
+              schema = "v11";
+              index = {
+                prefix = "index_";
+                period = "168h";
+              };
+            }
+            {
+              from = "2023-01-29";
+              store = "boltdb-shipper";
+              object_store = "aws";
+              schema = "v11";
+              index = {
+                prefix = "index_";
+                period = "24h";
+              };
+            }
+          ];
+        };
+        compactor = {
+          working_directory = "${config.services.loki.dataDir}/compactor";
+          shared_store = "s3";
         };
         limits_config = {
           enforce_metric_name = false;
-          reject_old_samples = true;
-          reject_old_samples_max_age = "168h";
         };
       };
     };
@@ -198,8 +249,8 @@
           enable_gzip = true;
         };
         security = {
-          admin_user = "{{ hostvars['localhost']['grafana_auth_user'] }}";
-          admin_password = "$__file{/var/.grafanaAdminPassword}";
+          admin_user = "{{ grafana_auth_user }}";
+          admin_password = "$__file{/mnt/ssd/monitoring/.grafanaAdminPassword}";
         };
         database = {
           type = "sqlite3";
@@ -264,7 +315,7 @@
       virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
         locations."/prometheus" = {
           proxyPass     = "http://127.0.0.1:${toString config.services.prometheus.port}";
-          basicAuthFile = /root/.prometheusBasicAuthPasswordFile;
+          basicAuthFile = /mnt/ssd/monitoring/.prometheusBasicAuthPassword;
         };
 
         locations."/minio" = {

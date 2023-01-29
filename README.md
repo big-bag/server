@@ -132,8 +132,6 @@ Installing OS:
          * ip-address[text]: [SERVER_IP_ADDRESS]
        * section: `Technical accounts`
          * nixos technical account name[text]: [USERNAME]
-         * prometheus auth user[text]: [USERNAME]
-         * grafana auth user[text]: [USERNAME]
        * section: `Domains`
          * internal domain name[text]: example.com
 
