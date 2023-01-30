@@ -130,8 +130,6 @@ Installing OS:
          * username[text]: root
          * password[password]: [ROOT_USER_PASSWORD]
          * ip-address[text]: [SERVER_IP_ADDRESS]
-       * section: `Technical accounts`
-         * nixos technical account name[text]: [USERNAME]
        * section: `Domains`
          * internal domain name[text]: example.com
 

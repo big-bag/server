@@ -78,10 +78,13 @@
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-  # environment.systemPackages = with pkgs; [
+  environment.systemPackages = with pkgs; [
   #   vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
   #   wget
-  # ];
+    # BEGIN ANSIBLE MANAGED BLOCK PARTED
+    parted  # For community.general.parted ansible module
+    # END ANSIBLE MANAGED BLOCK PARTED
+  ];
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -112,15 +115,15 @@
   services.nginx = {
     enable = true;
     sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
-    virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
+    virtualHosts."{{ hostvars['localhost']['internal_domain_name']['stdout'] }}" = {
       listen = [
         { addr = "*"; port = 80; }
         { addr = "*"; port = 443; ssl = true; }
       ];
       kTLS = true;
       forceSSL = true;
-      sslCertificate = "/var/{{ hostvars['localhost']['internal_domain_name'] }}.crt";
-      sslCertificateKey = "/var/{{ hostvars['localhost']['internal_domain_name'] }}.key";
+      sslCertificate = "/var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.crt";
+      sslCertificateKey = "/var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.key";
     };
   };
 
