@@ -190,18 +190,24 @@
       ansible.builtin.set_fact:
         prometheus_auth_user_seed: prometheus_auth_user_random
         prometheus_auth_password_seed: prometheus_auth_password_random
+        mimir_auth_user_seed: mimir_auth_user_random
+        mimir_auth_password_seed: mimir_auth_password_random
         grafana_auth_user_seed: grafana_auth_user_random
         grafana_auth_password_seed: grafana_auth_password_random
         prometheus_datasource_uid_seed: prometheus_datasource_uid_random
+        mimir_datasource_uid_seed: mimir_datasource_uid_random
         loki_datasource_uid_seed: loki_datasource_uid_random
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
         prometheus_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_auth_user_seed) }}"
         prometheus_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_auth_password_seed) }}"
+        mimir_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=mimir_auth_user_seed) }}"
+        mimir_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_auth_password_seed) }}"
         grafana_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_auth_user_seed) }}"
         grafana_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=grafana_auth_password_seed) }}"
         prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=prometheus_datasource_uid_seed) }}"
+        mimir_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=mimir_datasource_uid_seed) }}"
         loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_uid_seed) }}"
 
     - name: create a basic auth password file to access prometheus
@@ -209,6 +215,13 @@
         path: /mnt/ssd/monitoring/.prometheusBasicAuthPassword
         name: "{{ prometheus_auth_user }}"
         password: "{{ prometheus_auth_password }}"
+        mode: 0600
+
+    - name: create a basic auth password file to access mimir
+      community.general.htpasswd:
+        path: /mnt/ssd/monitoring/.mimirBasicAuthPassword
+        name: "{{ mimir_auth_user }}"
+        password: "{{ mimir_auth_password }}"
         mode: 0600
 
     - name: create a password file to login to grafana
@@ -284,7 +297,7 @@
     - name: upload grafana dashboards
       ansible.builtin.template:
         src: "{{ item }}"
-        dest: "/var/lib/grafana/dashboards/"
+        dest: "/mnt/ssd/monitoring/grafana-dashboards/"
       with_fileglob: dashboards/*
 
     # ------------------- nixos configuration ------------------- #
@@ -293,7 +306,7 @@
       ansible.builtin.template:
         src: "{{ item }}"
         dest: "/etc/nixos/"
-      with_fileglob: templates/*
+      with_fileglob: configs/*
       notify:
         - check compilation
         - apply config
@@ -350,6 +363,9 @@
           Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/prometheus \
           Prometheus.username[text]='{{ prometheus_auth_user }}' \
           Prometheus.password[password]='{{ prometheus_auth_password }}' \
+          Mimir.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/mimir \
+          Mimir.username[text]='{{ mimir_auth_user }}' \
+          Mimir.password[password]='{{ mimir_auth_password }}' \
           Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/grafana \
           Grafana.username[text]='{{ grafana_auth_user }}' \
           Grafana.password[password]='{{ grafana_auth_password }}' \

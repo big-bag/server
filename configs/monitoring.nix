@@ -97,14 +97,112 @@
         "-c" "
           mc alias set $ALIAS http://${toString config.services.minio.listenAddress} {{ minio_access_key }} {{ minio_secret_key }}
           mc admin prometheus generate $ALIAS | grep bearer_token | awk '{ print $2 }' | tr -d '\n' > /mnt/.minioScrapeBearerToken
+
           mc mb --ignore-existing $ALIAS/loki
           mc anonymous set public $ALIAS/loki
+
+          mc mb --ignore-existing $ALIAS/mimir-blocks
+          mc anonymous set public $ALIAS/mimir-blocks
+
+          mc mb --ignore-existing $ALIAS/mimir-ruler
+          mc anonymous set public $ALIAS/mimir-ruler
+
+          mc mb --ignore-existing $ALIAS/mimir-alertmanager
+          mc anonymous set public $ALIAS/mimir-alertmanager
         "
       ];
     };
   };
 
+  fileSystems."/var/lib/private/mimir" = {
+    device = "/mnt/ssd/monitoring/mimir";
+    options = [
+      "bind"
+      "x-systemd.before=mimir.service"
+    ];
+  };
+
   services = {
+    mimir = {
+      enable = true;
+      configuration = {
+        multitenancy_enabled = false;
+        server = {
+          http_listen_address = "127.0.0.1";
+          http_listen_port = 9009;
+          grpc_listen_address = "127.0.0.1";
+          grpc_listen_port = 9095;
+          http_path_prefix = "/mimir/";
+        };
+        ingester = {
+          ring = {
+            replication_factor = 1;
+            instance_addr = "127.0.0.1";
+          };
+        };
+        blocks_storage = {
+          s3 = {
+            bucket_name = "mimir-blocks";
+          };
+          bucket_store = {
+            sync_dir = "./tsdb-sync/";
+          };
+          tsdb = {
+            dir = "./tsdb/";
+          };
+        };
+        compactor = {
+          data_dir = "./data-compactor/";
+        };
+        store_gateway = {
+          sharding_ring = {
+            replication_factor = 1;
+          };
+        };
+        activity_tracker = {
+          filepath = "./metrics-activity.log";
+        };
+        ruler = {
+          rule_path = "./data-ruler/";
+        };
+        ruler_storage = {
+          s3 = {
+            bucket_name = "mimir-ruler";
+          };
+        };
+        alertmanager = {
+          data_dir = "./data-alertmanager/";
+          sharding_ring = {
+            replication_factor = 1;
+          };
+        };
+        alertmanager_storage = {
+          s3 = {
+            bucket_name = "mimir-alertmanager";
+          };
+        };
+        memberlist = {
+          message_history_buffer_bytes = 10240;
+          bind_addr = ["127.0.0.1"];
+        };
+        common = {
+          storage = {
+            backend = "s3";
+            s3 = {
+              endpoint = "${toString config.services.minio.listenAddress}";
+              region = "${toString config.services.minio.region}";
+              secret_access_key = "{{ minio_secret_key }}";
+              access_key_id = "{{ minio_access_key }}";
+              insecure = true;
+              http = {
+                insecure_skip_verify = true;
+              };
+            };
+          };
+        };
+      };
+    };
+
     loki = {
       enable = true;
       dataDir = "/mnt/ssd/monitoring/loki";
@@ -119,7 +217,7 @@
           http_listen_address = "127.0.0.1";
           http_listen_port = 3100;
           grpc_listen_address = "0.0.0.0";
-          grpc_listen_port = 9095;
+          grpc_listen_port = 9096;
         };
         ingester = {
           lifecycler = {
@@ -148,7 +246,7 @@
             s3forcepathstyle = true;
             bucketnames = "loki";
             endpoint = "http://${toString config.services.minio.listenAddress}";
-            region = "eu-west-3";
+            region = "${toString config.services.minio.region}";
             access_key_id = "{{ minio_access_key }}";
             secret_access_key = "{{ minio_secret_key }}";
             insecure = true;
@@ -208,7 +306,7 @@
           http_listen_address = "127.0.0.1";
           http_listen_port = 9080;
           grpc_listen_address = "127.0.0.1";
-          grpc_listen_port = 9096;
+          grpc_listen_port = 9097;
         };
         clients = [{
           url = "http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
@@ -278,6 +376,20 @@
                 prometheusType: Prometheus
               editable: true
 
+            - name: Mimir
+              type: prometheus
+              access: proxy
+              orgId: 1
+              uid: {{ mimir_datasource_uid }}
+              url: http://127.0.0.1:${toString config.services.mimir.configuration.server.http_listen_port}/mimir/prometheus
+              isDefault: false
+              jsonData:
+                manageAlerts: true
+                timeInterval: 1m # 'Scrape interval' in Grafana UI, defaults to 15s
+                httpMethod: POST
+                prometheusType: Mimir
+              editable: true
+
             - name: Loki
               type: loki
               access: proxy
@@ -301,7 +413,7 @@
               updateIntervalSeconds: 30
               allowUiUpdates: true
               options:
-                path: /var/lib/grafana/dashboards
+                path: /mnt/ssd/monitoring/grafana-dashboards
                 foldersFromFilesStructure: true
         '';
       };
@@ -329,6 +441,11 @@
             proxy_set_header Connection $connection_upgrade;
           '';
           proxyPass = "http://${toString config.services.minio.consoleAddress}";
+        };
+
+        locations."/mimir/" = {
+          proxyPass     = "http://127.0.0.1:${toString config.services.mimir.configuration.server.http_listen_port}";
+          basicAuthFile = /mnt/ssd/monitoring/.mimirBasicAuthPassword;
         };
 
         locations."/grafana/" = {
