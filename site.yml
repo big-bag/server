@@ -48,10 +48,9 @@
         state: directory
         mode: "{{ item.mode }}"
       loop:
-        - { path: /mnt/hdd/src,                 mode: '0755' }
-        - { path: /mnt/ssd/storages,            mode: '0755' }
-        - { path: /mnt/ssd/monitoring,          mode: '0755' }
-        - { path: /mnt/ssd/monitoring/promtail, mode: '0777' }
+        - { path: /mnt/hdd/src,        mode: '0755' }
+        - { path: /mnt/ssd/storages,   mode: '0755' }
+        - { path: /mnt/ssd/monitoring, mode: '0755' }
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -188,40 +187,40 @@
 
     - name: set seed variables
       ansible.builtin.set_fact:
-        prometheus_auth_user_seed: prometheus_auth_user_random
-        prometheus_auth_password_seed: prometheus_auth_password_random
         mimir_auth_user_seed: mimir_auth_user_random
         mimir_auth_password_seed: mimir_auth_password_random
+        mimir_datasource_uid_seed: mimir_datasource_uid_random
+        prometheus_auth_user_seed: prometheus_auth_user_random
+        prometheus_auth_password_seed: prometheus_auth_password_random
+        prometheus_datasource_uid_seed: prometheus_datasource_uid_random
+        loki_datasource_uid_seed: loki_datasource_uid_random
         grafana_auth_user_seed: grafana_auth_user_random
         grafana_auth_password_seed: grafana_auth_password_random
-        prometheus_datasource_uid_seed: prometheus_datasource_uid_random
-        mimir_datasource_uid_seed: mimir_datasource_uid_random
-        loki_datasource_uid_seed: loki_datasource_uid_random
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
-        prometheus_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_auth_user_seed) }}"
-        prometheus_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_auth_password_seed) }}"
         mimir_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=mimir_auth_user_seed) }}"
         mimir_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_auth_password_seed) }}"
+        mimir_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=mimir_datasource_uid_seed) }}"
+        prometheus_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_auth_user_seed) }}"
+        prometheus_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_auth_password_seed) }}"
+        prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=prometheus_datasource_uid_seed) }}"
+        loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_uid_seed) }}"
         grafana_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_auth_user_seed) }}"
         grafana_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=grafana_auth_password_seed) }}"
-        prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=prometheus_datasource_uid_seed) }}"
-        mimir_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=mimir_datasource_uid_seed) }}"
-        loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_uid_seed) }}"
-
-    - name: create a basic auth password file to access prometheus
-      community.general.htpasswd:
-        path: /mnt/ssd/monitoring/.prometheusBasicAuthPassword
-        name: "{{ prometheus_auth_user }}"
-        password: "{{ prometheus_auth_password }}"
-        mode: 0600
 
     - name: create a basic auth password file to access mimir
       community.general.htpasswd:
         path: /mnt/ssd/monitoring/.mimirBasicAuthPassword
         name: "{{ mimir_auth_user }}"
         password: "{{ mimir_auth_password }}"
+        mode: 0600
+
+    - name: create a basic auth password file to access prometheus
+      community.general.htpasswd:
+        path: /mnt/ssd/monitoring/.prometheusBasicAuthPassword
+        name: "{{ prometheus_auth_user }}"
+        password: "{{ prometheus_auth_password }}"
         mode: 0600
 
     - name: create a password file to login to grafana
@@ -270,21 +269,42 @@
             replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4'
           with_fileglob: dashboards/*
 
-        - name: change datasource uid to variable
+        - name: change mimir datasource uid to variable
           ansible.builtin.replace:
-            path: "{{ item }}"
+            path: "dashboards/{{ item }}"
+            regexp: '{{ mimir_datasource_uid }}'
+            replace: '{% raw %}{{ mimir_datasource_uid }}{% endraw %}'
+          loop:
+            - MinIO Dashboard.json
+            - Grafana metrics.json
+            - Node Exporter.json
+
+        - name: change prometheus datasource uid to variable
+          ansible.builtin.replace:
+            path: "dashboards/{{ item }}"
             regexp: '{{ prometheus_datasource_uid }}'
             replace: '{% raw %}{{ prometheus_datasource_uid }}{% endraw %}'
+          loop:
+            - Prometheus Stats.json
+            - Prometheus 2.0 Stats.json
+
+        - name: reset location number in folder
+          ansible.builtin.replace:
+            path: "{{ item }}"
+            after: 'graphTooltip'
+            before: 'liveNow'
+            regexp: '"id":\s.*,'
+            replace: '"id": 0,'
           with_fileglob: dashboards/*
 
-        - name: delete dashboard uid
+        - name: reset dashboard uid
           ansible.builtin.replace:
             path: "{{ item }}"
             regexp: '("uid":\s").*(",)'
             replace: '\1\2'
           with_fileglob: dashboards/*
 
-        - name: set dashboard version
+        - name: reset dashboard version
           ansible.builtin.replace:
             path: "{{ item }}"
             regexp: '"version":\s.*,'
@@ -307,16 +327,22 @@
         src: "{{ item }}"
         dest: "/etc/nixos/"
       with_fileglob: configs/*
-      notify:
-        - check compilation
-        - apply config
+      notify: apply config
 
   handlers:
     - name: check compilation
       ansible.builtin.command: nixos-rebuild build
+      listen: apply config
 
-    - name: apply config
+    - name: rebuild system
       ansible.builtin.command: nixos-rebuild switch
+      register: rebuild_output
+      listen: apply config
+
+    - name: display rebuild output
+      ansible.builtin.debug:
+        msg: "{{ rebuild_output.stderr_lines }}"
+      listen: apply config
 
   post_tasks:
     - name: check if item in 1password has been created
@@ -360,12 +386,12 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Monitoring (generated)' \
-          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/prometheus \
-          Prometheus.username[text]='{{ prometheus_auth_user }}' \
-          Prometheus.password[password]='{{ prometheus_auth_password }}' \
           Mimir.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/mimir \
           Mimir.username[text]='{{ mimir_auth_user }}' \
           Mimir.password[password]='{{ mimir_auth_password }}' \
+          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/prometheus \
+          Prometheus.username[text]='{{ prometheus_auth_user }}' \
+          Prometheus.password[password]='{{ prometheus_auth_password }}' \
           Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/grafana \
           Grafana.username[text]='{{ grafana_auth_user }}' \
           Grafana.password[password]='{{ grafana_auth_password }}' \

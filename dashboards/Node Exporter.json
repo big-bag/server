@@ -26,7 +26,7 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 13978,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 0,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -82,7 +82,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "(\n  (1 - rate(node_cpu_seconds_total{job=\"node\", mode=\"idle\", instance=\"$instance\"}[$__interval]))\n/ ignoring(cpu) group_left\n  count without (cpu)( node_cpu_seconds_total{job=\"node\", mode=\"idle\", instance=\"$instance\"})\n)\n",
+          "expr": "(\n  (1 - rate(node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"}[$__interval]))\n/ ignoring(cpu) group_left\n  count without (cpu)( node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"})\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 5,
@@ -177,7 +177,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_load1{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_load1{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -190,7 +190,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_load5{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_load5{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -203,7 +203,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_load15{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_load15{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -216,7 +216,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "count(node_cpu_seconds_total{job=\"node\", instance=\"$instance\", mode=\"idle\"})",
+          "expr": "count(node_cpu_seconds_total{job=\"integrations/node_exporter\", instance=\"$instance\", mode=\"idle\"})",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -309,7 +309,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "(\n  node_memory_MemTotal_bytes{job=\"node\", instance=\"$instance\"}\n-\n  node_memory_MemFree_bytes{job=\"node\", instance=\"$instance\"}\n-\n  node_memory_Buffers_bytes{job=\"node\", instance=\"$instance\"}\n-\n  node_memory_Cached_bytes{job=\"node\", instance=\"$instance\"}\n)\n",
+          "expr": "(\n  node_memory_MemTotal_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_MemFree_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_Buffers_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_Cached_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -322,7 +322,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_memory_Buffers_bytes{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_memory_Buffers_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -335,7 +335,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_memory_Cached_bytes{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_memory_Cached_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -348,7 +348,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "node_memory_MemFree_bytes{job=\"node\", instance=\"$instance\"}",
+          "expr": "node_memory_MemFree_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -461,7 +461,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "100 -\n(\n  avg(node_memory_MemAvailable_bytes{job=\"node\", instance=\"$instance\"})\n/\n  avg(node_memory_MemTotal_bytes{job=\"node\", instance=\"$instance\"})\n* 100\n)\n",
+          "expr": "100 -\n(\n  avg(node_memory_MemAvailable_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"})\n/\n  avg(node_memory_MemTotal_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"})\n* 100\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -534,7 +534,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_disk_read_bytes_total{job=\"node\", instance=\"$instance\", device!=\"\"}[$__interval])",
+          "expr": "rate(node_disk_read_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
           "interval": "2s",
           "intervalFactor": 2,
@@ -547,7 +547,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_disk_written_bytes_total{job=\"node\", instance=\"$instance\", device!=\"\"}[$__interval])",
+          "expr": "rate(node_disk_written_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
           "interval": "2s",
           "intervalFactor": 2,
@@ -560,7 +560,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_disk_io_time_seconds_total{job=\"node\", instance=\"$instance\", device!=\"\"}[$__interval])",
+          "expr": "rate(node_disk_io_time_seconds_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
           "interval": "2s",
           "intervalFactor": 2,
@@ -660,7 +660,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  -\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
           "interval": "1s",
@@ -674,7 +674,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  )\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -718,7 +718,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ mimir_datasource_uid }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -773,10 +773,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ mimir_datasource_uid }}"
           },
           "editorMode": "code",
-          "expr": "1 - node_filesystem_free_bytes{job='node',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''} / node_filesystem_size_bytes{job='node',instance='$instance'}",
+          "expr": "1 - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''} / node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'}",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -850,7 +850,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  -\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
           "interval": "1s",
@@ -864,7 +864,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  )\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -966,7 +966,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  -\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
           "interval": "1s",
@@ -980,7 +980,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"node\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  )\n)\n",
+          "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  )\n)\n",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -1031,7 +1031,7 @@
       ],
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ mimir_datasource_uid }}"
       },
       "editable": true,
       "error": false,
@@ -1070,10 +1070,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ mimir_datasource_uid }}"
           },
           "editorMode": "code",
-          "expr": "(node_filesystem_size_bytes{job='node',instance='$instance'} - node_filesystem_free_bytes{job='node',instance='$instance'}) / deriv(node_filesystem_free_bytes{job='node',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''}[3d]) > 0",
+          "expr": "(node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'} - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance'}) / deriv(node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''}[3d]) > 0",
           "format": "time_series",
           "interval": "1s",
           "intervalFactor": 2,
@@ -1141,7 +1141,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_network_receive_bytes_total{job=\"node\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
+          "expr": "rate(node_network_receive_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
           "format": "time_series",
           "interval": "2s",
           "intervalFactor": 2,
@@ -1234,7 +1234,7 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_network_transmit_bytes_total{job=\"node\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
+          "expr": "rate(node_network_transmit_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
           "format": "time_series",
           "interval": "2s",
           "intervalFactor": 2,
@@ -1285,8 +1285,8 @@
       {
         "current": {
           "selected": false,
-          "text": "Prometheus",
-          "value": "Prometheus"
+          "text": "Mimir",
+          "value": "Mimir"
         },
         "hide": 0,
         "includeAll": false,
@@ -1294,6 +1294,7 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "queryValue": "",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1302,22 +1303,22 @@
       {
         "current": {
           "selected": false,
-          "text": "127.0.0.1:9100",
-          "value": "127.0.0.1:9100"
+          "text": "127.0.0.1:12345",
+          "value": "127.0.0.1:12345"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "$datasource"
         },
-        "definition": "",
+        "definition": "label_values(node_exporter_build_info{job=\"integrations/node_exporter\"}, instance)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "instance",
         "options": [],
         "query": {
-          "query": "label_values(node_exporter_build_info{job=\"node\"}, instance)",
-          "refId": "Prometheus-instance-Variable-Query"
+          "query": "label_values(node_exporter_build_info{job=\"integrations/node_exporter\"}, instance)",
+          "refId": "StandardVariableQuery"
         },
         "refresh": 2,
         "regex": "",
