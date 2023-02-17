@@ -136,9 +136,6 @@
           secret_access_key = "{{ minio_secret_key }}";
           access_key_id = "{{ minio_access_key }}";
           insecure = true;
-          http = {
-            insecure_skip_verify = true;
-          };
         };
       };
     };
@@ -253,9 +250,6 @@
           access_key_id = "{{ minio_access_key }}";
           secret_access_key = "{{ minio_secret_key }}";
           insecure = true;
-          http_config = {
-            insecure_skip_verify = true;
-          };
         };
         boltdb_shipper = {
           active_index_directory = "${config.services.loki.dataDir}/index";
@@ -417,6 +411,20 @@
         configs = [{
           name = "agent";
           scrape_configs = [
+            {
+              job_name = "local/mimir";
+              scheme = "http";
+              static_configs = [{
+                targets = [ "127.0.0.1:${toString config.services.mimir.configuration.server.http_listen_port}" ];
+                labels = {
+                  cluster = "local";
+                  namespace = "local";
+                  pod = "mimir";
+                };
+              }];
+              metrics_path = "/mimir/metrics";
+              scrape_interval = "5s";
+            }
             {
               job_name = "grafana";
               scheme = "http";

@@ -173,7 +173,15 @@ Installing OS:
 
 # Configuring a server
 
-1. run a playbook to configure a server
+1. run a playbook to upload grafana dashboards
+   ```fish
+   docker run --rm -t \
+     --volume=(pwd):/etc/ansible \
+     ansible:2.14.0 \
+       ansible-playbook site.yml --tags dashboards
+   ```
+
+2. run a playbook to configure a server
    ```fish
    docker run --rm -t \
      --volume=(pwd):/etc/ansible \
@@ -181,17 +189,27 @@ Installing OS:
        ansible-playbook site.yml
    ```
 
-2. import certificate authority in browser
+3. import certificate authority in browser
 
    For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
 
-3. grafana dashboard sources
+4. grafana dashboard sources
 
-   | Dashboard | Source (based on) |
+   | Dashboard group | Dashboard source (based on) |
    | :--- | :--- |
-   | MinIO Dashboard.json | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
-   | Prometheus Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
-   | Prometheus 2.0 Stats.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
-   | Grafana metrics.json | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
-   | Node Exporter.json | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
+   | MinIO | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
+   | Mimir | https://grafana.com/grafana/dashboards/16007-mimir-alertmanager/ |
+   || https://grafana.com/grafana/dashboards/16009-mimir-compactor/ |
+   || https://grafana.com/grafana/dashboards/16011-mimir-object-store/ |
+   || https://grafana.com/grafana/dashboards/16012-mimir-overrides/ |
+   || https://grafana.com/grafana/dashboards/16013-mimir-queries/ |
+   || https://grafana.com/grafana/dashboards/16016-mimir-reads/ |
+   || https://grafana.com/grafana/dashboards/16018-mimir-ruler/ |
+   || https://grafana.com/grafana/dashboards/16021-mimir-tenants/ |
+   || https://grafana.com/grafana/dashboards/16022-mimir-top-tenants/ |
+   || https://grafana.com/grafana/dashboards/16026-mimir-writes/ |
+   | Prometheus | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
+   || Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
+   | Grafana | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+   | Node Exporter | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
    || https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |

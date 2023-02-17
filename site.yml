@@ -196,6 +196,7 @@
         loki_datasource_uid_seed: loki_datasource_uid_random
         grafana_auth_user_seed: grafana_auth_user_random
         grafana_auth_password_seed: grafana_auth_password_random
+      tags: dashboards
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
@@ -208,6 +209,7 @@
         loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_uid_seed) }}"
         grafana_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_auth_user_seed) }}"
         grafana_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=grafana_auth_password_seed) }}"
+      tags: dashboards
 
     - name: create a basic auth password file to access mimir
       community.general.htpasswd:
@@ -230,12 +232,16 @@
 
     - name: check if a grafana dashboard has been downloaded to the local machine
       ansible.builtin.command: "grep '\"uid\": \"\",' '{{ item }}'"
-      with_fileglob: dashboards/*
+      with_fileglob:
+        - dashboards/Mimir/*
+        - dashboards/Prometheus/*
+        - dashboards/*
       register: dashboard_uid
       delegate_to: localhost
       failed_when: false
       changed_when: false
       become: false
+      tags: [ never, dashboards ]
 
     - name: templatization of grafana dashboards
       block:
@@ -246,7 +252,10 @@
             path: "{{ item }}"
             regexp: '{% raw %}("){{(.*)}}(.*){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\2{{ "}}{% endraw %}" }}\3{{ "{% raw %}{{" }}\4{{ "}}{% endraw %}" }}\5'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
 
         # find and escape double curly braces which looks like:
         # "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
@@ -255,7 +264,10 @@
             path: "{{ item }}"
             regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(:){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4{{ "{% raw %}{{" }}\5{{ "}}{% endraw %}" }}\6'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
 
         # find and escape double curly braces which looks like:
         # "legendFormat": "{{job}}",
@@ -267,26 +279,26 @@
             path: "{{ item }}"
             regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
 
         - name: change mimir datasource uid to variable
           ansible.builtin.replace:
-            path: "dashboards/{{ item }}"
+            path: "{{ item }}"
             regexp: '{{ mimir_datasource_uid }}'
             replace: '{% raw %}{{ mimir_datasource_uid }}{% endraw %}'
-          loop:
-            - MinIO Dashboard.json
-            - Grafana metrics.json
-            - Node Exporter.json
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/*
 
         - name: change prometheus datasource uid to variable
           ansible.builtin.replace:
-            path: "dashboards/{{ item }}"
+            path: "{{ item }}"
             regexp: '{{ prometheus_datasource_uid }}'
             replace: '{% raw %}{{ prometheus_datasource_uid }}{% endraw %}'
-          loop:
-            - Prometheus Stats.json
-            - Prometheus 2.0 Stats.json
+          with_fileglob: dashboards/Prometheus/*
 
         - name: reset location number in folder
           ansible.builtin.replace:
@@ -295,30 +307,52 @@
             before: 'liveNow'
             regexp: '"id":\s.*,'
             replace: '"id": 0,'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
 
         - name: reset dashboard uid
           ansible.builtin.replace:
             path: "{{ item }}"
             regexp: '("uid":\s").*(",)'
             replace: '\1\2'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
 
         - name: reset dashboard version
           ansible.builtin.replace:
             path: "{{ item }}"
             regexp: '"version":\s.*,'
             replace: '"version": 0,'
-          with_fileglob: dashboards/*
+          with_fileglob:
+            - dashboards/Mimir/*
+            - dashboards/Prometheus/*
+            - dashboards/*
       delegate_to: localhost
       become: false
       when: dashboard_uid.results | json_query('[*].rc') | reject('match', '0')
+      tags: [ never, dashboards ]
+
+    - name: create folders
+      ansible.builtin.file:
+        path: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
+        state: directory
+        mode: '{{ item.mode }}'
+      with_community.general.filetree: dashboards/
+      when: item.state == 'directory'
+      tags: [ never, dashboards ]
 
     - name: upload grafana dashboards
       ansible.builtin.template:
-        src: "{{ item }}"
-        dest: "/mnt/ssd/monitoring/grafana-dashboards/"
-      with_fileglob: dashboards/*
+        src: '{{ item.src }}'
+        dest: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
+        mode: '{{ item.mode }}'
+      with_community.general.filetree: dashboards/
+      when: item.state == 'file'
+      tags: [ never, dashboards ]
 
     # ------------------- nixos configuration ------------------- #
 
