@@ -24,28 +24,33 @@ Partitioning of disk:
 
 > Ignore info messages from parted: `Information: You may need to update /etc/fstab.`
 
-1. find disk which connected to SATA-port 1
+1. delete data from SSD drives
+   ```bash
+   sudo shred --verbose /dev/sdX
+   ```
+
+2. find disk which connected to SATA-port 1
    ```bash
    $ for i in /dev/disk/by-path/*;do [[ ! "$i" =~ '-part[0-9]+$' ]] && echo "Port $(basename "$i"|grep -Po '(?<=ata-)[0-9]+'): $(readlink -f "$i")";done
    Port 1: /dev/sdb
    ```
 
-2. create a GPT partition table
+3. create a GPT partition table
    ```bash
    sudo parted /dev/sdb -- mklabel gpt
    ```
 
-3. create a `root` partition, left 16GiB for `swap` partition at the end of disk and 512MiB for `boot` partition at the beggining of disk
+4. create a `root` partition, left 16GiB for `swap` partition at the end of disk and 512MiB for `boot` partition at the beggining of disk
    ```bash
    sudo parted /dev/sdb -- mkpart primary 512MiB -16GiB
    ```
 
-4. create a `swap` partition
+5. create a `swap` partition
    ```bash
    sudo parted -a none /dev/sdb -- mkpart primary linux-swap -16GiB 100%
    ```
 
-5. create a `boot` partition
+6. create a `boot` partition
    ```bash
    sudo parted /dev/sdb -- mkpart ESP fat32 1MiB 512MiB
    sudo parted /dev/sdb -- set 3 esp on
@@ -121,6 +126,16 @@ Installing OS:
    ssh root@[SERVER_IP_ADDRESS]
    ```
 
+9. delete data from HDD drive
+   * run the process in the background, because it can take a long time
+     ```bash
+     sudo shred --verbose /dev/sdX >> shred.log 2>&1 &
+     ```
+   * display logs
+     ```bash
+     tail -f shred.log
+     ```
+
 # Setting up a local environment and preparing a server
 
 1. save secrets in 1Password
@@ -130,25 +145,27 @@ Installing OS:
          * username[text]: root
          * password[password]: [ROOT_USER_PASSWORD]
          * ip-address[text]: [SERVER_IP_ADDRESS]
+       * section: `Technical account`
+         * username[text]: [TECHNICAL_USER_NAME]
        * section: `Domains`
          * internal domain name[text]: example.com
 
 2. build an image
-   ```fish
-   docker build --rm --file Dockerfile --tag ansible:2.14.0 .
+   ```bash
+   docker build --rm --file Dockerfile --tag ansible:2.14.2 .
    ```
 
 3. create a Vault password file named `.vault_password` and add a password in it
 
 4. create an encrypted file
-   ```fish
+   ```bash
    docker run --rm -ti \
-     --volume=(pwd):/etc/ansible \
-     ansible:2.14.0 \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
        ansible-vault create host_vars/localhost/vault.yml
    ```
 
-5. write credentials to access 1Password into variables:
+5. write credentials to access 1Password in variables:
    - vault_1password_device_id: `<value>`, value can be found in `~/.config/op/config` on Alpine linux
    - vault_1password_master_password: `'S0me P@ssword'`
    - vault_1password_subdomain: `my`
@@ -156,36 +173,36 @@ Installing OS:
    - vault_1password_secret_key: `<value>`
 
 6. run a playbook to do an initial configuration on a server and configure a local environment
-   ```fish
+   ```bash
    docker run --rm -t \
-     --volume=(pwd):/etc/ansible \
-     ansible:2.14.0 \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
        ansible-playbook prepare.yml
    ```
 
 7. run a playbook to upgrade NixOS to the latest version
-   ```fish
+   ```bash
    docker run --rm -t \
-     --volume=(pwd):/etc/ansible \
-     ansible:2.14.0 \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
        ansible-playbook prepare.yml --tags upgrade
    ```
 
 # Configuring a server
 
 1. run a playbook to upload grafana dashboards
-   ```fish
+   ```bash
    docker run --rm -t \
-     --volume=(pwd):/etc/ansible \
-     ansible:2.14.0 \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
        ansible-playbook site.yml --tags dashboards
    ```
 
 2. run a playbook to configure a server
-   ```fish
+   ```bash
    docker run --rm -t \
-     --volume=(pwd):/etc/ansible \
-     ansible:2.14.0 \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
        ansible-playbook site.yml
    ```
 

@@ -27,6 +27,7 @@
       loop:
         - "'Root account'.ip-address"
         - "'Root account'.password"
+        - "'Technical account'.username"
       register: secrets
       changed_when: false
       no_log: true
@@ -36,6 +37,16 @@
       ansible.builtin.set_fact:
         server_ip_address: "{{ secrets.results[0].stdout }}"
         nixos_root_password: "{{ secrets.results[1].stdout }}"
+        nixos_technical_account_name: "{{ secrets.results[2].stdout }}"
+      tags: always
+
+    - name: check connection to server under root
+      ansible.builtin.command: "sshpass -e ssh -o StrictHostKeyChecking=no root@{{ server_ip_address }} 'exit'"
+      environment:
+        SSHPASS: "{{ nixos_root_password }}"
+      register: root_available
+      failed_when: false
+      changed_when: false
       tags: always
 
     - name: add a host to the ansible-playbook in-memory inventory | root
@@ -46,39 +57,19 @@
         ansible_password: "{{ nixos_root_password }}"
       changed_when: false
       no_log: true
-      tags: always
-
-    - name: check connection to server under root
-      ansible.builtin.ping:
-      delegate_to: server
-      register: root_available
-      ignore_unreachable: true
-      tags: always
-
-    - name: get secrets from 1password | technical account
-      ansible.builtin.command: |
-        op item get 'NixOS technical account (generated)' \
-          --vault 'Local server' \
-          --fields label=username \
-          --session {{ op_session_token.stdout }}
-      register: nixos_technical_account_name_1password
-      changed_when: false
-      no_log: true
-      when: root_available.unreachable is defined and
-            root_available.unreachable == true
+      when: root_available.rc == 0
       tags: always
 
     - name: add a host to the ansible-playbook in-memory inventory | technical account
       ansible.builtin.add_host:
         name: server
         ansible_host: "{{ server_ip_address }}"
-        ansible_user: "{{ nixos_technical_account_name_1password.stdout }}"
+        ansible_user: "{{ nixos_technical_account_name }}"
         ansible_ssh_private_key_file: id_ed25519
         ansible_python_interpreter: /run/current-system/sw/bin/python
       changed_when: false
       no_log: true
-      when: root_available.unreachable is defined and
-            root_available.unreachable == true
+      when: root_available.rc != 0
       tags: always
 
 - name: install requirements for ansible
@@ -130,7 +121,7 @@
       tags: [ never, upgrade ]
 
     - name: try to upgrade without switching to the latest nixos channel
-      ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ latest_nixos_version.stdout }}.tar.gz build
+      ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ nixos_latest_version.stdout }}.tar.gz build
       register: build_result
       when: nixos_current_version.stdout < nixos_latest_version.stdout
       tags: [ never, upgrade ]
@@ -144,7 +135,7 @@
       tags: [ never, upgrade ]
 
     - name: switch to the latest stable nixos channel for servers
-      ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ latest_nixos_version.stdout }}-small nixos
+      ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ nixos_latest_version.stdout }}-small nixos
       when:
         - build_result.changed
         - "'warning' not in build_result.stderr"
@@ -162,25 +153,17 @@
   become: true
   gather_facts: false
   tasks:
-    - name: set seed variables
-      ansible.builtin.set_fact:
-        nixos_technical_account_name_seed: nixos_technical_account_name_random
-
-    - name: create random but idempotent secrets
-      ansible.builtin.set_fact:
-        nixos_technical_account_name: "ta_{{ lookup('ansible.builtin.password', '/dev/null chars=digits length=6', seed=nixos_technical_account_name_seed) }}"
-
     # https://github.com/ansible/ansible/issues/77217
     #- name: generate an openssh keypair
     #  community.crypto.openssh_keypair:
     #    type: ed25519
     #    path: id_ed25519
-    #    comment: "{{ nixos_technical_account_name }}"
+    #    comment: "{{ hostvars['localhost']['nixos_technical_account_name'] }}"
     #  delegate_to: localhost
     #  become: false
 
     - name: generate an openssh keypair
-      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ nixos_technical_account_name }} -q -N ""
+      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ hostvars['localhost']['nixos_technical_account_name'] }} -q -N ""
       args:
         creates: id_ed25519
       delegate_to: localhost
@@ -199,14 +182,14 @@
           { pkgs, ... }:
 
           {
-            users.groups.{{ nixos_technical_account_name }} = {};
-            users.users.{{ nixos_technical_account_name }} = {
+            users.groups.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {};
+            users.users.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {
               isSystemUser = true;
-              group = "{{ nixos_technical_account_name }}";
+              group = "{{ hostvars['localhost']['nixos_technical_account_name'] }}";
               extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
               openssh.authorizedKeys.keys = [ "{{ id_ed25519_pub.stdout }}" ];
               createHome = true;
-              home = "/home/{{ nixos_technical_account_name }}";
+              home = "/home/{{ hostvars['localhost']['nixos_technical_account_name'] }}";
               useDefaultShell = true;
               packages = with pkgs; [
                 expect  # to generate ca and self-signed certificate
@@ -225,7 +208,7 @@
             # Allow people in group wheel to run all commands without a password
             security.sudo.wheelNeedsPassword = false;
         marker: "  # {mark} ANSIBLE MANAGED BLOCK WHEEL"
-        backup: yes
+        backup: true
       notify: apply config
 
     - name: insert an empty line after the marker line
@@ -239,6 +222,7 @@
         path: /etc/nixos/configuration.nix
         insertafter: ".\/python.nix"
         line: "      ./technical-account.nix"
+        backup: true
       notify: apply config
 
     - name: forbid root login
@@ -246,6 +230,7 @@
         path: /etc/nixos/configuration.nix
         regexp: '(permitRootLogin = ").*(";)'
         replace: '\1no\2'
+        backup: true
       notify: apply config
 
     - name: install parted for 'configure disks' play (1/3)
@@ -253,6 +238,7 @@
         path: /etc/nixos/configuration.nix
         regexp: '# (environment\.systemPackages \= with pkgs; \[)'
         replace: '\1'
+        backup: true
       notify: apply config
 
     - name: install parted for 'configure disks' play (2/3)
@@ -262,7 +248,7 @@
         block: |2
               parted  # For community.general.parted ansible module
         marker: "    # {mark} ANSIBLE MANAGED BLOCK PARTED"
-        backup: yes
+        backup: true
       notify: apply config
 
     - name: install parted for 'configure disks' play (3/3)
@@ -270,6 +256,7 @@
         path: /etc/nixos/configuration.nix
         regexp: '# (];)'
         replace: '\1'
+        backup: true
       notify: apply config
 
   handlers:
@@ -304,8 +291,7 @@
       ansible.builtin.shell: |
         op item template get Server --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'NixOS technical account (generated)' \
-          username={{ nixos_technical_account_name }} \
-          command[text]="ssh {{ nixos_technical_account_name }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
+          command[text]="ssh {{ hostvars['localhost']['nixos_technical_account_name'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
           [file]=id_ed25519 \
           [file]=id_ed25519.pub \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -319,7 +305,7 @@
         content: >
           server
           ansible_host={{ hostvars['localhost']['server_ip_address'] }}
-          ansible_user={{ nixos_technical_account_name }}
+          ansible_user={{ hostvars['localhost']['nixos_technical_account_name'] }}
           ansible_ssh_private_key_file=id_ed25519
           ansible_python_interpreter=/run/current-system/sw/bin/python
         dest: hosts
@@ -410,6 +396,7 @@
         path: /etc/nixos/configuration.nix
         insertafter: ".\/technical-account.nix"
         line: "      ./disks.nix"
+        backup: true
       notify: apply config
 
   handlers:

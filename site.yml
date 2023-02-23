@@ -21,21 +21,19 @@
       ansible.builtin.command: |
         op item get 'Secrets (manually)' \
           --vault 'Local server' \
-          --fields label=Domains.'internal domain name' \
+          --fields label={{ item }} \
           --session {{ op_session_token.stdout }}
-      register: internal_domain_name
+      loop:
+        - "Domains.'internal domain name'"
+        - "'Technical account'.username"
+      register: secrets
       changed_when: false
       no_log: true
 
     - name: get secrets from 1password (2/2)
-      ansible.builtin.command: |
-        op item get 'NixOS technical account (generated)' \
-          --vault 'Local server' \
-          --fields label=username \
-          --session {{ op_session_token.stdout }}
-      register: nixos_technical_account_name
-      changed_when: false
-      no_log: true
+      ansible.builtin.set_fact:
+        internal_domain_name: "{{ secrets.results[0].stdout }}"
+        nixos_technical_account_name: "{{ secrets.results[1].stdout }}"
 
 - name: configure server
   hosts: server
@@ -49,6 +47,7 @@
         mode: "{{ item.mode }}"
       loop:
         - { path: /mnt/hdd/src,        mode: '0755' }
+        - { path: /mnt/ssd/services,   mode: '0755' }
         - { path: /mnt/ssd/storages,   mode: '0755' }
         - { path: /mnt/ssd/monitoring, mode: '0755' }
 
@@ -110,30 +109,30 @@
           ansible.builtin.shell: |
             spawn ./easyrsa build-ca nopass
             expect -exact "Common Name (eg: your user, host, or server name) \[Easy-RSA CA\]:"
-            send -- "{{ hostvars['localhost']['internal_domain_name']['stdout'] | replace('.',' ') | title }} Root CA\r"
+            send -- "{{ hostvars['localhost']['internal_domain_name'] | replace('.',' ') | title }} Root CA\r"
             expect eof
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            executable: /etc/profiles/per-user/{{ hostvars['localhost']['nixos_technical_account_name']['stdout'] }}/bin/expect
+            executable: /etc/profiles/per-user/{{ hostvars['localhost']['nixos_technical_account_name'] }}/bin/expect
             creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
 
         - name: issue an ssl certificate
-          ansible.builtin.command: ./easyrsa --batch build-server-full {{ hostvars['localhost']['internal_domain_name']['stdout'] }} nopass
+          ansible.builtin.command: ./easyrsa --batch build-server-full {{ hostvars['localhost']['internal_domain_name'] }} nopass
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.crt
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
 
-        - name: copy an ssl certificate to /var folder
+        - name: copy an ssl certificate to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.crt
-            dest: /var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.crt
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
+            dest: /mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.crt
             remote_src: true
           register: certificate
 
-        - name: copy a private key to /var folder
+        - name: copy a private key to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.key
-            dest: /var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.key
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ hostvars['localhost']['internal_domain_name'] }}.key
+            dest: /mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.key
             remote_src: true
           register: key
 
@@ -174,7 +173,7 @@
           MINIO_ROOT_PASSWORD={{ minio_secret_key }}
           MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
           MINIO_PROMETHEUS_JOB_ID=minio-job
-          MINIO_BROWSER_REDIRECT_URL=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/minio
+          MINIO_BROWSER_REDIRECT_URL=http://{{ hostvars['localhost']['internal_domain_name'] }}/minio
         dest: /mnt/ssd/storages/.minioEnvironmentVariables
 
     - name: create an empty file for minio bearer token
@@ -360,6 +359,7 @@
       ansible.builtin.template:
         src: "{{ item }}"
         dest: "/etc/nixos/"
+        backup: true
       with_fileglob: configs/*
       notify: apply config
 
@@ -395,7 +395,7 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Storages (generated)' \
-          Minio.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/minio \
+          Minio.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/minio \
           Minio.'Username (Access Key)'[text]='{{ minio_access_key }}' \
           Minio.'Password (Secret Key)'[password]='{{ minio_secret_key }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -420,13 +420,13 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Monitoring (generated)' \
-          Mimir.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/mimir \
+          Mimir.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/mimir \
           Mimir.username[text]='{{ mimir_auth_user }}' \
           Mimir.password[password]='{{ mimir_auth_password }}' \
-          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/prometheus \
+          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus \
           Prometheus.username[text]='{{ prometheus_auth_user }}' \
           Prometheus.password[password]='{{ prometheus_auth_password }}' \
-          Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name']['stdout'] }}/grafana \
+          Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/grafana \
           Grafana.username[text]='{{ grafana_auth_user }}' \
           Grafana.password[password]='{{ grafana_auth_password }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}

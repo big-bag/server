@@ -11,6 +11,7 @@
       ./python.nix
       ./technical-account.nix
       ./disks.nix
+      ./storages.nix
       ./monitoring.nix
     ];
 
@@ -104,9 +105,8 @@
 
   security.dhparams = {
     enable = true;
-    path = "/var/lib/dhparams";
-    stateful = true;
-    defaultBitSize = 2048;
+    path = "/mnt/ssd/services/dhparams";
+    defaultBitSize = 4096;
     params = {
       nginx = {};
     };
@@ -115,15 +115,15 @@
   services.nginx = {
     enable = true;
     sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
-    virtualHosts."{{ hostvars['localhost']['internal_domain_name']['stdout'] }}" = {
+    virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
       listen = [
         { addr = "*"; port = 80; }
         { addr = "*"; port = 443; ssl = true; }
       ];
       kTLS = true;
       forceSSL = true;
-      sslCertificate = "/var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.crt";
-      sslCertificateKey = "/var/{{ hostvars['localhost']['internal_domain_name']['stdout'] }}.key";
+      sslCertificate = "/mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.crt";
+      sslCertificateKey = "/mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.key";
     };
   };
 
