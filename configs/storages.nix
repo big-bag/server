@@ -1,15 +1,23 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 
 {
-  services.minio = {
-    enable = true;
-    listenAddress = "127.0.0.1:9000";
-    consoleAddress = "127.0.0.1:9001";
-    dataDir = [ "/mnt/ssd/storages/minio/data" ];
-    configDir = "/mnt/ssd/storages/minio/config";
-    region = "eu-west-3";
-    browser = true;
-    rootCredentialsFile = "/mnt/ssd/storages/.minioEnvironmentVariables";
+  services = {
+    minio = {
+      enable = true;
+      listenAddress = "127.0.0.1:9000";
+      consoleAddress = "127.0.0.1:9001";
+      dataDir = [ "/mnt/ssd/storages/minio/data" ];
+      configDir = "/mnt/ssd/storages/minio/config";
+      region = "eu-west-3";
+      browser = true;
+      rootCredentialsFile = pkgs.writeText "Environment variables" ''
+        MINIO_ROOT_USER={{ minio_access_key }}
+        MINIO_ROOT_PASSWORD={{ minio_secret_key }}
+        MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
+        MINIO_PROMETHEUS_JOB_ID=minio-job
+        MINIO_BROWSER_REDIRECT_URL=http://{{ internal_domain_name }}/minio
+      '';
+    };
   };
 
   virtualisation = {
@@ -19,7 +27,7 @@
           image = "minio/mc:RELEASE.2023-01-11T03-14-16Z";
           autoStart = true;
           extraOptions = [ "--network=host" ];
-          volumes = [ "/mnt/ssd/storages/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken" ];
+          volumes = [ "/mnt/ssd/services/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken" ];
           environment = { ALIAS = "local"; };
           entrypoint = "/bin/sh";
           cmd = [
@@ -45,19 +53,21 @@
     };
   };
 
-  services.nginx = {
-    virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
-      locations."/minio" = {
-        extraConfig = ''
-          rewrite ^/minio/(.*) /$1 break;
-          proxy_set_header Host $host;
+  services = {
+    nginx = {
+      virtualHosts."{{ internal_domain_name }}" = {
+        locations."/minio" = {
+          extraConfig = ''
+            rewrite ^/minio/(.*) /$1 break;
+            proxy_set_header Host $host;
 
-          # Proxy Minio WebSocket connections.
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade    $http_upgrade;
-          proxy_set_header Connection $connection_upgrade;
-        '';
-        proxyPass = "http://${toString config.services.minio.consoleAddress}";
+            # Proxy Minio WebSocket connections.
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade    $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+          '';
+          proxyPass = "http://${toString config.services.minio.consoleAddress}";
+        };
       };
     };
   };

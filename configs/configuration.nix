@@ -13,6 +13,7 @@
       ./disks.nix
       ./storages.nix
       ./monitoring.nix
+      ./databases.nix
     ];
 
   # Use the systemd-boot EFI boot loader.
@@ -115,15 +116,15 @@
   services.nginx = {
     enable = true;
     sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
-    virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}" = {
+    virtualHosts."{{ internal_domain_name }}" = {
       listen = [
         { addr = "*"; port = 80; }
         { addr = "*"; port = 443; ssl = true; }
       ];
       kTLS = true;
       forceSSL = true;
-      sslCertificate = "/mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.crt";
-      sslCertificateKey = "/mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.key";
+      sslCertificate = "/mnt/ssd/services/{{ internal_domain_name }}.crt";
+      sslCertificateKey = "/mnt/ssd/services/{{ internal_domain_name }}.key";
     };
   };
 

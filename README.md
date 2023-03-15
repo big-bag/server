@@ -146,7 +146,9 @@ Installing OS:
          * password[password]: [ROOT_USER_PASSWORD]
          * ip-address[text]: [SERVER_IP_ADDRESS]
        * section: `Technical account`
-         * username[text]: [TECHNICAL_USER_NAME]
+         * nixos[text]: [NIXOS_TECHNICAL_ACCOUNT]
+         * postgres pgadmin username[text]: [PGADMIN_POSTGRES_USER]
+         * postgres monitoring username[text]: [MONITORING_POSTGRES_USER]
        * section: `Domains`
          * internal domain name[text]: example.com
 
@@ -212,9 +214,9 @@ Installing OS:
 
 4. grafana dashboard sources
 
-   | Dashboard group | Dashboard source (based on) |
+   | Dashboard name/group | Dashboard source (based on) |
    | :--- | :--- |
-   | MinIO | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
+   | MinIO Dashboard | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
    | Mimir | https://grafana.com/grafana/dashboards/16007-mimir-alertmanager/ |
    || https://grafana.com/grafana/dashboards/16009-mimir-compactor/ |
    || https://grafana.com/grafana/dashboards/16011-mimir-object-store/ |
@@ -227,6 +229,7 @@ Installing OS:
    || https://grafana.com/grafana/dashboards/16026-mimir-writes/ |
    | Prometheus | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
    || Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
-   | Grafana | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
-   | Node Exporter | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
+   | Grafana metrics | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+   | Node Exporter Dashboard | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
    || https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
+   | PostgreSQL Exporter Dashboard | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |

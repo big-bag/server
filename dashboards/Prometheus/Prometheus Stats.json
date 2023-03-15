@@ -49,7 +49,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -114,7 +114,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "(time() - process_start_time_seconds{job=\"prometheus\", instance=~\"$node\"})",
           "intervalFactor": 2,
@@ -127,7 +127,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -186,7 +186,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "prometheus_local_storage_memory_series{instance=~\"$node\"}",
           "intervalFactor": 2,
@@ -199,7 +199,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -266,7 +266,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "prometheus_local_storage_indexing_queue_length{instance=~\"$node\"}",
           "intervalFactor": 2,
@@ -279,7 +279,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "editable": true,
       "error": false,
@@ -306,7 +306,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "refId": "A"
         }
@@ -317,7 +317,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -429,7 +429,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "rate(prometheus_local_storage_ingested_samples_total{instance=~\"$node\"}[5m])",
           "interval": "",
@@ -445,7 +445,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "editable": true,
       "error": false,
@@ -472,7 +472,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "refId": "A"
         }
@@ -483,7 +483,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -595,7 +595,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "rate(prometheus_target_interval_length_seconds_count{instance=~\"$node\"}[5m])",
           "intervalFactor": 2,
@@ -609,7 +609,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -690,7 +690,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "prometheus_target_interval_length_seconds{quantile!=\"0.01\", quantile!=\"0.05\",instance=~\"$node\"}",
           "interval": "",
@@ -706,7 +706,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "editable": true,
       "error": false,
@@ -733,7 +733,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "refId": "A"
         }
@@ -744,7 +744,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -825,7 +825,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "expr": "prometheus_evaluator_duration_seconds{quantile!=\"0.01\", quantile!=\"0.05\",instance=~\"$node\"}",
           "interval": "",
@@ -840,7 +840,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ prometheus_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_prometheus }}"
       },
       "editable": true,
       "error": false,
@@ -867,7 +867,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ prometheus_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_prometheus }}"
           },
           "refId": "A"
         }
@@ -893,7 +893,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ prometheus_datasource_uid }}"
+          "uid": "{{ grafana_datasource_uid_prometheus }}"
         },
         "definition": "",
         "hide": 0,

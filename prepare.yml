@@ -27,7 +27,7 @@
       loop:
         - "'Root account'.ip-address"
         - "'Root account'.password"
-        - "'Technical account'.username"
+        - "'Technical account'.nixos"
       register: secrets
       changed_when: false
       no_log: true
@@ -37,7 +37,7 @@
       ansible.builtin.set_fact:
         server_ip_address: "{{ secrets.results[0].stdout }}"
         nixos_root_password: "{{ secrets.results[1].stdout }}"
-        nixos_technical_account_name: "{{ secrets.results[2].stdout }}"
+        nixos_technical_account: "{{ secrets.results[2].stdout }}"
       tags: always
 
     - name: check connection to server under root
@@ -64,7 +64,7 @@
       ansible.builtin.add_host:
         name: server
         ansible_host: "{{ server_ip_address }}"
-        ansible_user: "{{ nixos_technical_account_name }}"
+        ansible_user: "{{ nixos_technical_account }}"
         ansible_ssh_private_key_file: id_ed25519
         ansible_python_interpreter: /run/current-system/sw/bin/python
       changed_when: false
@@ -158,12 +158,12 @@
     #  community.crypto.openssh_keypair:
     #    type: ed25519
     #    path: id_ed25519
-    #    comment: "{{ hostvars['localhost']['nixos_technical_account_name'] }}"
+    #    comment: "{{ hostvars['localhost']['nixos_technical_account'] }}"
     #  delegate_to: localhost
     #  become: false
 
     - name: generate an openssh keypair
-      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ hostvars['localhost']['nixos_technical_account_name'] }} -q -N ""
+      ansible.builtin.command: ssh-keygen -t ed25519 -f id_ed25519 -C {{ hostvars['localhost']['nixos_technical_account'] }} -q -N ""
       args:
         creates: id_ed25519
       delegate_to: localhost
@@ -182,14 +182,14 @@
           { pkgs, ... }:
 
           {
-            users.groups.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {};
-            users.users.{{ hostvars['localhost']['nixos_technical_account_name'] }} = {
+            users.groups.{{ hostvars['localhost']['nixos_technical_account'] }} = {};
+            users.users.{{ hostvars['localhost']['nixos_technical_account'] }} = {
               isSystemUser = true;
-              group = "{{ hostvars['localhost']['nixos_technical_account_name'] }}";
+              group = "{{ hostvars['localhost']['nixos_technical_account'] }}";
               extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
               openssh.authorizedKeys.keys = [ "{{ id_ed25519_pub.stdout }}" ];
               createHome = true;
-              home = "/home/{{ hostvars['localhost']['nixos_technical_account_name'] }}";
+              home = "/home/{{ hostvars['localhost']['nixos_technical_account'] }}";
               useDefaultShell = true;
               packages = with pkgs; [
                 expect  # to generate ca and self-signed certificate
@@ -291,7 +291,7 @@
       ansible.builtin.shell: |
         op item template get Server --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'NixOS technical account (generated)' \
-          command[text]="ssh {{ hostvars['localhost']['nixos_technical_account_name'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
+          command[text]="ssh {{ hostvars['localhost']['nixos_technical_account'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
           [file]=id_ed25519 \
           [file]=id_ed25519.pub \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -305,7 +305,7 @@
         content: >
           server
           ansible_host={{ hostvars['localhost']['server_ip_address'] }}
-          ansible_user={{ hostvars['localhost']['nixos_technical_account_name'] }}
+          ansible_user={{ hostvars['localhost']['nixos_technical_account'] }}
           ansible_ssh_private_key_file=id_ed25519
           ansible_python_interpreter=/run/current-system/sw/bin/python
         dest: hosts

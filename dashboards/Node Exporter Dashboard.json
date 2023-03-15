@@ -718,7 +718,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ mimir_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -773,7 +773,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ mimir_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "editorMode": "code",
           "expr": "1 - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''} / node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'}",
@@ -1031,7 +1031,7 @@
       ],
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ mimir_datasource_uid }}"
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "editable": true,
       "error": false,
@@ -1070,7 +1070,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ mimir_datasource_uid }}"
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "editorMode": "code",
           "expr": "(node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'} - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance'}) / deriv(node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''}[3d]) > 0",
@@ -1361,7 +1361,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Node Exporter",
+  "title": "Node Exporter Dashboard",
   "uid": "",
   "version": 0,
   "weekStart": ""

@@ -87,10 +87,10 @@
     };
   };
 
-  services.nginx.virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}".locations = {
+  services.nginx.virtualHosts."{{ internal_domain_name }}".locations = {
     "/mimir/" = {
       proxyPass     = "http://127.0.0.1:${toString config.services.mimir.configuration.server.http_listen_port}";
-      basicAuthFile = /mnt/ssd/monitoring/.mimirBasicAuthPassword;
+      basicAuthFile = /mnt/ssd/services/.mimirBasicAuthPassword;
     };
   };
 
@@ -105,7 +105,7 @@
     enable = true;
     listenAddress = "127.0.0.1";
     port = 9090;
-    webExternalUrl = "http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus";
+    webExternalUrl = "http://{{ internal_domain_name }}/prometheus";
     stateDir = "prometheus2";
     retentionTime = "15d";
     checkConfig = "syntax-only";
@@ -123,7 +123,7 @@
           targets = [ "${toString config.services.minio.listenAddress}" ];
         }];
         metrics_path = "/minio/v2/metrics/cluster";
-        bearer_token_file = "/mnt/ssd/storages/.minioScrapeBearerToken";
+        bearer_token_file = "/mnt/ssd/services/.minioScrapeBearerToken";
       }
       {
         job_name = "prometheus";
@@ -148,10 +148,10 @@
     }];
   };
 
-  services.nginx.virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}".locations = {
+  services.nginx.virtualHosts."{{ internal_domain_name }}".locations = {
     "/prometheus" = {
       proxyPass     = "http://127.0.0.1:${toString config.services.prometheus.port}";
-      basicAuthFile = /mnt/ssd/monitoring/.prometheusBasicAuthPassword;
+      basicAuthFile = /mnt/ssd/services/.prometheusBasicAuthPassword;
     };
   };
 
@@ -234,13 +234,13 @@
         protocol = "http";
         http_addr = "127.0.0.1";
         http_port = 3000;
-        domain = "{{ hostvars['localhost']['internal_domain_name'] }}";
+        domain = "{{ internal_domain_name }}";
         root_url = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
         enable_gzip = true;
       };
       security = {
-        admin_user = "{{ grafana_auth_user }}";
-        admin_password = "$__file{/mnt/ssd/monitoring/.grafanaAdminPassword}";
+        admin_user = "{{ grafana_username }}";
+        admin_password = "{{ grafana_password }}";
       };
     };
     provision = {
@@ -253,7 +253,7 @@
             type: prometheus
             access: proxy
             orgId: 1
-            uid: {{ mimir_datasource_uid }}
+            uid: {{ grafana_datasource_uid_mimir }}
             url: http://127.0.0.1:${toString config.services.mimir.configuration.server.http_listen_port}/mimir/prometheus
             isDefault: false
             jsonData:
@@ -267,7 +267,7 @@
             type: prometheus
             access: proxy
             orgId: 1
-            uid: {{ prometheus_datasource_uid }}
+            uid: {{ grafana_datasource_uid_prometheus }}
             url: http://127.0.0.1:${toString config.services.prometheus.port}/prometheus
             isDefault: false
             jsonData:
@@ -281,7 +281,7 @@
             type: loki
             access: proxy
             orgId: 1
-            uid: {{ loki_datasource_uid }}
+            uid: {{ grafana_datasource_uid_loki }}
             url: http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}
             isDefault: true
             jsonData:
@@ -310,7 +310,7 @@
     servers = { "127.0.0.1:${toString config.services.grafana.settings.server.http_port}" = {}; };
   };
 
-  services.nginx.virtualHosts."{{ hostvars['localhost']['internal_domain_name'] }}".locations = {
+  services.nginx.virtualHosts."{{ internal_domain_name }}".locations = {
     "/grafana/" = {
       extraConfig = ''
         rewrite ^/grafana/(.*) /$1 break;

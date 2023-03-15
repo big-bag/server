@@ -17,7 +17,7 @@
       changed_when: false
       no_log: true
 
-    - name: get secrets from 1password (1/2)
+    - name: get secrets from 1password
       ansible.builtin.command: |
         op item get 'Secrets (manually)' \
           --vault 'Local server' \
@@ -25,21 +25,23 @@
           --session {{ op_session_token.stdout }}
       loop:
         - "Domains.'internal domain name'"
-        - "'Technical account'.username"
+        - "'Technical account'.nixos"
+        - "'Technical account'.'postgres pgadmin username'"
+        - "'Technical account'.'postgres monitoring username'"
       register: secrets
       changed_when: false
       no_log: true
-
-    - name: get secrets from 1password (2/2)
-      ansible.builtin.set_fact:
-        internal_domain_name: "{{ secrets.results[0].stdout }}"
-        nixos_technical_account_name: "{{ secrets.results[1].stdout }}"
 
 - name: configure server
   hosts: server
   become: true
   gather_facts: false
   tasks:
+    - name: set global variables
+      ansible.builtin.set_fact:
+        internal_domain_name: "{{ hostvars['localhost']['secrets']['results'][0]['stdout'] }}"
+        nixos_technical_account: "{{ hostvars['localhost']['secrets']['results'][1]['stdout'] }}"
+
     - name: create directories
       ansible.builtin.file:
         path: "{{ item.path }}"
@@ -50,6 +52,7 @@
         - { path: /mnt/ssd/services,   mode: '0755' }
         - { path: /mnt/ssd/storages,   mode: '0755' }
         - { path: /mnt/ssd/monitoring, mode: '0755' }
+        - { path: /mnt/ssd/databases,  mode: '0755' }
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -109,30 +112,30 @@
           ansible.builtin.shell: |
             spawn ./easyrsa build-ca nopass
             expect -exact "Common Name (eg: your user, host, or server name) \[Easy-RSA CA\]:"
-            send -- "{{ hostvars['localhost']['internal_domain_name'] | replace('.',' ') | title }} Root CA\r"
+            send -- "{{ internal_domain_name | replace('.',' ') | title }} Root CA\r"
             expect eof
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            executable: /etc/profiles/per-user/{{ hostvars['localhost']['nixos_technical_account_name'] }}/bin/expect
+            executable: /etc/profiles/per-user/{{ nixos_technical_account }}/bin/expect
             creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
 
         - name: issue an ssl certificate
-          ansible.builtin.command: ./easyrsa --batch build-server-full {{ hostvars['localhost']['internal_domain_name'] }} nopass
+          ansible.builtin.command: ./easyrsa --batch build-server-full {{ internal_domain_name }} nopass
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name }}.crt
 
         - name: copy an ssl certificate to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ hostvars['localhost']['internal_domain_name'] }}.crt
-            dest: /mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.crt
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name }}.crt
+            dest: /mnt/ssd/services/{{ internal_domain_name }}.crt
             remote_src: true
           register: certificate
 
         - name: copy a private key to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ hostvars['localhost']['internal_domain_name'] }}.key
-            dest: /mnt/ssd/services/{{ hostvars['localhost']['internal_domain_name'] }}.key
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ internal_domain_name }}.key
+            dest: /mnt/ssd/services/{{ internal_domain_name }}.key
             remote_src: true
           register: key
 
@@ -166,68 +169,53 @@
         minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_access_key_seed) }}"
         minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_secret_key_seed) }}"
 
-    - name: minio environment variable file
-      ansible.builtin.copy:
-        content: |
-          MINIO_ROOT_USER={{ minio_access_key }}
-          MINIO_ROOT_PASSWORD={{ minio_secret_key }}
-          MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
-          MINIO_PROMETHEUS_JOB_ID=minio-job
-          MINIO_BROWSER_REDIRECT_URL=http://{{ hostvars['localhost']['internal_domain_name'] }}/minio
-        dest: /mnt/ssd/storages/.minioEnvironmentVariables
-
     - name: create an empty file for minio bearer token
       ansible.builtin.copy:
         content: ""
-        dest: /mnt/ssd/storages/.minioScrapeBearerToken
+        dest: /mnt/ssd/services/.minioScrapeBearerToken
         force: false
 
     # ------------------- monitoring ------------------- #
 
     - name: set seed variables
       ansible.builtin.set_fact:
-        mimir_auth_user_seed: mimir_auth_user_random
-        mimir_auth_password_seed: mimir_auth_password_random
-        mimir_datasource_uid_seed: mimir_datasource_uid_random
-        prometheus_auth_user_seed: prometheus_auth_user_random
-        prometheus_auth_password_seed: prometheus_auth_password_random
-        prometheus_datasource_uid_seed: prometheus_datasource_uid_random
-        loki_datasource_uid_seed: loki_datasource_uid_random
-        grafana_auth_user_seed: grafana_auth_user_random
-        grafana_auth_password_seed: grafana_auth_password_random
+        mimir_username_seed: mimir_username_random
+        mimir_password_seed: mimir_password_random
+        prometheus_username_seed: prometheus_username_random
+        prometheus_password_seed: prometheus_password_random
+        grafana_username_seed: grafana_username_random
+        grafana_password_seed: grafana_password_random
+        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
+        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
+        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
       tags: dashboards
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
-        mimir_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=mimir_auth_user_seed) }}"
-        mimir_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_auth_password_seed) }}"
-        mimir_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=mimir_datasource_uid_seed) }}"
-        prometheus_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_auth_user_seed) }}"
-        prometheus_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_auth_password_seed) }}"
-        prometheus_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=prometheus_datasource_uid_seed) }}"
-        loki_datasource_uid: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=loki_datasource_uid_seed) }}"
-        grafana_auth_user: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_auth_user_seed) }}"
-        grafana_auth_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=grafana_auth_password_seed) }}"
+        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=mimir_username_seed) }}"
+        mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_password_seed) }}"
+        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_username_seed) }}"
+        prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_password_seed) }}"
+        grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_username_seed) }}"
+        grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
+        grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
+        grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
+        grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
       tags: dashboards
 
     - name: create a basic auth password file to access mimir
       community.general.htpasswd:
-        path: /mnt/ssd/monitoring/.mimirBasicAuthPassword
-        name: "{{ mimir_auth_user }}"
-        password: "{{ mimir_auth_password }}"
+        path: /mnt/ssd/services/.mimirBasicAuthPassword
+        name: "{{ mimir_username }}"
+        password: "{{ mimir_password }}"
         mode: 0600
 
     - name: create a basic auth password file to access prometheus
       community.general.htpasswd:
-        path: /mnt/ssd/monitoring/.prometheusBasicAuthPassword
-        name: "{{ prometheus_auth_user }}"
-        password: "{{ prometheus_auth_password }}"
+        path: /mnt/ssd/services/.prometheusBasicAuthPassword
+        name: "{{ prometheus_username }}"
+        password: "{{ prometheus_password }}"
         mode: 0600
-
-    - name: create a password file to login to grafana
-      ansible.builtin.copy:
-        content: "{{ grafana_auth_password }}"
-        dest: /mnt/ssd/monitoring/.grafanaAdminPassword
 
     - name: check if a grafana dashboard has been downloaded to the local machine
       ansible.builtin.command: "grep '\"uid\": \"\",' '{{ item }}'"
@@ -286,8 +274,8 @@
         - name: change mimir datasource uid to variable
           ansible.builtin.replace:
             path: "{{ item }}"
-            regexp: '{{ mimir_datasource_uid }}'
-            replace: '{% raw %}{{ mimir_datasource_uid }}{% endraw %}'
+            regexp: '{{ grafana_datasource_uid_mimir }}'
+            replace: '{% raw %}{{ grafana_datasource_uid_mimir }}{% endraw %}'
           with_fileglob:
             - dashboards/Mimir/*
             - dashboards/*
@@ -295,8 +283,8 @@
         - name: change prometheus datasource uid to variable
           ansible.builtin.replace:
             path: "{{ item }}"
-            regexp: '{{ prometheus_datasource_uid }}'
-            replace: '{% raw %}{{ prometheus_datasource_uid }}{% endraw %}'
+            regexp: '{{ grafana_datasource_uid_prometheus }}'
+            replace: '{% raw %}{{ grafana_datasource_uid_prometheus }}{% endraw %}'
           with_fileglob: dashboards/Prometheus/*
 
         - name: reset location number in folder
@@ -353,6 +341,31 @@
       when: item.state == 'file'
       tags: [ never, dashboards ]
 
+    # ------------------- databases ------------------- #
+
+    - name: set seed variables
+      ansible.builtin.set_fact:
+        postgres_pgadmin_database_password_seed: postgres_pgadmin_database_password_random
+        postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
+        postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
+        postgres_monitoring_database_password_seed: postgres_monitoring_database_password_random
+
+    - name: create random but idempotent secrets
+      ansible.builtin.set_fact:
+        postgres_pgadmin_database_username: "{{ hostvars['localhost']['secrets']['results'][2]['stdout'] }}"
+        postgres_pgadmin_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_database_password_seed) }}"
+        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=postgres_pgadmin_gui_username_seed) }}"
+        postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=postgres_pgadmin_gui_password_seed) }}"
+        postgres_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][3]['stdout'] }}"
+        postgres_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_monitoring_database_password_seed) }}"
+
+    - name: create a basic auth password file to access pgadmin
+      community.general.htpasswd:
+        path: /mnt/ssd/services/.pgadminBasicAuthPassword
+        name: "{{ postgres_pgadmin_gui_username }}"
+        password: "{{ postgres_pgadmin_gui_password }}"
+        mode: 0600
+
     # ------------------- nixos configuration ------------------- #
 
     - name: upload nixos configuration files
@@ -395,7 +408,7 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Storages (generated)' \
-          Minio.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/minio \
+          Minio.website[url]=http://{{ internal_domain_name }}/minio \
           Minio.'Username (Access Key)'[text]='{{ minio_access_key }}' \
           Minio.'Password (Secret Key)'[password]='{{ minio_secret_key }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -420,15 +433,42 @@
       ansible.builtin.shell: |
         op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
           --title 'Monitoring (generated)' \
-          Mimir.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/mimir \
-          Mimir.username[text]='{{ mimir_auth_user }}' \
-          Mimir.password[password]='{{ mimir_auth_password }}' \
-          Prometheus.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/prometheus \
-          Prometheus.username[text]='{{ prometheus_auth_user }}' \
-          Prometheus.password[password]='{{ prometheus_auth_password }}' \
-          Grafana.website[url]=http://{{ hostvars['localhost']['internal_domain_name'] }}/grafana \
-          Grafana.username[text]='{{ grafana_auth_user }}' \
-          Grafana.password[password]='{{ grafana_auth_password }}' \
+          Mimir.website[url]=http://{{ internal_domain_name }}/mimir \
+          Mimir.username[text]='{{ mimir_username }}' \
+          Mimir.password[password]='{{ mimir_password }}' \
+          Prometheus.website[url]=http://{{ internal_domain_name }}/prometheus \
+          Prometheus.username[text]='{{ prometheus_username }}' \
+          Prometheus.password[password]='{{ prometheus_password }}' \
+          Grafana.website[url]=http://{{ internal_domain_name }}/grafana \
+          Grafana.username[text]='{{ grafana_username }}' \
+          Grafana.password[password]='{{ grafana_password }}' \
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
+      delegate_to: localhost
+      become: false
+      no_log: true
+      when: item_created.rc != 0
+
+    - name: check if item in 1password has been created
+      ansible.builtin.command: |
+        op item get 'Databases (generated)' \
+          --vault 'Local server' \
+          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
+      register: item_created
+      delegate_to: localhost
+      failed_when: false
+      changed_when: false
+      become: false
+      no_log: true
+
+    - name: create an item in 1password with credentials for databases
+      ansible.builtin.shell: |
+        op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
+          --title 'Databases (generated)' \
+          PostgreSQL.'pgAdmin db connection command'[password]='PGPASSWORD='\''{{ postgres_pgadmin_database_password }}'\'' psql -h 127.0.0.1 -p 5432 -U {{ postgres_pgadmin_database_username }} postgres' \
+          PostgreSQL.'Monitoring db connection command'[password]='PGPASSWORD='\''{{ postgres_monitoring_database_password }}'\'' psql -h 127.0.0.1 -p 5432 -U {{ postgres_monitoring_database_username }} postgres' \
+          PostgreSQL.'pgAdmin website'[url]=http://{{ internal_domain_name }}/pgadmin4 \
+          PostgreSQL.'pgAdmin username'[text]='{{ postgres_pgadmin_gui_username }}' \
+          PostgreSQL.'pgAdmin password'[password]='{{ postgres_pgadmin_gui_password }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       delegate_to: localhost
       become: false
