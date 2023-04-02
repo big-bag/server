@@ -149,6 +149,7 @@ Installing OS:
          * nixos[text]: [NIXOS_TECHNICAL_ACCOUNT]
          * postgres pgadmin username[text]: [PGADMIN_POSTGRES_USER]
          * postgres monitoring username[text]: [MONITORING_POSTGRES_USER]
+         * redis monitoring username[text]: [MONITORING_REDIS_USER]
        * section: `Domains`
          * internal domain name[text]: example.com
 
@@ -233,3 +234,4 @@ Installing OS:
    | Node Exporter Dashboard | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
    || https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
    | PostgreSQL Exporter Dashboard | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
+   | Redis Exporter Dashboard | https://grafana.com/grafana/dashboards/14091-redis-dashboard-for-prometheus-redis-exporter-1-x/ |

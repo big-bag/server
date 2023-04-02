@@ -6,8 +6,8 @@
       enable = true;
       listenAddress = "127.0.0.1:9000";
       consoleAddress = "127.0.0.1:9001";
-      dataDir = [ "/mnt/ssd/storages/minio/data" ];
-      configDir = "/mnt/ssd/storages/minio/config";
+      dataDir = [ "/mnt/ssd/data-stores/minio/data" ];
+      configDir = "/mnt/ssd/data-stores/minio/config";
       region = "eu-west-3";
       browser = true;
       rootCredentialsFile = pkgs.writeText "Environment variables" ''
@@ -20,13 +20,30 @@
     };
   };
 
+  systemd = {
+    services = {
+      minio = {
+        serviceConfig = {
+          CPUQuota = "1,56%";
+          MemoryHigh = "461M";
+          MemoryMax = "512M";
+        };
+      };
+    };
+  };
+
   virtualisation = {
     oci-containers = {
       containers = {
         minio-client = {
-          image = "minio/mc:RELEASE.2023-01-11T03-14-16Z";
+          image = "minio/mc:RELEASE.2023-03-23T20-03-04Z";
           autoStart = true;
-          extraOptions = [ "--network=host" ];
+          extraOptions = [
+            "--network=host"
+            "--cpus=0.01563"
+            "--memory-reservation=58m"
+            "--memory=64m"
+          ];
           volumes = [ "/mnt/ssd/services/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken" ];
           environment = { ALIAS = "local"; };
           entrypoint = "/bin/sh";

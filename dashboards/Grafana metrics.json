@@ -120,7 +120,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -200,7 +200,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -280,7 +280,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -360,7 +360,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {

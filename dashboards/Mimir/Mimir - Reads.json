@@ -45,8 +45,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -59,8 +59,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -70,8 +70,8 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "description": "",
       "gridPos": {
@@ -90,12 +90,12 @@
         "content": "<p>\n  This dashboard shows health metrics for the read path.\n  It is broken into sections for each service on the read path, and organized by the order in which the read request flows.\n  <br/>\n  Incoming queries travel from the gateway → query frontend → query scheduler → querier → ingester and/or store-gateway (depending on the time range of the query).\n  <br/>\n  For each service, there are 3 panels showing (1) requests per second to that service, (2) average, median, and p99 latency of requests to that service, and (3) p99 latency of requests to each instance of that service.\n</p>\n<p>\n  The dashboard also shows metrics for the 4 optional caches that can be deployed:\n  the query results cache, the metadata cache, the chunks cache, and the index cache.\n  <br/>\n  These panels will show “no data” if the caches are not deployed.\n</p>\n<p>\n  Lastly, it also includes metrics for how the ingester and store-gateway interact with object storage.\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -106,8 +106,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -120,8 +120,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -180,7 +180,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -248,7 +248,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -316,7 +316,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -384,7 +384,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -452,7 +452,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
@@ -472,8 +472,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -486,8 +486,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -539,7 +539,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -629,7 +629,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -800,8 +800,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -814,8 +814,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -825,8 +825,8 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "description": "",
       "gridPos": {
@@ -849,8 +849,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1065,8 +1065,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1079,8 +1079,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1287,8 +1287,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1301,8 +1301,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1615,8 +1615,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1629,8 +1629,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1930,8 +1930,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1944,8 +1944,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -2245,8 +2245,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -2259,8 +2259,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -2561,8 +2561,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -2575,8 +2575,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -2791,8 +2791,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -2805,8 +2805,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -3101,8 +3101,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -3115,8 +3115,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -3410,8 +3410,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -3424,8 +3424,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -3719,8 +3719,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -3733,8 +3733,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -4028,8 +4028,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -4042,8 +4042,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -4446,8 +4446,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -4460,8 +4460,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -4907,8 +4907,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -4921,8 +4921,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -5325,8 +5325,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -5339,8 +5339,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -5822,7 +5822,7 @@
           ]
         },
         "datasource": {
-          "type": "loki",
+          "type": "prometheus",
           "uid": "$datasource"
         },
         "definition": "",
@@ -5857,7 +5857,7 @@
           ]
         },
         "datasource": {
-          "type": "loki",
+          "type": "prometheus",
           "uid": "$datasource"
         },
         "definition": "",

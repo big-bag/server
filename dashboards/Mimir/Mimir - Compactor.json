@@ -45,8 +45,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -59,8 +59,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -108,7 +108,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -218,7 +218,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -387,7 +387,7 @@
         "textMode": "value"
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -644,7 +644,7 @@
         "showHeader": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -756,8 +756,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -770,8 +770,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -814,7 +814,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -902,7 +902,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -979,8 +979,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -993,8 +993,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1036,7 +1036,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1124,7 +1124,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "9.3.6",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1179,8 +1179,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1193,8 +1193,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1373,8 +1373,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1387,8 +1387,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1589,8 +1589,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1603,8 +1603,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -1967,8 +1967,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -1981,8 +1981,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -2388,8 +2388,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "hHIWF6FoD"
+        "type": "prometheus",
+        "uid": "{{ grafana_datasource_uid_mimir }}"
       },
       "gridPos": {
         "h": 1,
@@ -2402,8 +2402,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "hHIWF6FoD"
+            "type": "prometheus",
+            "uid": "{{ grafana_datasource_uid_mimir }}"
           },
           "refId": "A"
         }
@@ -2634,7 +2634,7 @@
           ]
         },
         "datasource": {
-          "type": "loki",
+          "type": "prometheus",
           "uid": "$datasource"
         },
         "definition": "",
@@ -2669,7 +2669,7 @@
           ]
         },
         "datasource": {
-          "type": "loki",
+          "type": "prometheus",
           "uid": "$datasource"
         },
         "definition": "",

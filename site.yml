@@ -28,6 +28,7 @@
         - "'Technical account'.nixos"
         - "'Technical account'.'postgres pgadmin username'"
         - "'Technical account'.'postgres monitoring username'"
+        - "'Technical account'.'redis monitoring username'"
       register: secrets
       changed_when: false
       no_log: true
@@ -48,11 +49,10 @@
         state: directory
         mode: "{{ item.mode }}"
       loop:
-        - { path: /mnt/hdd/src,        mode: '0755' }
-        - { path: /mnt/ssd/services,   mode: '0755' }
-        - { path: /mnt/ssd/storages,   mode: '0755' }
-        - { path: /mnt/ssd/monitoring, mode: '0755' }
-        - { path: /mnt/ssd/databases,  mode: '0755' }
+        - { path: /mnt/hdd/src,         mode: '0755' }
+        - { path: /mnt/ssd/services,    mode: '0755' }
+        - { path: /mnt/ssd/data-stores, mode: '0755' }
+        - { path: /mnt/ssd/monitoring,  mode: '0755' }
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -192,9 +192,9 @@
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
-        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=mimir_username_seed) }}"
+        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=mimir_username_seed) }}"
         mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_password_seed) }}"
-        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=prometheus_username_seed) }}"
+        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=prometheus_username_seed) }}"
         prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_password_seed) }}"
         grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_username_seed) }}"
         grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
@@ -349,21 +349,37 @@
         postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
         postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
         postgres_monitoring_database_password_seed: postgres_monitoring_database_password_random
+        redis_database_password_seed: redis_database_password_random
+        redis_redisinsight_username_seed: redis_redisinsight_username_random
+        redis_redisinsight_password_seed: redis_redisinsight_password_random
+        redis_monitoring_database_password_seed: redis_monitoring_database_password_random
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
         postgres_pgadmin_database_username: "{{ hostvars['localhost']['secrets']['results'][2]['stdout'] }}"
         postgres_pgadmin_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_database_password_seed) }}"
-        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=postgres_pgadmin_gui_username_seed) }}"
+        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=postgres_pgadmin_gui_username_seed) }}"
         postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=postgres_pgadmin_gui_password_seed) }}"
         postgres_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][3]['stdout'] }}"
         postgres_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_monitoring_database_password_seed) }}"
+        redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
+        redis_redisinsight_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=redis_redisinsight_username_seed) }}"
+        redis_redisinsight_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_redisinsight_password_seed) }}"
+        redis_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][4]['stdout'] }}"
+        redis_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_monitoring_database_password_seed) }}"
 
     - name: create a basic auth password file to access pgadmin
       community.general.htpasswd:
         path: /mnt/ssd/services/.pgadminBasicAuthPassword
         name: "{{ postgres_pgadmin_gui_username }}"
         password: "{{ postgres_pgadmin_gui_password }}"
+        mode: 0600
+
+    - name: create a basic auth password file to access redisinsight
+      community.general.htpasswd:
+        path: /mnt/ssd/services/.redisinsightBasicAuthPassword
+        name: "{{ redis_redisinsight_username }}"
+        password: "{{ redis_redisinsight_password }}"
         mode: 0600
 
     # ------------------- nixos configuration ------------------- #
@@ -469,6 +485,10 @@
           PostgreSQL.'pgAdmin website'[url]=http://{{ internal_domain_name }}/pgadmin4 \
           PostgreSQL.'pgAdmin username'[text]='{{ postgres_pgadmin_gui_username }}' \
           PostgreSQL.'pgAdmin password'[password]='{{ postgres_pgadmin_gui_password }}' \
+          Redis.'Database "Local" password'[password]='{{ redis_database_password }}' \
+          Redis.'RedisInsight website'[url]=http://{{ internal_domain_name }}/redisinsight \
+          Redis.'RedisInsight username'[text]='{{ redis_redisinsight_username }}' \
+          Redis.'RedisInsight password'[password]='{{ redis_redisinsight_password }}' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       delegate_to: localhost
       become: false

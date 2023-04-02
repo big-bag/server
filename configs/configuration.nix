@@ -11,9 +11,14 @@
       ./python.nix
       ./technical-account.nix
       ./disks.nix
-      ./storages.nix
-      ./monitoring.nix
-      ./databases.nix
+      ./minio.nix
+      ./mimir.nix
+      ./prometheus.nix
+      ./loki.nix
+      ./grafana.nix
+      ./grafana-agent.nix
+      ./postgresql.nix
+      ./redis.nix
     ];
 
   # Use the systemd-boot EFI boot loader.
@@ -125,6 +130,14 @@
       forceSSL = true;
       sslCertificate = "/mnt/ssd/services/{{ internal_domain_name }}.crt";
       sslCertificateKey = "/mnt/ssd/services/{{ internal_domain_name }}.key";
+    };
+  };
+
+  systemd.services.nginx = {
+    serviceConfig = {
+      CPUQuota = "0,049%";
+      MemoryHigh = "14M";
+      MemoryMax = "16M";
     };
   };
 
