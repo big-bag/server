@@ -19,6 +19,7 @@
       ./grafana-agent.nix
       ./postgresql.nix
       ./redis.nix
+      ./gitlab.nix
     ];
 
   # Use the systemd-boot EFI boot loader.
@@ -89,7 +90,7 @@
   #   vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
   #   wget
     # BEGIN ANSIBLE MANAGED BLOCK PARTED
-    parted  # For community.general.parted ansible module
+    parted # For community.general.parted ansible module
     # END ANSIBLE MANAGED BLOCK PARTED
   ];
 
@@ -107,6 +108,9 @@
   services.openssh = {
     enable = true;
     permitRootLogin = "no";
+    # BEGIN ANSIBLE MANAGED BLOCK SSH PORT
+    ports = [ {{ server_ssh_port }} ];
+    # END ANSIBLE MANAGED BLOCK SSH PORT
   };
 
   security.dhparams = {
@@ -121,15 +125,50 @@
   services.nginx = {
     enable = true;
     sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
-    virtualHosts."{{ internal_domain_name }}" = {
-      listen = [
-        { addr = "*"; port = 80; }
-        { addr = "*"; port = 443; ssl = true; }
-      ];
-      kTLS = true;
-      forceSSL = true;
-      sslCertificate = "/mnt/ssd/services/{{ internal_domain_name }}.crt";
-      sslCertificateKey = "/mnt/ssd/services/{{ internal_domain_name }}.key";
+    virtualHosts = {
+      "{{ internal_domain_name }}" = {
+        listen = [
+          { addr = "*"; port = 80; }
+          { addr = "*"; port = 443; ssl = true; }
+        ];
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+      };
+
+      "gitlab.{{ internal_domain_name }}" = {
+        listen = [
+          { addr = "*"; port = 80; }
+          { addr = "*"; port = 443; ssl = true; }
+        ];
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+      };
+
+      "registry.{{ internal_domain_name }}" = {
+        listen = [
+          { addr = "*"; port = 80; }
+          { addr = "*"; port = 443; ssl = true; }
+        ];
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+      };
+
+      "pages.{{ internal_domain_name }}" = {
+        listen = [
+          { addr = "*"; port = 80; }
+          { addr = "*"; port = 443; ssl = true; }
+        ];
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+      };
     };
   };
 
@@ -153,6 +192,9 @@
   virtualisation = {
     oci-containers = {
       backend = "podman";
+    };
+    podman = {
+      enable = true;
     };
   };
 

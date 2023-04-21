@@ -17,7 +17,7 @@
       changed_when: false
       no_log: true
 
-    - name: get secrets from 1password
+    - name: get secrets from 1password (1/2)
       ansible.builtin.command: |
         op item get 'Secrets (manually)' \
           --vault 'Local server' \
@@ -29,7 +29,18 @@
         - "'Technical account'.'postgres pgadmin username'"
         - "'Technical account'.'postgres monitoring username'"
         - "'Technical account'.'redis monitoring username'"
+        - "'Technical account'.'postgres gitlab username'"
       register: secrets
+      changed_when: false
+      no_log: true
+
+    - name: get secrets from 1password (2/2)
+      ansible.builtin.command: |
+        op item get 'NixOS (generated)' \
+          --vault 'Local server' \
+          --fields label='ssh port' \
+          --session {{ op_session_token.stdout }}
+      register: server_ssh_port_generated
       changed_when: false
       no_log: true
 
@@ -42,6 +53,7 @@
       ansible.builtin.set_fact:
         internal_domain_name: "{{ hostvars['localhost']['secrets']['results'][0]['stdout'] }}"
         nixos_technical_account: "{{ hostvars['localhost']['secrets']['results'][1]['stdout'] }}"
+        server_ssh_port: "{{ hostvars['localhost']['server_ssh_port_generated']['stdout'] }}"
 
     - name: create directories
       ansible.builtin.file:
@@ -49,10 +61,14 @@
         state: directory
         mode: "{{ item.mode }}"
       loop:
-        - { path: /mnt/hdd/src,         mode: '0755' }
-        - { path: /mnt/ssd/services,    mode: '0755' }
-        - { path: /mnt/ssd/data-stores, mode: '0755' }
-        - { path: /mnt/ssd/monitoring,  mode: '0755' }
+        - { path: /mnt/hdd/src,                    mode: '0755' }
+        - { path: /mnt/ssd/services/nginx,         mode: '0755' }
+        - { path: /mnt/ssd/data-stores,            mode: '0755' }
+        - { path: /mnt/ssd/monitoring,             mode: '0755' }
+        - { path: /mnt/ssd/services/gitlab,        mode: '0755' }
+        - { path: /mnt/ssd/services/gitlab/config, mode: '0775' }
+        - { path: /mnt/ssd/services/gitlab/logs,   mode: '0755' }
+        - { path: /mnt/ssd/services/gitlab/data,   mode: '0755' }
 
     # ------------------- self-signed certificate ------------------- #
 
@@ -120,35 +136,26 @@
             creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
 
         - name: issue an ssl certificate
-          ansible.builtin.command: ./easyrsa --batch build-server-full {{ internal_domain_name }} nopass
+          ansible.builtin.command: ./easyrsa --batch build-server-full *.{{ internal_domain_name }} nopass
           args:
             chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name }}.crt
+            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/*.{{ internal_domain_name }}.crt
 
         - name: copy an ssl certificate to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/{{ internal_domain_name }}.crt
-            dest: /mnt/ssd/services/{{ internal_domain_name }}.crt
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/*.{{ internal_domain_name }}.crt
+            dest: /mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt
             remote_src: true
           register: certificate
+          notify: apply config
 
         - name: copy a private key to services folder
           ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/{{ internal_domain_name }}.key
-            dest: /mnt/ssd/services/{{ internal_domain_name }}.key
+            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/*.{{ internal_domain_name }}.key
+            dest: /mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key
             remote_src: true
           register: key
-
-        - name: populate service facts
-          ansible.builtin.service_facts:
-
-        - name: reload service nginx
-          ansible.builtin.systemd:
-            name: nginx.service
-            state: reloaded
-          when:
-            - certificate.changed or key.changed
-            - "'nginx.service' in ansible_facts.services"
+          notify: apply config
 
         - name: copy ca certificate from server to local machine
           ansible.posix.synchronize:
@@ -172,7 +179,7 @@
     - name: create an empty file for minio bearer token
       ansible.builtin.copy:
         content: ""
-        dest: /mnt/ssd/services/.minioScrapeBearerToken
+        dest: /mnt/ssd/monitoring/.minioScrapeBearerToken
         force: false
 
     # ------------------- monitoring ------------------- #
@@ -192,10 +199,10 @@
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
-        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=mimir_username_seed) }}"
-        mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=mimir_password_seed) }}"
-        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=prometheus_username_seed) }}"
-        prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=prometheus_password_seed) }}"
+        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=mimir_username_seed) }}"
+        mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mimir_password_seed) }}"
+        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=prometheus_username_seed) }}"
+        prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=prometheus_password_seed) }}"
         grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_username_seed) }}"
         grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
         grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
@@ -203,26 +210,13 @@
         grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
       tags: dashboards
 
-    - name: create a basic auth password file to access mimir
-      community.general.htpasswd:
-        path: /mnt/ssd/services/.mimirBasicAuthPassword
-        name: "{{ mimir_username }}"
-        password: "{{ mimir_password }}"
-        mode: 0600
-
-    - name: create a basic auth password file to access prometheus
-      community.general.htpasswd:
-        path: /mnt/ssd/services/.prometheusBasicAuthPassword
-        name: "{{ prometheus_username }}"
-        password: "{{ prometheus_password }}"
-        mode: 0600
-
     - name: check if a grafana dashboard has been downloaded to the local machine
       ansible.builtin.command: "grep '\"uid\": \"\",' '{{ item }}'"
       with_fileglob:
         - dashboards/Mimir/*
         - dashboards/Prometheus/*
         - dashboards/*
+        - dashboards/GitLab/*
       register: dashboard_uid
       delegate_to: localhost
       failed_when: false
@@ -243,6 +237,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         # find and escape double curly braces which looks like:
         # "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
@@ -255,6 +250,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         # find and escape double curly braces which looks like:
         # "legendFormat": "{{job}}",
@@ -270,6 +266,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         - name: change mimir datasource uid to variable
           ansible.builtin.replace:
@@ -279,6 +276,7 @@
           with_fileglob:
             - dashboards/Mimir/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         - name: change prometheus datasource uid to variable
           ansible.builtin.replace:
@@ -298,6 +296,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         - name: reset dashboard uid
           ansible.builtin.replace:
@@ -308,6 +307,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
 
         - name: reset dashboard version
           ansible.builtin.replace:
@@ -318,6 +318,7 @@
             - dashboards/Mimir/*
             - dashboards/Prometheus/*
             - dashboards/*
+            - dashboards/GitLab/*
       delegate_to: localhost
       become: false
       when: dashboard_uid.results | json_query('[*].rc') | reject('match', '0')
@@ -341,10 +342,11 @@
       when: item.state == 'file'
       tags: [ never, dashboards ]
 
-    # ------------------- databases ------------------- #
-
     - name: set seed variables
       ansible.builtin.set_fact:
+
+        # ------------------- databases ------------------- #
+
         postgres_pgadmin_database_password_seed: postgres_pgadmin_database_password_random
         postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
         postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
@@ -354,33 +356,35 @@
         redis_redisinsight_password_seed: redis_redisinsight_password_random
         redis_monitoring_database_password_seed: redis_monitoring_database_password_random
 
+        # ------------------- gitlab ------------------- #
+
+        gitlab_password_seed: gitlab_password_random
+        gitlab_token_seed: gitlab_token_random
+        postgres_gitlab_database_password_seed: postgres_gitlab_database_password_random
+
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
+
+        # ------------------- databases ------------------- #
+
         postgres_pgadmin_database_username: "{{ hostvars['localhost']['secrets']['results'][2]['stdout'] }}"
         postgres_pgadmin_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_database_password_seed) }}"
-        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=postgres_pgadmin_gui_username_seed) }}"
-        postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=postgres_pgadmin_gui_password_seed) }}"
+        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=postgres_pgadmin_gui_username_seed) }}"
+        postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_gui_password_seed) }}"
         postgres_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][3]['stdout'] }}"
         postgres_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_monitoring_database_password_seed) }}"
         redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
-        redis_redisinsight_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=redis_redisinsight_username_seed) }}"
-        redis_redisinsight_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_redisinsight_password_seed) }}"
+        redis_redisinsight_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=redis_redisinsight_username_seed) }}"
+        redis_redisinsight_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=redis_redisinsight_password_seed) }}"
         redis_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][4]['stdout'] }}"
         redis_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_monitoring_database_password_seed) }}"
 
-    - name: create a basic auth password file to access pgadmin
-      community.general.htpasswd:
-        path: /mnt/ssd/services/.pgadminBasicAuthPassword
-        name: "{{ postgres_pgadmin_gui_username }}"
-        password: "{{ postgres_pgadmin_gui_password }}"
-        mode: 0600
+        # ------------------- gitlab ------------------- #
 
-    - name: create a basic auth password file to access redisinsight
-      community.general.htpasswd:
-        path: /mnt/ssd/services/.redisinsightBasicAuthPassword
-        name: "{{ redis_redisinsight_username }}"
-        password: "{{ redis_redisinsight_password }}"
-        mode: 0600
+        gitlab_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_password_seed) }}"
+        gitlab_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_token_seed) }}"
+        postgres_gitlab_database_username: "{{ hostvars['localhost']['secrets']['results'][5]['stdout'] }}"
+        postgres_gitlab_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=postgres_gitlab_database_password_seed) }}"
 
     # ------------------- nixos configuration ------------------- #
 
@@ -407,90 +411,16 @@
         msg: "{{ rebuild_output.stderr_lines }}"
       listen: apply config
 
-  post_tasks:
-    - name: check if item in 1password has been created
-      ansible.builtin.command: |
-        op item get 'Storages (generated)' \
-          --vault 'Local server' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      register: item_created
-      delegate_to: localhost
-      failed_when: false
-      changed_when: false
-      become: false
-      no_log: true
+    - name: populate service facts
+      ansible.builtin.service_facts:
+      when: certificate.changed or key.changed
+      listen: apply config
 
-    - name: create an item in 1password with credentials for storages
-      ansible.builtin.shell: |
-        op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
-          --title 'Storages (generated)' \
-          Minio.website[url]=http://{{ internal_domain_name }}/minio \
-          Minio.'Username (Access Key)'[text]='{{ minio_access_key }}' \
-          Minio.'Password (Secret Key)'[password]='{{ minio_secret_key }}' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      delegate_to: localhost
-      become: false
-      no_log: true
-      when: item_created.rc != 0
-
-    - name: check if item in 1password has been created
-      ansible.builtin.command: |
-        op item get 'Monitoring (generated)' \
-          --vault 'Local server' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      register: item_created
-      delegate_to: localhost
-      failed_when: false
-      changed_when: false
-      become: false
-      no_log: true
-
-    - name: create an item in 1password with credentials for monitoring
-      ansible.builtin.shell: |
-        op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
-          --title 'Monitoring (generated)' \
-          Mimir.website[url]=http://{{ internal_domain_name }}/mimir \
-          Mimir.username[text]='{{ mimir_username }}' \
-          Mimir.password[password]='{{ mimir_password }}' \
-          Prometheus.website[url]=http://{{ internal_domain_name }}/prometheus \
-          Prometheus.username[text]='{{ prometheus_username }}' \
-          Prometheus.password[password]='{{ prometheus_password }}' \
-          Grafana.website[url]=http://{{ internal_domain_name }}/grafana \
-          Grafana.username[text]='{{ grafana_username }}' \
-          Grafana.password[password]='{{ grafana_password }}' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      delegate_to: localhost
-      become: false
-      no_log: true
-      when: item_created.rc != 0
-
-    - name: check if item in 1password has been created
-      ansible.builtin.command: |
-        op item get 'Databases (generated)' \
-          --vault 'Local server' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      register: item_created
-      delegate_to: localhost
-      failed_when: false
-      changed_when: false
-      become: false
-      no_log: true
-
-    - name: create an item in 1password with credentials for databases
-      ansible.builtin.shell: |
-        op item template get Login --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
-          --title 'Databases (generated)' \
-          PostgreSQL.'pgAdmin db connection command'[password]='PGPASSWORD='\''{{ postgres_pgadmin_database_password }}'\'' psql -h 127.0.0.1 -p 5432 -U {{ postgres_pgadmin_database_username }} postgres' \
-          PostgreSQL.'Monitoring db connection command'[password]='PGPASSWORD='\''{{ postgres_monitoring_database_password }}'\'' psql -h 127.0.0.1 -p 5432 -U {{ postgres_monitoring_database_username }} postgres' \
-          PostgreSQL.'pgAdmin website'[url]=http://{{ internal_domain_name }}/pgadmin4 \
-          PostgreSQL.'pgAdmin username'[text]='{{ postgres_pgadmin_gui_username }}' \
-          PostgreSQL.'pgAdmin password'[password]='{{ postgres_pgadmin_gui_password }}' \
-          Redis.'Database "Local" password'[password]='{{ redis_database_password }}' \
-          Redis.'RedisInsight website'[url]=http://{{ internal_domain_name }}/redisinsight \
-          Redis.'RedisInsight username'[text]='{{ redis_redisinsight_username }}' \
-          Redis.'RedisInsight password'[password]='{{ redis_redisinsight_password }}' \
-          --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
-      delegate_to: localhost
-      become: false
-      no_log: true
-      when: item_created.rc != 0
+    - name: reload service nginx
+      ansible.builtin.systemd:
+        name: nginx.service
+        state: reloaded
+      when:
+        - certificate.changed or key.changed
+        - "'nginx.service' in ansible_facts.services"
+      listen: apply config

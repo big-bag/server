@@ -141,15 +141,17 @@ Installing OS:
 1. save secrets in 1Password
    * vault: `Local server`
      * item: `Secrets (manually)`
+       * section: `Server`
+         * ip address[text]: [SERVER_IP_ADDRESS]
        * section: `Root account`
          * username[text]: root
          * password[password]: [ROOT_USER_PASSWORD]
-         * ip-address[text]: [SERVER_IP_ADDRESS]
        * section: `Technical account`
          * nixos[text]: [NIXOS_TECHNICAL_ACCOUNT]
          * postgres pgadmin username[text]: [PGADMIN_POSTGRES_USER]
          * postgres monitoring username[text]: [MONITORING_POSTGRES_USER]
          * redis monitoring username[text]: [MONITORING_REDIS_USER]
+         * postgres gitlab username[text]: [GITLAB_POSTGRES_USER]
        * section: `Domains`
          * internal domain name[text]: example.com
 
@@ -235,3 +237,10 @@ Installing OS:
    || https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
    | PostgreSQL Exporter Dashboard | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
    | Redis Exporter Dashboard | https://grafana.com/grafana/dashboards/14091-redis-dashboard-for-prometheus-redis-exporter-1-x/ |
+   | GitLab | https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/gitaly.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/overview.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/postgresql.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/rails-app.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json |
+   || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |

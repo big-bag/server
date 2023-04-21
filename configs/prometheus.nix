@@ -29,7 +29,7 @@
             targets = [ "${toString config.services.minio.listenAddress}" ];
           }];
           metrics_path = "/minio/v2/metrics/cluster";
-          bearer_token_file = "/mnt/ssd/services/.minioScrapeBearerToken";
+          bearer_token_file = "/mnt/ssd/monitoring/.minioScrapeBearerToken";
         }
         {
           job_name = "prometheus";
@@ -55,6 +55,57 @@
     };
   };
 
+  services = {
+    nginx = {
+      virtualHosts."{{ internal_domain_name }}" = {
+        locations."/prometheus" = {
+          proxyPass = "http://127.0.0.1:${toString config.services.prometheus.port}";
+          basicAuth = { {{ prometheus_username }} = "{{ prometheus_password }}"; };
+        };
+      };
+    };
+  };
+
+  virtualisation = {
+    oci-containers = {
+      containers = {
+        op-prometheus = {
+          image = "1password/op:2.16.1";
+          autoStart = true;
+          extraOptions = [
+            "--cpus=0.01563"
+            "--memory-reservation=58m"
+            "--memory=64m"
+          ];
+          environment = { OP_DEVICE = "{{ hostvars['localhost']['vault_1password_device_id'] }}"; };
+          entrypoint = "/bin/bash";
+          cmd = [
+            "-c" "
+              SESSION_TOKEN=$(echo {{ hostvars['localhost']['vault_1password_master_password'] }} | op account add \\
+                --address {{ hostvars['localhost']['vault_1password_subdomain'] }}.1password.com \\
+                --email {{ hostvars['localhost']['vault_1password_email_address'] }} \\
+                --secret-key {{ hostvars['localhost']['vault_1password_secret_key'] }} \\
+                --signin --raw)
+
+              op item get 'Prometheus (generated)' \\
+                --vault 'Local server' \\
+                --session $SESSION_TOKEN
+
+              if [ $? != 0 ]; then
+                op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \\
+                  --title 'Prometheus (generated)' \\
+                  --url http://{{ internal_domain_name }}/prometheus \\
+                  username={{ prometheus_username }} \\
+                  password='{{ prometheus_password }}' \\
+                  --session $SESSION_TOKEN
+              fi
+            "
+          ];
+        };
+      };
+    };
+  };
+
   systemd = {
     services = {
       prometheus = {
@@ -64,15 +115,10 @@
           MemoryMax = "128M";
         };
       };
-    };
-  };
 
-  services = {
-    nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
-        locations."/prometheus" = {
-          proxyPass     = "http://127.0.0.1:${toString config.services.prometheus.port}";
-          basicAuthFile = /mnt/ssd/services/.prometheusBasicAuthPassword;
+      podman-op-prometheus = {
+        serviceConfig = {
+          RestartPreventExitStatus = 0;
         };
       };
     };

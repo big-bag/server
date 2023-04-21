@@ -45,19 +45,15 @@
             LOGIN
             PASSWORD '{{ postgres_monitoring_database_password }}';
         GRANT pg_monitor TO {{ postgres_monitoring_database_username }};
-      '';
-    };
-  };
 
-  systemd = {
-    services = {
-      postgresql = {
-        serviceConfig = {
-          CPUQuota = "6,25%";
-          MemoryHigh = 1932735283; # 1,8 Gb * 1024 * 1024 * 1024 = 1932735283,2 bytes
-          MemoryMax = "2G";
-        };
-      };
+        CREATE ROLE {{ postgres_gitlab_database_username }} WITH
+            LOGIN
+            PASSWORD '{{ postgres_gitlab_database_password }}';
+        CREATE DATABASE gitlab OWNER {{ postgres_gitlab_database_username }};
+        \c gitlab
+        CREATE EXTENSION IF NOT EXISTS pg_trgm;
+        CREATE EXTENSION IF NOT EXISTS btree_gist;
+      '';
     };
   };
 
@@ -110,6 +106,60 @@
             "
           ];
         };
+
+        op-pgadmin = {
+          image = "1password/op:2.16.1";
+          autoStart = true;
+          extraOptions = [
+            "--cpus=0.01563"
+            "--memory-reservation=58m"
+            "--memory=64m"
+          ];
+          environment = { OP_DEVICE = "{{ hostvars['localhost']['vault_1password_device_id'] }}"; };
+          entrypoint = "/bin/bash";
+          cmd = [
+            "-c" "
+              SESSION_TOKEN=$(echo {{ hostvars['localhost']['vault_1password_master_password'] }} | op account add \\
+                --address {{ hostvars['localhost']['vault_1password_subdomain'] }}.1password.com \\
+                --email {{ hostvars['localhost']['vault_1password_email_address'] }} \\
+                --secret-key {{ hostvars['localhost']['vault_1password_secret_key'] }} \\
+                --signin --raw)
+
+              op item get 'pgAdmin (generated)' \\
+                --vault 'Local server' \\
+                --session $SESSION_TOKEN
+
+              if [ $? != 0 ]; then
+                op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \\
+                  --title 'pgAdmin (generated)' \\
+                  website[url]=http://{{ internal_domain_name }}/pgadmin4 \\
+                  username={{ postgres_pgadmin_gui_username }} \\
+                  password='{{ postgres_pgadmin_gui_password }}' \\
+                  'DB connection command - pgAdmin'[password]='PGPASSWORD=\"{{ postgres_pgadmin_database_password }}\" psql -h 127.0.0.1 -p 5432 -U {{ postgres_pgadmin_database_username }} postgres' \\
+                  'DB connection command - Monitoring'[password]='PGPASSWORD=\"{{ postgres_monitoring_database_password }}\" psql -h 127.0.0.1 -p 5432 -U {{ postgres_monitoring_database_username }} postgres' \\
+                  --session $SESSION_TOKEN
+              fi
+            "
+          ];
+        };
+      };
+    };
+  };
+
+  systemd = {
+    services = {
+      postgresql = {
+        serviceConfig = {
+          CPUQuota = "6,25%";
+          MemoryHigh = 1932735283; # 1,8 Gb * 1024 * 1024 * 1024 = 1932735283,2 bytes
+          MemoryMax = "2G";
+        };
+      };
+
+      podman-op-pgadmin = {
+        serviceConfig = {
+          RestartPreventExitStatus = 0;
+        };
       };
     };
   };
@@ -125,7 +175,7 @@
             proxy_redirect off;
           '';
           proxyPass = "http://127.0.0.1:5050/";
-          basicAuthFile = /mnt/ssd/services/.pgadminBasicAuthPassword;
+          basicAuth = { {{ postgres_pgadmin_gui_username }} = "{{ postgres_pgadmin_gui_password }}"; };
         };
       };
     };

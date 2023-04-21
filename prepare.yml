@@ -25,7 +25,7 @@
           --fields label={{ item }} \
           --session {{ op_session_token.stdout }}
       loop:
-        - "'Root account'.ip-address"
+        - "Server.'ip address'"
         - "'Root account'.password"
         - "'Technical account'.nixos"
       register: secrets
@@ -40,8 +40,30 @@
         nixos_technical_account: "{{ secrets.results[2].stdout }}"
       tags: always
 
+    - name: set seed variables
+      ansible.builtin.set_fact:
+        server_ssh_port_seed: server_ssh_port_random
+      tags: always
+
+    - name: create random but idempotent numbers
+      ansible.builtin.set_fact:
+        server_ssh_port_generated: "{{ 65535 | random(start=49152, seed=server_ssh_port_seed) }}"
+      tags: always
+
+    - name: check connection to server on custom ssh port
+      ansible.builtin.command: nc -w 1 -v -z {{ server_ip_address }} {{ server_ssh_port_generated }}
+      register: port_available
+      failed_when: false
+      changed_when: false
+      tags: always
+
+    - name: set server ssh port
+      ansible.builtin.set_fact:
+        server_ssh_port: "{% if port_available.rc == 0 %}{{ server_ssh_port_generated }}{% else %}22{% endif %}"
+      tags: always
+
     - name: check connection to server under root
-      ansible.builtin.command: "sshpass -e ssh -o StrictHostKeyChecking=no root@{{ server_ip_address }} 'exit'"
+      ansible.builtin.command: sshpass -e ssh -o StrictHostKeyChecking=no root@{{ server_ip_address }} -p {{ server_ssh_port }} 'exit'
       environment:
         SSHPASS: "{{ nixos_root_password }}"
       register: root_available
@@ -53,6 +75,7 @@
       ansible.builtin.add_host:
         name: server
         ansible_host: "{{ server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
         ansible_user: root
         ansible_password: "{{ nixos_root_password }}"
       changed_when: false
@@ -64,6 +87,7 @@
       ansible.builtin.add_host:
         name: server
         ansible_host: "{{ server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
         ansible_user: "{{ nixos_technical_account }}"
         ansible_ssh_private_key_file: id_ed25519
         ansible_python_interpreter: /run/current-system/sw/bin/python
@@ -228,8 +252,18 @@
     - name: forbid root login
       ansible.builtin.replace:
         path: /etc/nixos/configuration.nix
-        regexp: '(permitRootLogin = ").*(";)'
+        regexp: '(permitRootLogin\s=\s").*(";)'
         replace: '\1no\2'
+        backup: true
+      notify: apply config
+
+    - name: configure server ssh port
+      ansible.builtin.blockinfile:
+        path: /etc/nixos/configuration.nix
+        insertafter: 'permitRootLogin\s=\s".*";'
+        block: |2
+              ports = [ {{ hostvars['localhost']['server_ssh_port_generated'] }} ];
+        marker: "    # {mark} ANSIBLE MANAGED BLOCK SSH PORT"
         backup: true
       notify: apply config
 
@@ -246,7 +280,7 @@
         path: /etc/nixos/configuration.nix
         insertafter: '#   wget'
         block: |2
-              parted  # For community.general.parted ansible module
+              parted # For community.general.parted ansible module
         marker: "    # {mark} ANSIBLE MANAGED BLOCK PARTED"
         backup: true
       notify: apply config
@@ -277,7 +311,7 @@
   post_tasks:
     - name: check if item in 1password has been created
       ansible.builtin.command: |
-        op item get 'NixOS technical account (generated)' \
+        op item get 'NixOS (generated)' \
           --vault 'Local server' \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
       register: item_created
@@ -290,8 +324,9 @@
     - name: create an item in 1password with credentials for technical account
       ansible.builtin.shell: |
         op item template get Server --session {{ hostvars['localhost']['op_session_token']['stdout'] }} | op item create --vault 'Local server' - \
-          --title 'NixOS technical account (generated)' \
-          command[text]="ssh {{ hostvars['localhost']['nixos_technical_account'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519" \
+          --title 'NixOS (generated)' \
+          'connection command'[text]="ssh {{ hostvars['localhost']['nixos_technical_account'] }}@{{ hostvars['localhost']['server_ip_address'] }} -i id_ed25519 -p {{ hostvars['localhost']['server_ssh_port_generated'] }}" \
+          'ssh port'[text]={{ hostvars['localhost']['server_ssh_port_generated'] }} \
           [file]=id_ed25519 \
           [file]=id_ed25519.pub \
           --session {{ hostvars['localhost']['op_session_token']['stdout'] }}
@@ -300,11 +335,25 @@
       no_log: true
       when: item_created.rc != 0
 
+    - name: add a host to the ansible-playbook in-memory inventory
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ hostvars['localhost']['server_ip_address'] }}"
+        ansible_port: "{{ hostvars['localhost']['server_ssh_port_generated'] }}"
+        ansible_user: "{{ hostvars['localhost']['nixos_technical_account'] }}"
+        ansible_ssh_private_key_file: id_ed25519
+        ansible_python_interpreter: /run/current-system/sw/bin/python
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+      become: false
+
     - name: create inventory file
       ansible.builtin.copy:
         content: >
           server
           ansible_host={{ hostvars['localhost']['server_ip_address'] }}
+          ansible_port={{ hostvars['localhost']['server_ssh_port_generated'] }}
           ansible_user={{ hostvars['localhost']['nixos_technical_account'] }}
           ansible_ssh_private_key_file=id_ed25519
           ansible_python_interpreter=/run/current-system/sw/bin/python

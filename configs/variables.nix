@@ -1,0 +1,3 @@
+{
+  redis_instance = "gitlab";
+}
