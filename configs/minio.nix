@@ -1,22 +1,52 @@
 { config, pkgs, ... }:
 
 {
+  systemd.services = {
+    minio-prepare = {
+      before = [ "minio.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+      };
+      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/data-stores";
+      wantedBy = [ "minio.service" ];
+    };
+  };
+
   services = {
     minio = {
       enable = true;
-      listenAddress = "127.0.0.1:9000";
+      listenAddress = "{{ ansible_default_ipv4.address }}:9000";
       consoleAddress = "127.0.0.1:9001";
       dataDir = [ "/mnt/ssd/data-stores/minio/data" ];
       configDir = "/mnt/ssd/data-stores/minio/config";
       region = "eu-west-3";
       browser = true;
-      rootCredentialsFile = pkgs.writeText "Environment variables" ''
-        MINIO_ROOT_USER={{ minio_access_key }}
-        MINIO_ROOT_PASSWORD={{ minio_secret_key }}
-        MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
-        MINIO_PROMETHEUS_JOB_ID=minio-job
-        MINIO_BROWSER_REDIRECT_URL=http://{{ internal_domain_name }}/minio
-      '';
+      rootCredentialsFile = pkgs.writeTextFile {
+        name = ".env";
+        text = ''
+          MINIO_ROOT_USER={{ minio_access_key }}
+          MINIO_ROOT_PASSWORD={{ minio_secret_key }}
+          MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
+          MINIO_PROMETHEUS_JOB_ID=minio-job
+          MINIO_BROWSER_REDIRECT_URL=http://{{ internal_domain_name }}/minio
+        '';
+      };
+    };
+  };
+
+  systemd.services = {
+    minio = {
+      serviceConfig = {
+        CPUQuota = "3%";
+        MemoryHigh = "973M";
+        MemoryMax = "1024M";
+      };
+    };
+  };
+
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 9000 ];
     };
   };
 
@@ -39,133 +69,78 @@
     };
   };
 
-  virtualisation = {
-    oci-containers = {
-      containers = {
-        minio-client = {
-          image = "minio/mc:RELEASE.2023-03-23T20-03-04Z";
-          autoStart = true;
-          extraOptions = [
-            "--network=host"
-            "--cpus=0.03125"
-            "--memory-reservation=115m"
-            "--memory=128m"
-          ];
-          volumes = [ "/mnt/ssd/monitoring/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken" ];
-          environment = { ALIAS = "local"; };
-          entrypoint = "/bin/sh";
-          cmd = [
-            "-c" "
-              mc alias set $ALIAS http://${toString config.services.minio.listenAddress} {{ minio_access_key }} {{ minio_secret_key }}
-              mc admin prometheus generate $ALIAS | grep bearer_token | awk '{ print $2 }' | tr -d '\n' > /mnt/.minioScrapeBearerToken
+  systemd.services = {
+    minio-1password = {
+      after = [
+        "minio.service"
+        "nginx.service"
+      ];
+      serviceConfig = let
+        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
+        ENTRYPOINT = pkgs.writeTextFile {
+          name = "entrypoint.sh";
+          text = ''
+            #!/bin/bash
 
-              mc mb --ignore-existing $ALIAS/mimir-blocks
-              mc anonymous set public $ALIAS/mimir-blocks
+            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
+              --address $OP_SUBDOMAIN.1password.com \
+              --email $OP_EMAIL_ADDRESS \
+              --secret-key $OP_SECRET_KEY \
+              --signin --raw)
 
-              mc mb --ignore-existing $ALIAS/mimir-ruler
-              mc anonymous set public $ALIAS/mimir-ruler
+            op item get 'MinIO (generated)' \
+              --vault 'Local server' \
+              --session $SESSION_TOKEN > /dev/null
 
-              mc mb --ignore-existing $ALIAS/mimir-alertmanager
-              mc anonymous set public $ALIAS/mimir-alertmanager
-
-              mc mb --ignore-existing $ALIAS/loki
-              mc anonymous set public $ALIAS/loki
-
-              mc mb --ignore-existing $ALIAS/gitlab-artifacts
-              mc anonymous set public $ALIAS/gitlab-artifacts
-
-              mc mb --ignore-existing $ALIAS/gitlab-external-diffs
-              mc anonymous set public $ALIAS/gitlab-external-diffs
-
-              mc mb --ignore-existing $ALIAS/gitlab-lfs
-              mc anonymous set public $ALIAS/gitlab-lfs
-
-              mc mb --ignore-existing $ALIAS/gitlab-uploads
-              mc anonymous set public $ALIAS/gitlab-uploads
-
-              mc mb --ignore-existing $ALIAS/gitlab-packages
-              mc anonymous set public $ALIAS/gitlab-packages
-
-              mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
-              mc anonymous set public $ALIAS/gitlab-dependency-proxy
-
-              mc mb --ignore-existing $ALIAS/gitlab-terraform-state
-              mc anonymous set public $ALIAS/gitlab-terraform-state
-
-              mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
-              mc anonymous set public $ALIAS/gitlab-ci-secure-files
-
-              mc mb --ignore-existing $ALIAS/gitlab-pages
-              mc anonymous set public $ALIAS/gitlab-pages
-
-              mc mb --ignore-existing $ALIAS/gitlab-backup
-              mc anonymous set public $ALIAS/gitlab-backup
-
-              mc mb --ignore-existing $ALIAS/gitlab-registry
-              mc anonymous set public $ALIAS/gitlab-registry
-            "
-          ];
+            if [ $? != 0 ]; then
+              op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
+                --title 'MinIO (generated)' \
+                website[url]=http://$INTERNAL_DOMAIN_NAME/minio \
+                username=$MINIO_ACCESS_KEY \
+                password=$MINIO_SECRET_KEY \
+                notesPlain='username -> Access Key, password -> Secret Key' \
+                --session $SESSION_TOKEN > /dev/null
+            fi
+          '';
+          executable = true;
         };
-
-        op-minio = {
-          image = "1password/op:2.16.1";
-          autoStart = true;
-          extraOptions = [
-            "--cpus=0.01563"
-            "--memory-reservation=58m"
-            "--memory=64m"
-          ];
-          environment = { OP_DEVICE = "{{ hostvars['localhost']['vault_1password_device_id'] }}"; };
-          entrypoint = "/bin/bash";
-          cmd = [
-            "-c" "
-              SESSION_TOKEN=$(echo {{ hostvars['localhost']['vault_1password_master_password'] }} | op account add \\
-                --address {{ hostvars['localhost']['vault_1password_subdomain'] }}.1password.com \\
-                --email {{ hostvars['localhost']['vault_1password_email_address'] }} \\
-                --secret-key {{ hostvars['localhost']['vault_1password_secret_key'] }} \\
-                --signin --raw)
-
-              op item get 'MinIO (generated)' \\
-                --vault 'Local server' \\
-                --session $SESSION_TOKEN
-
-              if [ $? != 0 ]; then
-                op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \\
-                  --title 'MinIO (generated)' \\
-                  website[url]=http://{{ internal_domain_name }}/minio \\
-                  username='{{ minio_access_key }}' \\
-                  password='{{ minio_secret_key }}' \\
-                  notesPlain='username -> Access Key, password -> Secret Key' \\
-                  --session $SESSION_TOKEN
-              fi
-            "
-          ];
+        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
+      in {
+        Type = "oneshot";
+        EnvironmentFile = pkgs.writeTextFile {
+          name = ".env";
+          text = ''
+            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
+            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
+            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
+            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
+            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
+            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
+            MINIO_ACCESS_KEY = {{ minio_access_key }}
+            MINIO_SECRET_KEY = {{ minio_secret_key }}
+          '';
         };
+        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
+            --rm \
+            --name minio-1password \
+            --volume ${ENTRYPOINT}:/entrypoint.sh \
+            --env OP_DEVICE=$OP_DEVICE \
+            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
+            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
+            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
+            --env OP_SECRET_KEY=$OP_SECRET_KEY \
+            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
+            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
+            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --entrypoint /entrypoint.sh \
+            --cpus 0.01563 \
+            --memory-reservation 61m \
+            --memory 64m \
+            ${ONE_PASSWORD_IMAGE}'
+        '';
       };
-    };
-  };
-
-  systemd = {
-    services = {
-      minio = {
-        serviceConfig = {
-          CPUQuota = "1,56%";
-          MemoryHigh = "461M";
-          MemoryMax = "512M";
-        };
-      };
-
-      podman-minio-client = {
-        serviceConfig = {
-          RestartPreventExitStatus = 0;
-        };
-      };
-
-      podman-op-minio = {
-        serviceConfig = {
-          RestartPreventExitStatus = 0;
-        };
-      };
+      wantedBy = [ "minio.service" ];
     };
   };
 }

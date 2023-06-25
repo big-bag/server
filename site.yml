@@ -1,4 +1,12 @@
 ---
+- name: include a play for initial server setup
+  ansible.builtin.import_playbook: playbooks/prepare.yml
+  tags: [ never, prepare ]
+
+- name: include a play for upgrading the nixos
+  ansible.builtin.import_playbook: playbooks/upgrade.yml
+  tags: [ never, upgrade ]
+
 - name: get secrets from 1password
   hosts: localhost
   become: false
@@ -16,6 +24,7 @@
       register: op_session_token
       changed_when: false
       no_log: true
+      tags: dashboards
 
     - name: get secrets from 1password (1/2)
       ansible.builtin.command: |
@@ -33,6 +42,7 @@
       register: secrets
       changed_when: false
       no_log: true
+      tags: dashboards
 
     - name: get secrets from 1password (2/2)
       ansible.builtin.command: |
@@ -55,317 +65,54 @@
         nixos_technical_account: "{{ hostvars['localhost']['secrets']['results'][1]['stdout'] }}"
         server_ssh_port: "{{ hostvars['localhost']['server_ssh_port_generated']['stdout'] }}"
 
-    - name: create directories
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: directory
-        mode: "{{ item.mode }}"
-      loop:
-        - { path: /mnt/hdd/src,                    mode: '0755' }
-        - { path: /mnt/ssd/services/nginx,         mode: '0755' }
-        - { path: /mnt/ssd/data-stores,            mode: '0755' }
-        - { path: /mnt/ssd/monitoring,             mode: '0755' }
-        - { path: /mnt/ssd/services/gitlab,        mode: '0755' }
-        - { path: /mnt/ssd/services/gitlab/config, mode: '0775' }
-        - { path: /mnt/ssd/services/gitlab/logs,   mode: '0755' }
-        - { path: /mnt/ssd/services/gitlab/data,   mode: '0755' }
-
-    # ------------------- self-signed certificate ------------------- #
-
-    - name: check if ca certificate exists on local machine
-      ansible.builtin.stat:
-        path: ca.crt
-      register: ca_crt
-      delegate_to: localhost
-      become: false
-
-    - name: issue a self-signed certificate
-      block:
-        - name: find the latest version of easy-rsa
-          ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/OpenVPN/easy-rsa.git '*[0-9].[0-9].[0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
-          register: easy_rsa_latest_version
-          delegate_to: localhost
-          changed_when: false
-          become: false
-
-        - name: download and extract easy-rsa archive
-          ansible.builtin.unarchive:
-            src: https://github.com/OpenVPN/easy-rsa/releases/download/{{ easy_rsa_latest_version.stdout }}/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}.tgz
-            dest: /mnt/hdd/src
-            remote_src: true
-            owner: root
-            group: root
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-
-        - name: create easy-rsa vars
-          ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars.example
-            dest: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars
-            remote_src: true
-            force: false
-
-        - name: set easy-rsa parameters
-          ansible.builtin.replace:
-            path: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/vars
-            regexp: "{{ item.regexp }}"
-            replace: "{{ item.replace }}"
-          loop:
-            - { regexp: '#(set_var\sEASYRSA_DN\s+"cn_only")',    replace: '\1' }
-            - { regexp: '#(set_var\sEASYRSA_KEY_SIZE\s+2048)',   replace: '\1' }
-            - { regexp: '#(set_var\sEASYRSA_ALGO\s+rsa)',        replace: '\1' }
-            - { regexp: '#(set_var\sEASYRSA_CA_EXPIRE\s+3650)',  replace: '\1' }
-            - { regexp: '#set_var\sEASYRSA_CERT_EXPIRE\s+825',   replace: 'set_var EASYRSA_CERT_EXPIRE     3650' }
-            - { regexp: '#(set_var\sEASYRSA_CRL_DAYS\s+180)',    replace: '\1' }
-            - { regexp: '#(set_var\sEASYRSA_DIGEST\s+"sha256")', replace: '\1' }
-
-        - name: init pki
-          ansible.builtin.command: ./easyrsa init-pki
-          args:
-            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki
-
-        - name: create a certificate authority
-          ansible.builtin.shell: |
-            spawn ./easyrsa build-ca nopass
-            expect -exact "Common Name (eg: your user, host, or server name) \[Easy-RSA CA\]:"
-            send -- "{{ internal_domain_name | replace('.',' ') | title }} Root CA\r"
-            expect eof
-          args:
-            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            executable: /etc/profiles/per-user/{{ nixos_technical_account }}/bin/expect
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
-
-        - name: issue an ssl certificate
-          ansible.builtin.command: ./easyrsa --batch build-server-full *.{{ internal_domain_name }} nopass
-          args:
-            chdir: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}
-            creates: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/*.{{ internal_domain_name }}.crt
-
-        - name: copy an ssl certificate to services folder
-          ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/issued/*.{{ internal_domain_name }}.crt
-            dest: /mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt
-            remote_src: true
-          register: certificate
-          notify: apply config
-
-        - name: copy a private key to services folder
-          ansible.builtin.copy:
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/private/*.{{ internal_domain_name }}.key
-            dest: /mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key
-            remote_src: true
-          register: key
-          notify: apply config
-
-        - name: copy ca certificate from server to local machine
-          ansible.posix.synchronize:
-            mode: pull
-            src: /mnt/hdd/src/EasyRSA-{{ easy_rsa_latest_version.stdout[1:] }}/pki/ca.crt
-            dest: ./
-      when: ca_crt.stat.exists == false
-
-    # ------------------- storages ------------------- #
-
     - name: set seed variables
       ansible.builtin.set_fact:
         minio_access_key_seed: minio_access_key_random
         minio_secret_key_seed: minio_secret_key_random
+
+        mimir_username_seed: mimir_username_random
+        mimir_password_seed: mimir_password_random
+
+        prometheus_username_seed: prometheus_username_random
+        prometheus_password_seed: prometheus_password_random
+
+        grafana_username_seed: grafana_username_random
+        grafana_password_seed: grafana_password_random
+        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
+        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
+        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
+
+        postgres_pgadmin_database_password_seed: postgres_pgadmin_database_password_random
+        postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
+        postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
+        postgres_monitoring_database_password_seed: postgres_monitoring_database_password_random
+
+        redis_database_password_seed: redis_database_password_random
+        redis_redisinsight_username_seed: redis_redisinsight_username_random
+        redis_redisinsight_password_seed: redis_redisinsight_password_random
+        redis_monitoring_database_password_seed: redis_monitoring_database_password_random
+
+        gitlab_password_seed: gitlab_password_random
+        gitlab_token_seed: gitlab_token_random
+        postgres_gitlab_database_password_seed: postgres_gitlab_database_password_random
+      tags: dashboards
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
         minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_access_key_seed) }}"
         minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_secret_key_seed) }}"
 
-    - name: create an empty file for minio bearer token
-      ansible.builtin.copy:
-        content: ""
-        dest: /mnt/ssd/monitoring/.minioScrapeBearerToken
-        force: false
-
-    # ------------------- monitoring ------------------- #
-
-    - name: set seed variables
-      ansible.builtin.set_fact:
-        mimir_username_seed: mimir_username_random
-        mimir_password_seed: mimir_password_random
-        prometheus_username_seed: prometheus_username_random
-        prometheus_password_seed: prometheus_password_random
-        grafana_username_seed: grafana_username_random
-        grafana_password_seed: grafana_password_random
-        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
-        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
-        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
-      tags: dashboards
-
-    - name: create random but idempotent secrets
-      ansible.builtin.set_fact:
         mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=mimir_username_seed) }}"
         mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mimir_password_seed) }}"
+
         prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=prometheus_username_seed) }}"
         prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=prometheus_password_seed) }}"
+
         grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_username_seed) }}"
         grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
         grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
         grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
         grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
-      tags: dashboards
-
-    - name: check if a grafana dashboard has been downloaded to the local machine
-      ansible.builtin.command: "grep '\"uid\": \"\",' '{{ item }}'"
-      with_fileglob:
-        - dashboards/Mimir/*
-        - dashboards/Prometheus/*
-        - dashboards/*
-        - dashboards/GitLab/*
-      register: dashboard_uid
-      delegate_to: localhost
-      failed_when: false
-      changed_when: false
-      become: false
-      tags: [ never, dashboards ]
-
-    - name: templatization of grafana dashboards
-      block:
-        # find and escape double curly braces which looks like:
-        # "legendFormat": "{{quantile}} ({{interval}})",
-        - name: escape double curly braces (1/3)
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '{% raw %}("){{(.*)}}(.*){{(.*)}}(.*",){% endraw %}'
-            replace: '\1{{ "{% raw %}{{" }}\2{{ "}}{% endraw %}" }}\3{{ "{% raw %}{{" }}\4{{ "}}{% endraw %}" }}\5'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        # find and escape double curly braces which looks like:
-        # "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
-        - name: escape double curly braces (2/3)
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(:){{(.*)}}(.*",){% endraw %}'
-            replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4{{ "{% raw %}{{" }}\5{{ "}}{% endraw %}" }}\6'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        # find and escape double curly braces which looks like:
-        # "legendFormat": "{{job}}",
-        # "legendFormat": "duration-{{p99}}",
-        # "legendFormat": "{{slice}}_p99",
-        # "legendFormat": "Data Received [{{server}}]",
-        - name: escape double curly braces (3/3)
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(.*",){% endraw %}'
-            replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        - name: change mimir datasource uid to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '{{ grafana_datasource_uid_mimir }}'
-            replace: '{% raw %}{{ grafana_datasource_uid_mimir }}{% endraw %}'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        - name: change prometheus datasource uid to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '{{ grafana_datasource_uid_prometheus }}'
-            replace: '{% raw %}{{ grafana_datasource_uid_prometheus }}{% endraw %}'
-          with_fileglob: dashboards/Prometheus/*
-
-        - name: reset location number in folder
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            after: 'graphTooltip'
-            before: 'liveNow'
-            regexp: '"id":\s.*,'
-            replace: '"id": 0,'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        - name: reset dashboard uid
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '("uid":\s").*(",)'
-            replace: '\1\2'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-
-        - name: reset dashboard version
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '"version":\s.*,'
-            replace: '"version": 0,'
-          with_fileglob:
-            - dashboards/Mimir/*
-            - dashboards/Prometheus/*
-            - dashboards/*
-            - dashboards/GitLab/*
-      delegate_to: localhost
-      become: false
-      when: dashboard_uid.results | json_query('[*].rc') | reject('match', '0')
-      tags: [ never, dashboards ]
-
-    - name: create folders
-      ansible.builtin.file:
-        path: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
-        state: directory
-        mode: '{{ item.mode }}'
-      with_community.general.filetree: dashboards/
-      when: item.state == 'directory'
-      tags: [ never, dashboards ]
-
-    - name: upload grafana dashboards
-      ansible.builtin.template:
-        src: '{{ item.src }}'
-        dest: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
-        mode: '{{ item.mode }}'
-      with_community.general.filetree: dashboards/
-      when: item.state == 'file'
-      tags: [ never, dashboards ]
-
-    - name: set seed variables
-      ansible.builtin.set_fact:
-
-        # ------------------- databases ------------------- #
-
-        postgres_pgadmin_database_password_seed: postgres_pgadmin_database_password_random
-        postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
-        postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
-        postgres_monitoring_database_password_seed: postgres_monitoring_database_password_random
-        redis_database_password_seed: redis_database_password_random
-        redis_redisinsight_username_seed: redis_redisinsight_username_random
-        redis_redisinsight_password_seed: redis_redisinsight_password_random
-        redis_monitoring_database_password_seed: redis_monitoring_database_password_random
-
-        # ------------------- gitlab ------------------- #
-
-        gitlab_password_seed: gitlab_password_random
-        gitlab_token_seed: gitlab_token_random
-        postgres_gitlab_database_password_seed: postgres_gitlab_database_password_random
-
-    - name: create random but idempotent secrets
-      ansible.builtin.set_fact:
-
-        # ------------------- databases ------------------- #
 
         postgres_pgadmin_database_username: "{{ hostvars['localhost']['secrets']['results'][2]['stdout'] }}"
         postgres_pgadmin_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_database_password_seed) }}"
@@ -373,26 +120,32 @@
         postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_gui_password_seed) }}"
         postgres_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][3]['stdout'] }}"
         postgres_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_monitoring_database_password_seed) }}"
+
         redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
         redis_redisinsight_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=redis_redisinsight_username_seed) }}"
         redis_redisinsight_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=redis_redisinsight_password_seed) }}"
         redis_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][4]['stdout'] }}"
         redis_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_monitoring_database_password_seed) }}"
 
-        # ------------------- gitlab ------------------- #
-
         gitlab_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_password_seed) }}"
         gitlab_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_token_seed) }}"
         postgres_gitlab_database_username: "{{ hostvars['localhost']['secrets']['results'][5]['stdout'] }}"
         postgres_gitlab_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=postgres_gitlab_database_password_seed) }}"
+      tags: dashboards
 
-    # ------------------- nixos configuration ------------------- #
+    - name: collect only facts about default ipv4 address
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - default_ipv4
+        filter:
+          - default_ipv4
 
     - name: upload nixos configuration files
       ansible.builtin.template:
         src: "{{ item }}"
         dest: "/etc/nixos/"
-        backup: true
       with_fileglob: configs/*
       notify: apply config
 
@@ -411,16 +164,22 @@
         msg: "{{ rebuild_output.stderr_lines }}"
       listen: apply config
 
-    - name: populate service facts
-      ansible.builtin.service_facts:
-      when: certificate.changed or key.changed
-      listen: apply config
+  post_tasks:
+    - name: gather facts about remote host
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
 
-    - name: reload service nginx
-      ansible.builtin.systemd:
-        name: nginx.service
-        state: reloaded
-      when:
-        - certificate.changed or key.changed
-        - "'nginx.service' in ansible_facts.services"
-      listen: apply config
+    - name: copy ca and client certificates from server to local machine
+      ansible.posix.synchronize:
+        mode: pull
+        src: /mnt/ssd/services/ca/{{ item }}
+        dest: ./
+      loop:
+        - ca.pem
+        - user.pfx
+
+- name: include a play to upload dashboards to the server
+  ansible.builtin.import_playbook: playbooks/dashboards.yml
+  tags: [ never, dashboards ]

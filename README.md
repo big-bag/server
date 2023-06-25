@@ -1,4 +1,6 @@
-# Installing NixOS
+<details>
+<summary>Installing NixOS</summary>
+<br>
 
 Server specification
 
@@ -136,7 +138,11 @@ Installing OS:
      tail -f shred.log
      ```
 
-# Setting up a local environment and preparing a server
+</details>
+
+<details>
+<summary>Setting up a local environment and preparing a server</summary>
+<br>
 
 1. save secrets in 1Password
    * vault: `Local server`
@@ -182,7 +188,7 @@ Installing OS:
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
      ansible:2.14.2 \
-       ansible-playbook prepare.yml
+       ansible-playbook site.yml --tags prepare
    ```
 
 7. run a playbook to upgrade NixOS to the latest version
@@ -190,12 +196,10 @@ Installing OS:
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
      ansible:2.14.2 \
-       ansible-playbook prepare.yml --tags upgrade
+       ansible-playbook site.yml --tags upgrade
    ```
 
-# Configuring a server
-
-1. run a playbook to upload grafana dashboards
+8. run a playbook to upload grafana dashboards
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
@@ -203,19 +207,7 @@ Installing OS:
        ansible-playbook site.yml --tags dashboards
    ```
 
-2. run a playbook to configure a server
-   ```bash
-   docker run --rm -t \
-     --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
-       ansible-playbook site.yml
-   ```
-
-3. import certificate authority in browser
-
-   For example in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates... -> Authorities -> Import... -> ca.crt (choose `Trust this CA to identify websites.`)
-
-4. grafana dashboard sources
+9. grafana dashboard sources
 
    | Dashboard name/group | Dashboard source (based on) |
    | :--- | :--- |
@@ -244,3 +236,23 @@ Installing OS:
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |
+
+</details>
+
+<details>
+<summary>Configuring a server</summary>
+<br>
+
+1. run a playbook to configure a server
+   ```bash
+   docker run --rm -t \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.14.2 \
+       ansible-playbook site.yml
+   ```
+
+2. import certificates in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates...
+   * import certificate authority: Authorities -> Import... -> ca.pem (choose `Trust this CA to identify websites.`)
+   * import user certificate for authentication: Your Certificates -> Import... -> user.pfx (leave the password field blank and click Log in)
+
+</details>

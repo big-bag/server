@@ -32,7 +32,18 @@
   # networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
-  # time.timeZone = "Europe/Amsterdam";
+  time.timeZone = "Europe/Moscow";
+
+  networking.timeServers = [
+    "0.ru.pool.ntp.org"
+    "1.ru.pool.ntp.org"
+    "2.ru.pool.ntp.org"
+    "3.ru.pool.ntp.org"
+  ];
+
+  services.timesyncd.extraConfig = ''
+    FallbackNTP=0.nixos.pool.ntp.org 1.nixos.pool.ntp.org 2.nixos.pool.ntp.org 3.nixos.pool.ntp.org
+  '';
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
@@ -122,61 +133,287 @@
     };
   };
 
+  systemd.services = {
+    self-signed-certificate = {
+      before = [ "nginx.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+      };
+      script = let
+        ca.cnf = "
+          [req]
+          default_bits       = 4096
+          distinguished_name = req_distinguished_name
+          prompt             = no
+          default_md         = sha256
+          req_extensions     = v3_req
+
+          [req_distinguished_name]
+          countryName         = RU
+          stateOrProvinceName = Moscow
+          localityName        = Moscow
+          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
+          commonName          = {{ internal_domain_name | replace('.','-') }}-ca
+
+          [v3_req]
+          basicConstraints     = critical, CA:true
+          keyUsage             = critical, keyCertSign, cRLSign
+          subjectKeyIdentifier = hash
+        ";
+        ca-intermediate.cnf = "
+          [req]
+          default_bits       = 4096
+          distinguished_name = req_distinguished_name
+          prompt             = no
+          default_md         = sha256
+          req_extensions     = v3_req
+
+          [req_distinguished_name]
+          countryName         = RU
+          stateOrProvinceName = Moscow
+          localityName        = Moscow
+          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
+          commonName          = {{ internal_domain_name | replace('.','-') }}-int-ca
+
+          [v3_req]
+          basicConstraints     = critical, CA:true
+          keyUsage             = critical, keyCertSign, cRLSign
+          subjectKeyIdentifier = hash
+        ";
+        server.cnf = "
+          [req]
+          prompt             = no
+          default_bits       = 4096
+          x509_extensions    = v3_req
+          req_extensions     = v3_req
+          default_md         = sha256
+          distinguished_name = req_distinguished_name
+
+          [req_distinguished_name]
+          countryName         = RU
+          stateOrProvinceName = Moscow
+          localityName        = Moscow
+          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
+          commonName          = {{ internal_domain_name }}
+
+          [v3_req]
+          basicConstraints = CA:FALSE
+          keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
+          extendedKeyUsage = critical, serverAuth
+          subjectAltName   = @alt_names
+
+          [alt_names]
+          DNS.1 = {{ internal_domain_name }}
+          DNS.2 = gitlab.{{ internal_domain_name }}
+          DNS.3 = registry.{{ internal_domain_name }}
+          DNS.4 = pages.{{ internal_domain_name }}
+        ";
+        user.cnf = "
+          [req]
+          prompt             = no
+          default_bits       = 2048
+          x509_extensions    = v3_req
+          req_extensions     = v3_req
+          default_md         = sha256
+          distinguished_name = req_distinguished_name
+
+          [req_distinguished_name]
+          countryName         = RU
+          stateOrProvinceName = Moscow
+          localityName        = Moscow
+          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
+          commonName          = user.{{ internal_domain_name }}
+
+          [v3_req]
+          basicConstraints = CA:FALSE
+          keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
+          extendedKeyUsage = critical, clientAuth
+        ";
+      in ''
+        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/ca
+        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/nginx
+
+        cd /mnt/ssd/services/ca
+
+        if ! [ -f ca.crt ]; then
+          ${pkgs.coreutils}/bin/echo "Creating Self-Signed Root CA certificate and key"
+          ${pkgs.coreutils}/bin/echo '${ca.cnf}' > ca.cnf
+          ${pkgs.openssl}/bin/openssl req \
+            -new \
+            -nodes \
+            -x509 \
+            -keyout ca.key \
+            -out ca.crt \
+            -config ca.cnf \
+            -extensions v3_req \
+            -days 1826 # 5 years
+        fi
+
+        if ! [ -f ca.pem ]; then
+          ${pkgs.coreutils}/bin/echo "Creating Intermediate CA certificate and key"
+          ${pkgs.coreutils}/bin/echo '${ca-intermediate.cnf}' > ca-intermediate.cnf
+          ${pkgs.openssl}/bin/openssl req \
+            -new \
+            -nodes \
+            -keyout ca_int.key \
+            -out ca_int.csr \
+            -config ca-intermediate.cnf \
+            -extensions v3_req
+          ${pkgs.openssl}/bin/openssl req -in ca_int.csr -noout -verify
+          ${pkgs.openssl}/bin/openssl x509 \
+            -req \
+            -CA ca.crt \
+            -CAkey ca.key \
+            -CAcreateserial \
+            -in ca_int.csr \
+            -out ca_int.crt \
+            -extfile ca-intermediate.cnf \
+            -extensions v3_req \
+            -days 365 # 1 year
+          ${pkgs.openssl}/bin/openssl verify -CAfile ca.crt ca_int.crt
+          ${pkgs.coreutils}/bin/echo "Creating CA chain"
+          ${pkgs.coreutils}/bin/cat ca_int.crt ca.crt > ca.pem
+        fi
+
+        if ! [ -f server.crt ]; then
+          ${pkgs.coreutils}/bin/echo "Creating server (Nginx) certificate and key"
+          ${pkgs.coreutils}/bin/echo '${server.cnf}' > server.cnf
+          ${pkgs.openssl}/bin/openssl req \
+            -new \
+            -nodes \
+            -keyout server.key \
+            -out server.csr \
+            -config server.cnf
+          ${pkgs.openssl}/bin/openssl req -in server.csr -noout -verify
+          ${pkgs.openssl}/bin/openssl x509 \
+            -req \
+            -CA ca_int.crt \
+            -CAkey ca_int.key \
+            -CAcreateserial \
+            -in server.csr \
+            -out server.crt \
+            -extfile server.cnf \
+            -extensions v3_req \
+            -days 365 # 1 year
+          ${pkgs.openssl}/bin/openssl verify -CAfile ca.pem server.crt
+        fi
+
+        if ! [ -f user.pfx ]; then
+          ${pkgs.coreutils}/bin/echo "Creating user certificate and key"
+          ${pkgs.coreutils}/bin/echo '${user.cnf}' > user.cnf
+          ${pkgs.openssl}/bin/openssl req \
+            -new \
+            -nodes \
+            -keyout user.key \
+            -out user.csr \
+            -config user.cnf
+          ${pkgs.openssl}/bin/openssl req -in user.csr -noout -verify
+          ${pkgs.openssl}/bin/openssl x509 \
+            -req \
+            -CA ca.crt \
+            -CAkey ca.key \
+            -CAcreateserial \
+            -in user.csr \
+            -out user.crt \
+            -extfile user.cnf \
+            -extensions v3_req \
+            -days 365 # 1 year
+          ${pkgs.openssl}/bin/openssl verify -CAfile ca.pem user.crt
+          ${pkgs.openssl}/bin/openssl pkcs12 \
+            -export \
+            -in user.crt \
+            -inkey user.key \
+            -certfile ca.pem \
+            -out user.pfx \
+            -passout pass:
+          ${pkgs.openssl}/bin/openssl verify -CAfile ca.pem user.pfx
+        fi
+
+        ${pkgs.coreutils}/bin/cp --update server.{crt,key} /mnt/ssd/services/nginx/
+        ${pkgs.coreutils}/bin/chmod 0604 /mnt/ssd/services/nginx/server.key
+        ${pkgs.coreutils}/bin/cp --update ca.pem /mnt/ssd/services/nginx/
+      '';
+      wantedBy = [ "nginx.service" ];
+    };
+  };
+
   services.nginx = {
     enable = true;
     sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
     virtualHosts = {
       "{{ internal_domain_name }}" = {
         listen = [
-          { addr = "*"; port = 80; }
-          { addr = "*"; port = 443; ssl = true; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
         ];
         kTLS = true;
         forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
       };
 
       "gitlab.{{ internal_domain_name }}" = {
         listen = [
-          { addr = "*"; port = 80; }
-          { addr = "*"; port = 443; ssl = true; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
         ];
         kTLS = true;
         forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
       };
 
       "registry.{{ internal_domain_name }}" = {
         listen = [
-          { addr = "*"; port = 80; }
-          { addr = "*"; port = 443; ssl = true; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
         ];
         kTLS = true;
         forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
       };
 
       "pages.{{ internal_domain_name }}" = {
         listen = [
-          { addr = "*"; port = 80; }
-          { addr = "*"; port = 443; ssl = true; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
+          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
         ];
         kTLS = true;
         forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/*.{{ internal_domain_name }}.key";
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
       };
     };
   };
 
-  systemd.services.nginx = {
-    serviceConfig = {
-      CPUQuota = "0,049%";
-      MemoryHigh = "14M";
-      MemoryMax = "16M";
+  systemd.services = {
+    nginx = {
+      serviceConfig = {
+        CPUQuota = "1%";
+        MemoryHigh = "15M";
+        MemoryMax = "16M";
+      };
     };
   };
 
@@ -191,9 +428,9 @@
 
   virtualisation = {
     oci-containers = {
-      backend = "podman";
+      backend = "docker";
     };
-    podman = {
+    docker = {
       enable = true;
     };
   };

@@ -1,37 +1,132 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 
 let
-  GITLAB_HOME = "/mnt/ssd/services/gitlab";
-  REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+  CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
 in
 
 {
+  systemd.services = {
+    gitlab-prepare = {
+      before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/gitlab/{config,logs,data}
+        ${pkgs.coreutils}/bin/chmod 0775 /mnt/ssd/services/gitlab/config
+      '';
+      wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+    };
+  };
+
+  systemd.services = {
+    gitlab-minio = {
+      before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+      serviceConfig = let
+        ENTRYPOINT = pkgs.writeTextFile {
+          name = "entrypoint.sh";
+          text = ''
+            #!/bin/bash
+
+            mc alias set $ALIAS http://${toString config.services.minio.listenAddress} $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+
+            mc mb --ignore-existing $ALIAS/gitlab-artifacts
+            mc anonymous set public $ALIAS/gitlab-artifacts
+
+            mc mb --ignore-existing $ALIAS/gitlab-external-diffs
+            mc anonymous set public $ALIAS/gitlab-external-diffs
+
+            mc mb --ignore-existing $ALIAS/gitlab-lfs
+            mc anonymous set public $ALIAS/gitlab-lfs
+
+            mc mb --ignore-existing $ALIAS/gitlab-uploads
+            mc anonymous set public $ALIAS/gitlab-uploads
+
+            mc mb --ignore-existing $ALIAS/gitlab-packages
+            mc anonymous set public $ALIAS/gitlab-packages
+
+            mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
+            mc anonymous set public $ALIAS/gitlab-dependency-proxy
+
+            mc mb --ignore-existing $ALIAS/gitlab-terraform-state
+            mc anonymous set public $ALIAS/gitlab-terraform-state
+
+            mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
+            mc anonymous set public $ALIAS/gitlab-ci-secure-files
+
+            mc mb --ignore-existing $ALIAS/gitlab-pages
+            mc anonymous set public $ALIAS/gitlab-pages
+
+            mc mb --ignore-existing $ALIAS/gitlab-backup
+            mc anonymous set public $ALIAS/gitlab-backup
+
+            mc mb --ignore-existing $ALIAS/gitlab-registry
+            mc anonymous set public $ALIAS/gitlab-registry
+          '';
+          executable = true;
+        };
+        MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
+      in {
+        Type = "oneshot";
+        EnvironmentFile = pkgs.writeTextFile {
+          name = ".env";
+          text = ''
+            ALIAS = local
+            MINIO_ACCESS_KEY = {{ minio_access_key }}
+            MINIO_SECRET_KEY = {{ minio_secret_key }}
+          '';
+        };
+        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
+            --rm \
+            --name gitlab-minio \
+            --volume ${ENTRYPOINT}:/entrypoint.sh \
+            --env ALIAS=$ALIAS \
+            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
+            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --entrypoint /entrypoint.sh \
+            --cpus 0.03125 \
+            --memory-reservation 122m \
+            --memory 128m \
+            ${MINIO_CLIENT_IMAGE}'
+        '';
+      };
+      wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+    };
+  };
+
   virtualisation = {
     oci-containers = {
       containers = {
         gitlab = {
-          image = "gitlab/gitlab-ce:15.10.2-ce.0";
           autoStart = true;
-          extraOptions = [
-            "--shm-size=256m"
-            "--network=host"
-            "--cpus=1"
-            "--memory-reservation=3686m"
-            "--memory=4096m"
+          ports = [
+            "127.0.0.1:8181:8181"
+            "127.0.0.1:5000:5000"
+            "127.0.0.1:8090:8090"
+            "127.0.0.1:5001:5001"
+            "127.0.0.1:9229:9229"
+            "127.0.0.1:8083:8083"
+            "127.0.0.1:8082:8082"
+            "127.0.0.1:9235:9235"
+            "127.0.0.1:9168:9168"
+            "127.0.0.1:9236:9236"
           ];
           volumes = [
-            "${GITLAB_HOME}/config:/etc/gitlab"
-            "${GITLAB_HOME}/logs:/var/log/gitlab"
-            "${GITLAB_HOME}/data:/var/opt/gitlab"
+            "/mnt/ssd/services/gitlab/config:/etc/gitlab"
+            "/mnt/ssd/services/gitlab/logs:/var/log/gitlab"
+            "/mnt/ssd/services/gitlab/data:/var/opt/gitlab"
           ];
-          environment = {
+          environment = let
+            REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+          in {
             GITLAB_OMNIBUS_CONFIG = ''
               external_url 'http://gitlab.{{ internal_domain_name }}'
 
               gitlab_rails['smtp_enable'] = false
               gitlab_rails['gitlab_email_enabled'] = false
 
-              gitlab_rails['monitoring_whitelist'] = ['127.0.0.1/32']
+              gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0']
 
               gitlab_rails['object_store']['enabled'] = true
               gitlab_rails['object_store']['connection'] = {
@@ -70,16 +165,16 @@ in
               gitlab_rails['db_database'] = 'gitlab'
               gitlab_rails['db_username'] = '{{ postgres_gitlab_database_username }}'
               gitlab_rails['db_password'] = '{{ postgres_gitlab_database_password }}'
-              gitlab_rails['db_host'] = '127.0.0.1'
+              gitlab_rails['db_host'] = '{{ ansible_default_ipv4.address }}'
               gitlab_rails['db_port'] = ${toString config.services.postgresql.port}
 
-              gitlab_rails['redis_host'] = '127.0.0.1'
+              gitlab_rails['redis_host'] = '${toString config.services.redis.servers.${REDIS_INSTANCE}.bind}'
               gitlab_rails['redis_port'] = ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
               gitlab_rails['redis_password'] = '{{ redis_database_password }}'
 
               registry_external_url 'http://registry.{{ internal_domain_name }}'
-              registry['registry_http_addr'] = '127.0.0.1:5000'
-              registry['debug_addr'] = 'localhost:5001'
+              registry['registry_http_addr'] = '0.0.0.0:5000'
+              registry['debug_addr'] = '0.0.0.0:5001'
               registry['storage'] = {
                 's3' => {
                   'provider' => 'AWS',
@@ -93,17 +188,17 @@ in
               }
 
               gitlab_workhorse['listen_network'] = 'tcp'
-              gitlab_workhorse['listen_addr'] = '127.0.0.1:8181'
-              gitlab_workhorse['prometheus_listen_addr'] = '127.0.0.1:9229'
+              gitlab_workhorse['listen_addr'] = '0.0.0.0:8181'
+              gitlab_workhorse['prometheus_listen_addr'] = '0.0.0.0:9229'
               gitlab_workhorse['image_scaler_max_procs'] = 1
 
               puma['listen'] = '127.0.0.1'
               puma['port'] = 8080
               puma['exporter_enabled'] = true
-              puma['exporter_address'] = '127.0.0.1'
+              puma['exporter_address'] = '0.0.0.0'
               puma['exporter_port'] = 8083
 
-              sidekiq['listen_address'] = '127.0.0.1'
+              sidekiq['listen_address'] = '0.0.0.0'
               sidekiq['listen_port'] = 8082
               sidekiq['health_checks_listen_address'] = '127.0.0.1'
               sidekiq['health_checks_listen_port'] = 8092
@@ -115,15 +210,15 @@ in
               pages_external_url 'http://pages.{{ internal_domain_name }}'
               gitlab_pages['enable'] = true
               gitlab_pages['status_uri'] = '/@status'
-              gitlab_pages['listen_proxy'] = '127.0.0.1:8090'
-              gitlab_pages['metrics_address'] = '127.0.0.1:9235'
+              gitlab_pages['listen_proxy'] = '0.0.0.0:8090'
+              gitlab_pages['metrics_address'] = '0.0.0.0:9235'
 
               pages_nginx['enable'] = false
               gitlab_rails['gitlab_kas_enabled'] = false
               gitlab_kas['enable'] = false
               prometheus['enable'] = false
 
-              gitlab_rails['prometheus_address'] = '127.0.0.1:${toString config.services.prometheus.port}'
+              gitlab_rails['prometheus_address'] = '${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}'
 
               alertmanager['enable'] = false
               node_exporter['enable'] = false
@@ -131,59 +226,21 @@ in
               postgres_exporter['enable'] = false
 
               gitlab_exporter['enable'] = true
-              gitlab_exporter['listen_address'] = '127.0.0.1'
+              gitlab_exporter['listen_address'] = '0.0.0.0'
               gitlab_exporter['listen_port'] = '9168'
 
               prometheus_monitoring['enable'] = false
 
-              gitaly['prometheus_listen_addr'] = '127.0.0.1:9236'
+              gitaly['prometheus_listen_addr'] = '0.0.0.0:9236'
             '';
           };
-        };
-
-        op-gitlab = {
-          image = "1password/op:2.16.1";
-          autoStart = true;
           extraOptions = [
-            "--cpus=0.01563"
-            "--memory-reservation=58m"
-            "--memory=64m"
+            "--shm-size=256m"
+            "--cpus=1"
+            "--memory-reservation=3891m"
+            "--memory=4096m"
           ];
-          environment = { OP_DEVICE = "{{ hostvars['localhost']['vault_1password_device_id'] }}"; };
-          entrypoint = "/bin/bash";
-          cmd = [
-            "-c" "
-              SESSION_TOKEN=$(echo {{ hostvars['localhost']['vault_1password_master_password'] }} | op account add \\
-                --address {{ hostvars['localhost']['vault_1password_subdomain'] }}.1password.com \\
-                --email {{ hostvars['localhost']['vault_1password_email_address'] }} \\
-                --secret-key {{ hostvars['localhost']['vault_1password_secret_key'] }} \\
-                --signin --raw)
-
-              op item get 'GitLab (generated)' \\
-                --vault 'Local server' \\
-                --session $SESSION_TOKEN
-
-              if [ $? != 0 ]; then
-                op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \\
-                  --title 'GitLab (generated)' \\
-                  --url http://gitlab.{{ internal_domain_name }} \\
-                  username=root \\
-                  password='{{ gitlab_password }}' \\
-                  'DB connection command'[password]='PGPASSWORD=\"{{ postgres_gitlab_database_password }}\" psql -h 127.0.0.1 -p 5432 -U {{ postgres_gitlab_database_username }} gitlab' \\
-                  --session $SESSION_TOKEN
-              fi
-            "
-          ];
-        };
-      };
-    };
-  };
-
-  systemd = {
-    services = {
-      podman-op-gitlab = {
-        serviceConfig = {
-          RestartPreventExitStatus = 0;
+          image = "gitlab/gitlab-ce:15.10.2-ce.0";
         };
       };
     };
@@ -304,6 +361,82 @@ in
           proxyPass = "http://127.0.0.1:8090";
         };
       };
+    };
+  };
+
+  systemd.services = {
+    gitlab-1password = {
+      after = [
+        "${CONTAINERS_BACKEND}-gitlab.service"
+        "nginx.service"
+      ];
+      serviceConfig = let
+        ENTRYPOINT = pkgs.writeTextFile {
+          name = "entrypoint.sh";
+          text = ''
+            #!/bin/bash
+
+            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
+              --address $OP_SUBDOMAIN.1password.com \
+              --email $OP_EMAIL_ADDRESS \
+              --secret-key $OP_SECRET_KEY \
+              --signin --raw)
+
+            op item get 'GitLab (generated)' \
+              --vault 'Local server' \
+              --session $SESSION_TOKEN > /dev/null
+
+            if [ $? != 0 ]; then
+              op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
+                --title 'GitLab (generated)' \
+                --url http://gitlab.$INTERNAL_DOMAIN_NAME \
+                username=root \
+                password=$GITLAB_PASSWORD \
+                'DB connection command'[password]="PGPASSWORD=\"$POSTGRES_GITLAB_DATABASE_PASSWORD\" psql -h {{ ansible_default_ipv4.address }} -p 5432 -U $POSTGRES_GITLAB_DATABASE_USERNAME gitlab" \
+                --session $SESSION_TOKEN > /dev/null
+            fi
+          '';
+          executable = true;
+        };
+        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
+      in {
+        Type = "oneshot";
+        EnvironmentFile = pkgs.writeTextFile {
+          name = ".env";
+          text = ''
+            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
+            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
+            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
+            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
+            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
+            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
+            GITLAB_PASSWORD = {{ gitlab_password }}
+            POSTGRES_GITLAB_DATABASE_PASSWORD = {{ postgres_gitlab_database_password }}
+            POSTGRES_GITLAB_DATABASE_USERNAME = {{ postgres_gitlab_database_username }}
+          '';
+        };
+        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
+            --rm \
+            --name gitlab-1password \
+            --volume ${ENTRYPOINT}:/entrypoint.sh \
+            --env OP_DEVICE=$OP_DEVICE \
+            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
+            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
+            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
+            --env OP_SECRET_KEY=$OP_SECRET_KEY \
+            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
+            --env GITLAB_PASSWORD=$GITLAB_PASSWORD \
+            --env POSTGRES_GITLAB_DATABASE_PASSWORD=$POSTGRES_GITLAB_DATABASE_PASSWORD \
+            --env POSTGRES_GITLAB_DATABASE_USERNAME=$POSTGRES_GITLAB_DATABASE_USERNAME \
+            --entrypoint /entrypoint.sh \
+            --cpus 0.01563 \
+            --memory-reservation 61m \
+            --memory 64m \
+            ${ONE_PASSWORD_IMAGE}'
+        '';
+      };
+      wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
     };
   };
 

@@ -7,7 +7,6 @@ FROM alpine:$ALPINE_VERSION
 ARG ANSIBLE_CORE_VERSION \
     ONE_PASSWORD_CLI_VERSION \
     ONE_PASSWORD_CLI_ARCH
-
 RUN apk add --update --no-cache \
       python3 \
       py3-pip \
