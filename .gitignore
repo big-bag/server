@@ -1,8 +1,12 @@
 .vault_password
 host_vars/localhost/vault.yml
 
-id_ed25519*
+id_ed25519
 hosts
+
+configs/key.txt
+.sops.yaml
+configs/secrets.yml
 
 ca.pem
 user.pfx

@@ -1,14 +1,20 @@
-<details>
-<summary>Installing NixOS</summary>
-<br>
+# Installing NixOS
 
-Server specification
+<details>
+<summary>Server specification</summary>
+<br>
 
 | Hardware | Configuration |
 | :--- | :--- |
 | Processor | Intel Core i7-4790, 4x3600 MHz |
 | Memory | 32 GB DDR3 1600 MHz |
 | Disks | 120 GB SSD x 2, 4 TB HDD x 1 |
+
+</details>
+
+<details>
+<summary>Boot from installation ISO image</summary>
+<br>
 
 Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
@@ -22,7 +28,11 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    ssh nixos@[SERVER_IP_ADDRESS]
    ```
 
-Partitioning of disk:
+</details>
+
+<details>
+<summary>Partitioning of disk</summary>
+<br>
 
 > Ignore info messages from parted: `Information: You may need to update /etc/fstab.`
 
@@ -58,7 +68,11 @@ Partitioning of disk:
    sudo parted /dev/sdb -- set 3 esp on
    ```
 
-Formatting of disk:
+</details>
+
+<details>
+<summary>Formatting of disk</summary>
+<br>
 
 1. format a `root` partition to ext4, add a label `nixos`
    ```bash
@@ -75,7 +89,11 @@ Formatting of disk:
    sudo mkfs.fat -F 32 -n boot /dev/sdb3
    ```
 
-Installing OS:
+</details>
+
+<details>
+<summary>Installing OS</summary>
+<br>
 
 1. mount the target file system on which NixOS should be installed on `/mnt`
    ```bash
@@ -140,62 +158,69 @@ Installing OS:
 
 </details>
 
+# Setting up a local environment and preparing a server
+
 <details>
-<summary>Setting up a local environment and preparing a server</summary>
+<summary>Prepare</summary>
 <br>
 
-1. save secrets in 1Password
-   * vault: `Local server`
-     * item: `Secrets (manually)`
-       * section: `Server`
-         * ip address[text]: [SERVER_IP_ADDRESS]
-       * section: `Root account`
-         * username[text]: root
-         * password[password]: [ROOT_USER_PASSWORD]
-       * section: `Technical account`
-         * nixos[text]: [NIXOS_TECHNICAL_ACCOUNT]
-         * postgres pgadmin username[text]: [PGADMIN_POSTGRES_USER]
-         * postgres monitoring username[text]: [MONITORING_POSTGRES_USER]
-         * redis monitoring username[text]: [MONITORING_REDIS_USER]
-         * postgres gitlab username[text]: [GITLAB_POSTGRES_USER]
-       * section: `Domains`
-         * internal domain name[text]: example.com
-
-2. build an image
+1. build an image
    ```bash
-   docker build --rm --file Dockerfile --tag ansible:2.14.2 .
+   docker build --rm --file Dockerfile --tag ansible:2.15.1 .
    ```
 
-3. create a Vault password file named `.vault_password` and add a password in it
+2. create a Vault password file named `.vault_password` and add a password in it
 
-4. create an encrypted file
+3. create an encrypted file
    ```bash
    docker run --rm -ti \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
+     ansible:2.15.1 \
        ansible-vault create host_vars/localhost/vault.yml
    ```
 
-5. write credentials to access 1Password in variables:
-   - vault_1password_device_id: `<value>`, value can be found in `~/.config/op/config` on Alpine linux
-   - vault_1password_master_password: `'S0me P@ssword'`
-   - vault_1password_subdomain: `my`
-   - vault_1password_email_address: `email@example.com`
-   - vault_1password_secret_key: `<value>`
+4. write credentials to encrypted file
+   ```bash
+   ---
+   vault_server_ip_address: 192.168.0.1
+   vault_server_root_account_password: 'S0me P@ssword'
+   vault_server_technical_account_username: [VALUE]
 
-6. run a playbook to do an initial configuration on a server and configure a local environment
+   vault_1password_device_id: [VALUE] (can be found in `~/.config/op/config` on Alpine linux)
+   vault_1password_master_password: 'S0me P@ssword'
+   vault_1password_subdomain: my
+   vault_1password_email_address: email@example.com
+   vault_1password_secret_key: [VALUE]
+
+   vault_domain_name_internal: example.com
+
+   vault_pgadmin_postgres_username: [VALUE]
+   vault_grafana_agent_postgres_username: [VALUE]
+   vault_grafana_agent_redis_username: [VALUE]
+   vault_gitlab_postgres_username: [VALUE]
+   ```
+
+5. run a playbook to do an initial configuration on a server and configure a local environment
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
+     ansible:2.15.1 \
        ansible-playbook site.yml --tags prepare
+   ```
+
+6. run a playbook to create secrets
+   ```bash
+   docker run --rm -t \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.15.1 \
+       ansible-playbook site.yml --tags secrets
    ```
 
 7. run a playbook to upgrade NixOS to the latest version
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
+     ansible:2.15.1 \
        ansible-playbook site.yml --tags upgrade
    ```
 
@@ -203,7 +228,7 @@ Installing OS:
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
+     ansible:2.15.1 \
        ansible-playbook site.yml --tags dashboards
    ```
 
@@ -239,15 +264,17 @@ Installing OS:
 
 </details>
 
+# Configuring a server
+
 <details>
-<summary>Configuring a server</summary>
+<summary>Deploy</summary>
 <br>
 
 1. run a playbook to configure a server
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.14.2 \
+     ansible:2.15.1 \
        ansible-playbook site.yml
    ```
 

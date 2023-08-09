@@ -2,33 +2,19 @@
 
 let
   REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
-  CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-  NETWORK = "redisinsight";
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
 in
 
 {
   systemd.services = {
-    "redis-${REDIS_INSTANCE}-prepare" = {
-      before = [
-        "var-lib-redis\\x2d${REDIS_INSTANCE}.mount"
-        "${CONTAINERS_BACKEND}-redisinsight.service"
-        "redis-configure.service"
-      ];
+    redis-prepare = {
+      before = [ "var-lib-redis\\x2d${REDIS_INSTANCE}.mount" ];
       serviceConfig = {
         Type = "oneshot";
       };
-      script = ''
-        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/data-stores
-
-        if [ -z $(${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} network ls --filter name=^${NETWORK}$ --format {% raw %}{{.Name}}{% endraw %}) ]; then
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} network create ${NETWORK}
-        fi
-      '';
-      wantedBy = [
-        "var-lib-redis\\x2d${REDIS_INSTANCE}.mount"
-        "${CONTAINERS_BACKEND}-redisinsight.service"
-        "redis-configure.service"
-      ];
+      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/data-stores";
+      wantedBy = [ "var-lib-redis\\x2d${REDIS_INSTANCE}.mount" ];
     };
   };
 
@@ -41,15 +27,26 @@ in
     ];
   };
 
+  sops.secrets = {
+    "redis/database_password_file" = {
+      mode = "0400";
+      owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
+      group = config.services.redis.servers.${REDIS_INSTANCE}.user;
+    };
+  };
+
   services = {
     redis = {
       vmOverCommit = true;
       servers = {
-        ${REDIS_INSTANCE} = {
+        ${REDIS_INSTANCE} = let
+          IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+        in {
           enable = true;
-          bind = "{{ ansible_default_ipv4.address }}";
+          user = "redis-${REDIS_INSTANCE}";
+          bind = "${IP_ADDRESS}";
           port = 6379;
-          requirePass = "{{ redis_database_password }}";
+          requirePassFile = config.sops.secrets."redis/database_password_file".path;
           appendOnly = true;
           settings = {
             maxmemory = "973mb";
@@ -82,12 +79,11 @@ in
           environment = {
             RIHOST = "0.0.0.0";
             RIPORT = "8001";
-            RITRUSTEDORIGINS = "https://{{ internal_domain_name }}";
+            RITRUSTEDORIGINS = "https://${DOMAIN_NAME_INTERNAL}";
             RIPROXYENABLE = "True";
             RIPROXYPATH = "/redisinsight/";
           };
           extraOptions = [
-            "--network=${NETWORK}"
             "--cpus=0.03125"
             "--memory-reservation=122m"
             "--memory=128m"
@@ -98,86 +94,48 @@ in
     };
   };
 
-  services = {
-    nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
-        locations."/redisinsight/" = {
-          extraConfig = ''
-            proxy_read_timeout 900;
-            proxy_set_header   Host $host;
-          '';
-          proxyPass = "http://127.0.0.1:${toString config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
-          basicAuth = { {{ redis_redisinsight_username }} = "{{ redis_redisinsight_password }}"; };
-        };
-      };
+  sops.secrets = {
+    "redis/database_password_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
     };
   };
 
   systemd.services = {
-    redis-configure = {
+    redisinsight-configure = {
       after = [
         "redis-${REDIS_INSTANCE}.service"
         "${CONTAINERS_BACKEND}-redisinsight.service"
       ];
-      serviceConfig = let
-        ENTRYPOINT = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/sh
-
-            post_data()
-            {
-            cat <<EOF
-              {
-                "name": "${REDIS_INSTANCE}",
-                "connectionType": "STANDALONE",
-                "host": "${toString config.services.redis.servers.${REDIS_INSTANCE}.bind}",
-                "port": ${toString config.services.redis.servers.${REDIS_INSTANCE}.port},
-                "password": "$REDISCLI_AUTH"
-              }
-            EOF
-            }
-
-            for i in `seq 1 300`; do
-              wget -q -O - http://redisinsight:${toString config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | grep "OK"
-              if [ $? == 0 ]; then
-                wget -O - http://redisinsight:${toString config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/api/instance/ \
-                  --header 'Content-Type: application/json' \
-                  --post-data "$(post_data)" > /dev/null
-                echo "ACL SETUSER $REDIS_MONITORING_DATABASE_USERNAME +client +ping +info +config|get +cluster|info +slowlog +latency +memory +select +get +scan +xinfo +type +pfcount +strlen +llen +scard +zcard +hlen +xlen +eval allkeys on >$REDIS_MONITORING_DATABASE_PASSWORD" | redis-cli -h ${toString config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
-                exit 0
-              fi
-              sleep 1
-            done
-          '';
-          executable = true;
-        };
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            REDIS_DATABASE_PASSWORD = {{ redis_database_password }}
-            REDIS_MONITORING_DATABASE_USERNAME = {{ redis_monitoring_database_username }}
-            REDIS_MONITORING_DATABASE_PASSWORD = {{ redis_monitoring_database_password }}
-          '';
-        };
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name redis-configure \
-            --network=${NETWORK} \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env REDISCLI_AUTH=$REDIS_DATABASE_PASSWORD \
-            --env REDIS_MONITORING_DATABASE_USERNAME=$REDIS_MONITORING_DATABASE_USERNAME \
-            --env REDIS_MONITORING_DATABASE_PASSWORD=$REDIS_MONITORING_DATABASE_PASSWORD \
-            --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
-            redis:7.0.10-alpine3.17'
-        '';
+        EnvironmentFile = config.sops.secrets."redis/database_password_envs".path;
       };
+      script = ''
+        post_data()
+        {
+        ${pkgs.coreutils}/bin/cat <<EOF
+          {
+            "name": "${REDIS_INSTANCE}",
+            "connectionType": "STANDALONE",
+            "host": "${config.services.redis.servers.${REDIS_INSTANCE}.bind}",
+            "port": ${toString config.services.redis.servers.${REDIS_INSTANCE}.port},
+            "password": "$REDISCLI_AUTH"
+          }
+        EOF
+        }
+
+        ${pkgs.coreutils}/bin/echo "Waiting for RedisInsight availability"
+        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | grep "OK"; do
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.coreutils}/bin/echo "Configuring a connection to the ${REDIS_INSTANCE} database in the Redis"
+        ${pkgs.wget}/bin/wget -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/api/instance/ \
+          --header 'Content-Type: application/json' \
+          --post-data "$(post_data)" > /dev/null
+      '';
       wantedBy = [
         "redis-${REDIS_INSTANCE}.service"
         "${CONTAINERS_BACKEND}-redisinsight.service"
@@ -185,14 +143,122 @@ in
     };
   };
 
+  sops.secrets = {
+    "redisinsight/nginx_file" = {
+      mode = "0400";
+      owner = config.services.nginx.user;
+      group = config.services.nginx.group;
+    };
+  };
+
+  services = {
+    nginx = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
+        locations."/redisinsight/" = {
+          extraConfig = ''
+            proxy_read_timeout 900;
+            proxy_set_header   Host $host;
+          '';
+          proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
+          basicAuthFile = config.sops.secrets."redisinsight/nginx_file".path;
+        };
+      };
+    };
+  };
+
+  sops.secrets = {
+    "redis/grafana_agent_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    redis-grafana-agent = {
+      after = [ "redis-${REDIS_INSTANCE}.service" ];
+      before = [ "grafana-agent.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."redis/database_password_envs".path
+          config.sops.secrets."redis/grafana_agent_envs".path
+        ];
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/echo "Waiting for Redis availability"
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${config.services.redis.servers.${REDIS_INSTANCE}.bind} ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}; do
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.coreutils}/bin/echo "Creating a Grafana Agent account in the Redis"
+        ${pkgs.coreutils}/bin/echo "ACL SETUSER $GRAFANA_AGENT_REDIS_USERNAME +client +ping +info +config|get +cluster|info +slowlog +latency +memory +select +get +scan +xinfo +type +pfcount +strlen +llen +scard +zcard +hlen +xlen +eval allkeys on >$GRAFANA_AGENT_REDIS_PASSWORD_CLI" | ${pkgs.redis}/bin/redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
+      '';
+      wantedBy = [
+        "redis-${REDIS_INSTANCE}.service"
+        "grafana-agent.service"
+      ];
+    };
+  };
+
+  sops.secrets = {
+    "redis/grafana_agent_file/username" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "redis/grafana_agent_file/password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      credentials = {
+        GRAFANA_AGENT_REDIS_USERNAME = config.sops.secrets."redis/grafana_agent_file/username".path;
+        GRAFANA_AGENT_REDIS_PASSWORD = config.sops.secrets."redis/grafana_agent_file/password".path;
+      };
+      settings = {
+        integrations = {
+          redis_exporter = {
+            enabled = true;
+            scrape_interval = "1m";
+            redis_addr = "${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
+            redis_user = "\${GRAFANA_AGENT_REDIS_USERNAME}";
+            redis_password = "\${GRAFANA_AGENT_REDIS_PASSWORD}";
+          };
+        };
+      };
+    };
+  };
+
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "redisinsight/nginx_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     redis-1password = {
-      after = [
-        "${CONTAINERS_BACKEND}-redisinsight.service"
-        "nginx.service"
-      ];
+      after = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -203,17 +269,18 @@ in
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'Redis (generated)' \
+            op item get Redis \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'Redis (generated)' \
-                website[url]=http://$INTERNAL_DOMAIN_NAME/redisinsight \
-                username=$REDIS_REDISINSIGHT_USERNAME \
-                password=$REDIS_REDISINSIGHT_PASSWORD \
-                'DB ${REDIS_INSTANCE} password'[password]=$REDIS_DATABASE_PASSWORD \
+                --title Redis \
+                website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
+                username=$REDISINSIGHT_NGINX_USERNAME \
+                password=$REDISINSIGHT_NGINX_PASSWORD \
+                'DB connection command - ${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
+                'DB connection command - Grafana Agent'[password]="redis-cli -u 'redis://$GRAFANA_AGENT_REDIS_USERNAME:$GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
                 --session $SESSION_TOKEN > /dev/null
             fi
           '';
@@ -222,58 +289,20 @@ in
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            REDIS_REDISINSIGHT_USERNAME = {{ redis_redisinsight_username }}
-            REDIS_REDISINSIGHT_PASSWORD = {{ redis_redisinsight_password }}
-            REDIS_DATABASE_PASSWORD = {{ redis_database_password }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name redis-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env REDIS_REDISINSIGHT_USERNAME=$REDIS_REDISINSIGHT_USERNAME \
-            --env REDIS_REDISINSIGHT_PASSWORD=$REDIS_REDISINSIGHT_PASSWORD \
-            --env REDIS_DATABASE_PASSWORD=$REDIS_DATABASE_PASSWORD \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."redisinsight/nginx_envs".path} \
+            --env-file ${config.sops.secrets."redis/database_password_envs".path} \
+            --env-file ${config.sops.secrets."redis/grafana_agent_envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };
       wantedBy = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
-    };
-  };
-
-  services = {
-    grafana-agent = {
-      settings = {
-        integrations = {
-          redis_exporter = {
-            enabled = true;
-            scrape_interval = "1m";
-            redis_addr = "${toString config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
-            redis_user = "{{ redis_monitoring_database_username }}";
-            redis_password = "{{ redis_monitoring_database_password }}";
-          };
-        };
-      };
     };
   };
 }

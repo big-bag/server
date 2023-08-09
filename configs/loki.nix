@@ -1,4 +1,8 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
+
+let
+  MINIO_ENDPOINT = config.services.minio.listenAddress;
+in
 
 {
   systemd.services = {
@@ -12,46 +16,63 @@
     };
   };
 
+  sops.secrets = {
+    "minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     loki-minio = {
       before = [ "loki.service" ];
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
 
-            mc alias set $ALIAS http://${toString config.services.minio.listenAddress} $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+            # args: host port
+            check_port_is_open() {
+              local exit_status_code
+              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+              exit_status_code=$?
+              case $exit_status_code in
+                49) return 0 ;;
+                *) return "$exit_status_code" ;;
+              esac
+            }
 
-            mc mb --ignore-existing $ALIAS/loki
-            mc anonymous set public $ALIAS/loki
+            while true; do
+              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
+              if [ $? == 0 ]; then
+                echo "Creating buckets in the MinIO"
+
+                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
+                mc mb --ignore-existing $ALIAS/loki
+
+                break
+              fi
+              echo "Waiting for MinIO availability"
+              sleep 1
+            done
           '';
           executable = true;
         };
         MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            ALIAS = local
-            MINIO_ACCESS_KEY = {{ minio_access_key }}
-            MINIO_SECRET_KEY = {{ minio_secret_key }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name loki-minio \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env ALIAS=$ALIAS \
-            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
-            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."minio/envs".path} \
+            --env ALIAS=local \
             --entrypoint /entrypoint.sh \
-            --cpus 0.03125 \
-            --memory-reservation 122m \
-            --memory 128m \
             ${MINIO_CLIENT_IMAGE}'
         '';
       };
@@ -63,7 +84,10 @@
     loki = {
       enable = true;
       dataDir = "/mnt/ssd/monitoring/loki";
-      extraFlags = [ "-log-config-reverse-order" ];
+      extraFlags = [
+        "-log-config-reverse-order"
+        "-config.expand-env=true"
+      ];
       configuration = {
         auth_enabled = false;
         server = {
@@ -85,23 +109,23 @@
           chunk_retain_period = "30s";
           chunk_idle_period = "5m";
           wal = {
-            dir = "${config.services.loki.dataDir}/wal";
+            dir = "./wal";
           };
         };
         storage_config = {
           aws = {
             s3forcepathstyle = true;
             bucketnames = "loki";
-            endpoint = "http://${toString config.services.minio.listenAddress}";
-            region = "${toString config.services.minio.region}";
-            access_key_id = "{{ minio_access_key }}";
-            secret_access_key = "{{ minio_secret_key }}";
+            endpoint = "http://${MINIO_ENDPOINT}";
+            region = config.services.minio.region;
+            access_key_id = "\${MINIO_ROOT_USER}";
+            secret_access_key = "\${MINIO_ROOT_PASSWORD}";
             insecure = true;
           };
           boltdb_shipper = {
-            active_index_directory = "${config.services.loki.dataDir}/index";
+            active_index_directory = "./index";
             shared_store = "s3";
-            cache_location = "${config.services.loki.dataDir}/cache";
+            cache_location = "./cache";
             resync_interval = "5s";
           };
         };
@@ -118,7 +142,7 @@
           }];
         };
         compactor = {
-          working_directory = "${config.services.loki.dataDir}/compactor";
+          working_directory = "./compactor";
           shared_store = "s3";
         };
         limits_config = {
@@ -131,6 +155,7 @@
   systemd.services = {
     loki = {
       serviceConfig = {
+        EnvironmentFile = config.sops.secrets."minio/envs".path;
         StartLimitBurst = 0;
         CPUQuota = "2%";
         MemoryHigh = "486M";

@@ -1,0 +1,137 @@
+---
+- name: configure disks
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: install parted (1/3)
+      ansible.builtin.replace:
+        path: /etc/nixos/configuration.nix
+        regexp: '# (environment\.systemPackages \= with pkgs; \[)'
+        replace: '\1'
+        backup: true
+      notify: apply config
+
+    - name: install parted (2/3)
+      ansible.builtin.blockinfile:
+        path: /etc/nixos/configuration.nix
+        insertafter: '#   wget'
+        block: |2
+              parted # For community.general.parted ansible module
+        marker: "    # {mark} ANSIBLE MANAGED BLOCK PARTED"
+        backup: true
+      notify: apply config
+
+    - name: install parted (3/3)
+      ansible.builtin.replace:
+        path: /etc/nixos/configuration.nix
+        regexp: '# (];)'
+        replace: '\1'
+        backup: true
+      notify: apply config
+
+    - name: force notified handlers to run at this point
+      ansible.builtin.meta: flush_handlers
+
+    - name: collect only facts about devices
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - devices
+        filter:
+          - devices
+
+    - name: find names of all disks
+      ansible.builtin.set_fact:
+        disks_names: "{{ ansible_facts.devices | dict2items |
+                         rejectattr('key', 'match', '^loop.*') |
+                         map(attribute='key') | list }}"
+
+    - name: find ssd root disk
+      ansible.builtin.set_fact:
+        ssd_root_disk: "{{ ansible_facts.devices | dict2items |
+                           selectattr('key', 'match', item) |
+                           selectattr('value.size', 'match', '^111.79 GB') |
+                           map(attribute='key') | join() }}"
+      when: ansible_facts.devices | dict2items |
+            selectattr('key', 'match', item) |
+            community.general.json_query('[*].value.partitions.*.links[].labels[]') | select('match', 'nixos|swap|boot')
+      loop: "{{ disks_names }}"
+
+    - name: find ssd data disk
+      ansible.builtin.set_fact:
+        ssd_data_disk: "{{ ansible_facts.devices | dict2items |
+                           rejectattr('key', 'match', '^loop.*') |
+                           rejectattr('key', 'match', ssd_root_disk) |
+                           selectattr('value.size', 'match', '^111.79 GB') |
+                           map(attribute='key') | join() }}"
+
+    - name: find hdd data disk
+      ansible.builtin.set_fact:
+        hdd_data_disk: "{{ ansible_facts.devices | dict2items |
+                           rejectattr('key', 'match', '^loop.*') |
+                           selectattr('key', 'match', '^sd.*') |
+                           selectattr('value.size', 'match', '^3.64 TB') |
+                           map(attribute='key') | join() }}"
+
+    - name: create gpt partition table
+      community.general.parted:
+        device: "/dev/{{ item }}"
+        label: gpt
+        number: 1
+        state: present
+      loop:
+        - "{{ ssd_data_disk }}"
+        - "{{ hdd_data_disk }}"
+
+    - name: create a ext4 filesystem and add label
+      community.general.filesystem:
+        fstype: ext4
+        dev: "/dev/{{ item.dev }}1"
+        opts: "-L {{ item.label }}"
+      loop:
+        - { dev: "{{ ssd_data_disk }}", label: ssd }
+        - { dev: "{{ hdd_data_disk }}", label: hdd }
+
+    - name: create mount point
+      ansible.builtin.copy:
+        content: |
+          {
+          {%- for i in labels +%}
+            fileSystems."/mnt/{{ i }}" = {
+              device = "/dev/disk/by-label/{{ i }}";
+              fsType = "ext4";
+              options = [ "nofail" ];
+            };
+          {% endfor %}
+          }
+        dest: /etc/nixos/disks.nix
+      vars:
+        labels:
+          - ssd
+          - hdd
+      notify: apply config
+
+    - name: import config
+      ansible.builtin.lineinfile:
+        path: /etc/nixos/configuration.nix
+        insertafter: ".\/technical-account.nix"
+        line: "      ./disks.nix"
+        backup: true
+      notify: apply config
+
+  handlers:
+    - name: check compilation
+      ansible.builtin.command: nixos-rebuild build
+      listen: apply config
+
+    - name: rebuild system
+      ansible.builtin.command: nixos-rebuild switch
+      register: rebuild_output
+      listen: apply config
+
+    - name: display rebuild output
+      ansible.builtin.debug:
+        msg: "{{ rebuild_output.stderr_lines }}"
+      listen: apply config

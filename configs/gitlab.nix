@@ -1,7 +1,11 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
-  CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  MINIO_ENDPOINT = config.services.minio.listenAddress;
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+  REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
 {
@@ -19,79 +23,189 @@ in
     };
   };
 
+  sops.secrets = {
+    "minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     gitlab-minio = {
       before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
       serviceConfig = let
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
 
-            mc alias set $ALIAS http://${toString config.services.minio.listenAddress} $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+            # args: host port
+            check_port_is_open() {
+              local exit_status_code
+              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+              exit_status_code=$?
+              case $exit_status_code in
+                49) return 0 ;;
+                *) return "$exit_status_code" ;;
+              esac
+            }
 
-            mc mb --ignore-existing $ALIAS/gitlab-artifacts
-            mc anonymous set public $ALIAS/gitlab-artifacts
+            while true; do
+              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
+              if [ $? == 0 ]; then
+                echo "Creating buckets in the MinIO"
 
-            mc mb --ignore-existing $ALIAS/gitlab-external-diffs
-            mc anonymous set public $ALIAS/gitlab-external-diffs
+                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
 
-            mc mb --ignore-existing $ALIAS/gitlab-lfs
-            mc anonymous set public $ALIAS/gitlab-lfs
+                mc mb --ignore-existing $ALIAS/gitlab-artifacts
+                mc mb --ignore-existing $ALIAS/gitlab-external-diffs
+                mc mb --ignore-existing $ALIAS/gitlab-lfs
+                mc mb --ignore-existing $ALIAS/gitlab-uploads
+                mc mb --ignore-existing $ALIAS/gitlab-packages
+                mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
+                mc mb --ignore-existing $ALIAS/gitlab-terraform-state
+                mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
+                mc mb --ignore-existing $ALIAS/gitlab-pages
+                mc mb --ignore-existing $ALIAS/gitlab-backup
+                mc mb --ignore-existing $ALIAS/gitlab-registry
 
-            mc mb --ignore-existing $ALIAS/gitlab-uploads
-            mc anonymous set public $ALIAS/gitlab-uploads
-
-            mc mb --ignore-existing $ALIAS/gitlab-packages
-            mc anonymous set public $ALIAS/gitlab-packages
-
-            mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
-            mc anonymous set public $ALIAS/gitlab-dependency-proxy
-
-            mc mb --ignore-existing $ALIAS/gitlab-terraform-state
-            mc anonymous set public $ALIAS/gitlab-terraform-state
-
-            mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
-            mc anonymous set public $ALIAS/gitlab-ci-secure-files
-
-            mc mb --ignore-existing $ALIAS/gitlab-pages
-            mc anonymous set public $ALIAS/gitlab-pages
-
-            mc mb --ignore-existing $ALIAS/gitlab-backup
-            mc anonymous set public $ALIAS/gitlab-backup
-
-            mc mb --ignore-existing $ALIAS/gitlab-registry
-            mc anonymous set public $ALIAS/gitlab-registry
+                break
+              fi
+              echo "Waiting for MinIO availability"
+              sleep 1
+            done
           '';
           executable = true;
         };
         MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            ALIAS = local
-            MINIO_ACCESS_KEY = {{ minio_access_key }}
-            MINIO_SECRET_KEY = {{ minio_secret_key }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name gitlab-minio \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env ALIAS=$ALIAS \
-            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
-            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."minio/envs".path} \
+            --env ALIAS=local \
             --entrypoint /entrypoint.sh \
-            --cpus 0.03125 \
-            --memory-reservation 122m \
-            --memory 128m \
             ${MINIO_CLIENT_IMAGE}'
         '';
       };
       wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/postgres_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    gitlab-postgres = {
+      after = [ "postgresql.service" ];
+      before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."gitlab/postgres_envs".path;
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.coreutils}/bin/echo "Creating a GitLab account in the PostgreSQL"
+        ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
+          DO
+          \$do$
+          BEGIN
+              IF EXISTS (
+                  SELECT FROM pg_catalog.pg_roles
+                  WHERE rolname = '$GITLAB_POSTGRES_USERNAME'
+              )
+              THEN
+                  RAISE NOTICE 'role "$GITLAB_POSTGRES_USERNAME" already exists, skipping';
+              ELSE
+                  CREATE ROLE $GITLAB_POSTGRES_USERNAME WITH
+                      LOGIN
+                      ENCRYPTED PASSWORD '$GITLAB_POSTGRES_PASSWORD';
+              END IF;
+          END
+          \$do$;
+
+          SELECT 'CREATE DATABASE gitlab OWNER $GITLAB_POSTGRES_USERNAME'
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'gitlab');
+          \gexec
+
+          \c gitlab
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+          CREATE EXTENSION IF NOT EXISTS btree_gist;
+        EOSQL
+      '';
+      wantedBy = [
+        "postgresql.service"
+        "${CONTAINERS_BACKEND}-gitlab.service"
+      ];
+    };
+  };
+
+  sops.secrets = {
+    "minio/file/username" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "minio/file/password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/password_file" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/token" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/postgres_file/username" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/postgres_file/password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "redis/database_password_file" = {
+      mode = "0400";
+      owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
+      group = config.services.redis.servers.${REDIS_INSTANCE}.user;
     };
   };
 
@@ -116,12 +230,19 @@ in
             "/mnt/ssd/services/gitlab/config:/etc/gitlab"
             "/mnt/ssd/services/gitlab/logs:/var/log/gitlab"
             "/mnt/ssd/services/gitlab/data:/var/opt/gitlab"
+            "${config.sops.secrets."minio/file/username".path}:/run/secrets/minio_user"
+            "${config.sops.secrets."minio/file/password".path}:/run/secrets/minio_password"
+            "${config.sops.secrets."gitlab/password_file".path}:/run/secrets/gitlab_password"
+            "${config.sops.secrets."gitlab/token".path}:/run/secrets/gitlab_token"
+            "${config.sops.secrets."gitlab/postgres_file/username".path}:/run/secrets/postgres_username"
+            "${config.sops.secrets."gitlab/postgres_file/password".path}:/run/secrets/postgres_password"
+            "${config.sops.secrets."redis/database_password_file".path}:/run/secrets/redis_password"
           ];
           environment = let
-            REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+            MINIO_REGION = config.services.minio.region;
           in {
             GITLAB_OMNIBUS_CONFIG = ''
-              external_url 'http://gitlab.{{ internal_domain_name }}'
+              external_url 'http://gitlab.${DOMAIN_NAME_INTERNAL}'
 
               gitlab_rails['smtp_enable'] = false
               gitlab_rails['gitlab_email_enabled'] = false
@@ -131,11 +252,11 @@ in
               gitlab_rails['object_store']['enabled'] = true
               gitlab_rails['object_store']['connection'] = {
                 'provider' => 'AWS',
-                'endpoint' => 'http://${toString config.services.minio.listenAddress}',
-                'region' => '${toString config.services.minio.region}',
+                'endpoint' => 'http://${MINIO_ENDPOINT}',
+                'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
-                'aws_access_key_id' => '{{ minio_access_key }}',
-                'aws_secret_access_key' => '{{ minio_secret_key }}'
+                'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
+                'aws_secret_access_key' => File.read('/run/secrets/minio_password').gsub("\n", "")
               }
               gitlab_rails['object_store']['proxy_download'] = true
               gitlab_rails['object_store']['objects']['artifacts']['bucket'] = 'gitlab-artifacts'
@@ -150,39 +271,39 @@ in
 
               gitlab_rails['backup_upload_connection'] = {
                 'provider' => 'AWS',
-                'endpoint' => 'http://${toString config.services.minio.listenAddress}',
-                'region' => '${toString config.services.minio.region}',
+                'endpoint' => 'http://${MINIO_ENDPOINT}',
+                'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
-                'aws_access_key_id' => '{{ minio_access_key }}',
-                'aws_secret_access_key' => '{{ minio_secret_key }}'
+                'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
+                'aws_secret_access_key' => File.read('/run/secrets/minio_password').gsub("\n", "")
               }
               gitlab_rails['backup_upload_remote_directory'] = 'gitlab-backup'
 
-              gitlab_rails['initial_root_password'] = '{{ gitlab_password }}'
-              gitlab_rails['initial_shared_runners_registration_token'] = '{{ gitlab_token }}'
+              gitlab_rails['initial_root_password'] = File.read('/run/secrets/gitlab_password').gsub("\n", "")
+              gitlab_rails['initial_shared_runners_registration_token'] = File.read('/run/secrets/gitlab_token').gsub("\n", "")
               gitlab_rails['store_initial_root_password'] = false
 
               gitlab_rails['db_database'] = 'gitlab'
-              gitlab_rails['db_username'] = '{{ postgres_gitlab_database_username }}'
-              gitlab_rails['db_password'] = '{{ postgres_gitlab_database_password }}'
-              gitlab_rails['db_host'] = '{{ ansible_default_ipv4.address }}'
+              gitlab_rails['db_username'] = File.read('/run/secrets/postgres_username').gsub("\n", "")
+              gitlab_rails['db_password'] = File.read('/run/secrets/postgres_password').gsub("\n", "")
+              gitlab_rails['db_host'] = '${IP_ADDRESS}'
               gitlab_rails['db_port'] = ${toString config.services.postgresql.port}
 
-              gitlab_rails['redis_host'] = '${toString config.services.redis.servers.${REDIS_INSTANCE}.bind}'
+              gitlab_rails['redis_host'] = '${config.services.redis.servers.${REDIS_INSTANCE}.bind}'
               gitlab_rails['redis_port'] = ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
-              gitlab_rails['redis_password'] = '{{ redis_database_password }}'
+              gitlab_rails['redis_password'] = File.read('/run/secrets/redis_password').gsub("\n", "")
 
-              registry_external_url 'http://registry.{{ internal_domain_name }}'
+              registry_external_url 'http://registry.${DOMAIN_NAME_INTERNAL}'
               registry['registry_http_addr'] = '0.0.0.0:5000'
               registry['debug_addr'] = '0.0.0.0:5001'
               registry['storage'] = {
                 's3' => {
                   'provider' => 'AWS',
-                  'regionendpoint' => 'http://${toString config.services.minio.listenAddress}',
-                  'region' => '${toString config.services.minio.region}',
+                  'regionendpoint' => 'http://${MINIO_ENDPOINT}',
+                  'region' => '${MINIO_REGION}',
                   'path_style' => 'true',
-                  'accesskey' => '{{ minio_access_key }}',
-                  'secretkey' => '{{ minio_secret_key }}',
+                  'accesskey' => File.read('/run/secrets/minio_user').gsub("\n", ""),
+                  'secretkey' => File.read('/run/secrets/minio_password').gsub("\n", ""),
                   'bucket' => 'gitlab-registry'
                 }
               }
@@ -207,7 +328,7 @@ in
               redis['enable'] = false
               nginx['enable'] = false
 
-              pages_external_url 'http://pages.{{ internal_domain_name }}'
+              pages_external_url 'http://pages.${DOMAIN_NAME_INTERNAL}'
               gitlab_pages['enable'] = true
               gitlab_pages['status_uri'] = '/@status'
               gitlab_pages['listen_proxy'] = '0.0.0.0:8090'
@@ -218,7 +339,7 @@ in
               gitlab_kas['enable'] = false
               prometheus['enable'] = false
 
-              gitlab_rails['prometheus_address'] = '${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}'
+              gitlab_rails['prometheus_address'] = '${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}'
 
               alertmanager['enable'] = false
               node_exporter['enable'] = false
@@ -292,7 +413,23 @@ in
         }
       '';
 
-      virtualHosts."gitlab.{{ internal_domain_name }}" = {
+      virtualHosts."gitlab.${DOMAIN_NAME_INTERNAL}" = {
+        listen = [
+          { addr = "${IP_ADDRESS}"; port = 80; }
+          { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
+        ];
+
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
+
         locations."/" = {
           extraConfig = ''
             access_log /var/log/nginx/gitlab_access.log gitlab_ssl_access;
@@ -323,7 +460,23 @@ in
         };
       };
 
-      virtualHosts."registry.{{ internal_domain_name }}" = {
+      virtualHosts."registry.${DOMAIN_NAME_INTERNAL}" = {
+        listen = [
+          { addr = "${IP_ADDRESS}"; port = 80; }
+          { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
+        ];
+
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
+
         locations."/" = {
           extraConfig = ''
             access_log /var/log/nginx/gitlab_registry_access.log;
@@ -344,7 +497,23 @@ in
         };
       };
 
-      virtualHosts."pages.{{ internal_domain_name }}" = {
+      virtualHosts."pages.${DOMAIN_NAME_INTERNAL}" = {
+        listen = [
+          { addr = "${IP_ADDRESS}"; port = 80; }
+          { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
+        ];
+
+        kTLS = true;
+        forceSSL = true;
+        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+
+        # Authentication based on a client certificate
+        extraConfig = ''
+          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          ssl_verify_client      on;
+        '';
+
         locations."/" = {
           extraConfig = ''
             access_log /var/log/nginx/gitlab_pages_access.log;
@@ -364,14 +533,28 @@ in
     };
   };
 
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/password_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     gitlab-1password = {
-      after = [
-        "${CONTAINERS_BACKEND}-gitlab.service"
-        "nginx.service"
-      ];
+      after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -382,17 +565,17 @@ in
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'GitLab (generated)' \
+            op item get GitLab \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'GitLab (generated)' \
-                --url http://gitlab.$INTERNAL_DOMAIN_NAME \
+                --title GitLab \
+                --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
                 username=root \
                 password=$GITLAB_PASSWORD \
-                'DB connection command'[password]="PGPASSWORD=\"$POSTGRES_GITLAB_DATABASE_PASSWORD\" psql -h {{ ansible_default_ipv4.address }} -p 5432 -U $POSTGRES_GITLAB_DATABASE_USERNAME gitlab" \
+                'DB connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
                 --session $SESSION_TOKEN > /dev/null
             fi
           '';
@@ -401,38 +584,15 @@ in
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            GITLAB_PASSWORD = {{ gitlab_password }}
-            POSTGRES_GITLAB_DATABASE_PASSWORD = {{ postgres_gitlab_database_password }}
-            POSTGRES_GITLAB_DATABASE_USERNAME = {{ postgres_gitlab_database_username }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name gitlab-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env GITLAB_PASSWORD=$GITLAB_PASSWORD \
-            --env POSTGRES_GITLAB_DATABASE_PASSWORD=$POSTGRES_GITLAB_DATABASE_PASSWORD \
-            --env POSTGRES_GITLAB_DATABASE_USERNAME=$POSTGRES_GITLAB_DATABASE_USERNAME \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."gitlab/password_envs".path} \
+            --env-file ${config.sops.secrets."gitlab/postgres_envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };

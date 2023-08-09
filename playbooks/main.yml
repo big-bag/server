@@ -1,0 +1,126 @@
+---
+- name: configure in-memory inventory
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+    - name: set seed variables
+      ansible.builtin.set_fact:
+        server_ssh_port_seed: server_ssh_port_random
+      tags: [ prepare, secrets ]
+
+    - name: create random but idempotent numbers
+      ansible.builtin.set_fact:
+        server_ssh_port_generated: "{{ 65535 | random(start=49152, seed=server_ssh_port_seed) }}"
+      tags: [ prepare, secrets ]
+
+    - name: check connection to server on custom ssh port
+      ansible.builtin.command: nc -w 1 -v -z {{ vault_server_ip_address }} {{ server_ssh_port_generated }}
+      register: port_available
+      failed_when: false
+      changed_when: false
+      tags: prepare
+
+    - name: set server ssh port
+      ansible.builtin.set_fact:
+        server_ssh_port: "{% if port_available.rc == 0 %}{{ server_ssh_port_generated }}{% else %}22{% endif %}"
+      tags: prepare
+
+    - name: check connection to server under root
+      ansible.builtin.command: sshpass -e ssh -o StrictHostKeyChecking=no root@{{ vault_server_ip_address }} -p {{ server_ssh_port }} 'exit'
+      environment:
+        SSHPASS: "{{ vault_server_root_account_password }}"
+      register: root_available
+      failed_when: false
+      changed_when: false
+      tags: prepare
+
+    - name: add a host to the ansible-playbook in-memory inventory | root
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ vault_server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
+        ansible_user: root
+        ansible_password: "{{ vault_server_root_account_password }}"
+      changed_when: false
+      no_log: true
+      when: root_available.rc == 0
+      tags: prepare
+
+    - name: add a host to the ansible-playbook in-memory inventory | technical account
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ vault_server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
+        ansible_user: "{{ vault_server_technical_account_username }}"
+        ansible_ssh_private_key_file: "{{ playbook_dir }}/../id_ed25519"
+        ansible_python_interpreter: /run/current-system/sw/bin/python
+      changed_when: false
+      no_log: true
+      when: root_available.rc != 0
+      tags: prepare
+
+- name: include a play to install requirements for ansible
+  ansible.builtin.import_playbook: python.yml
+  tags: prepare
+
+- name: include a play to save connection parameters on server
+  ansible.builtin.import_playbook: connection-parameters.yml
+  tags: prepare
+
+- name: include a play to configure connection parameters
+  ansible.builtin.import_playbook: technical-account.yml
+  tags: prepare
+
+- name: include a play to configure disks
+  ansible.builtin.import_playbook: disks.yml
+  tags: prepare
+
+- name: include a play to create secrets
+  ansible.builtin.import_playbook: sops-nix.yml
+
+- name: include a play to upgrade nixos
+  ansible.builtin.import_playbook: upgrade.yml
+  tags: upgrade
+
+- name: include a play to upload dashboards to the server
+  ansible.builtin.import_playbook: dashboards.yml
+  tags: dashboards
+
+- name: download config
+  hosts: server
+  become: false
+  gather_facts: false
+  tasks:
+    - name: create a directory
+      ansible.builtin.file:
+        path: ../configs
+        state: directory
+      delegate_to: localhost
+      become: false
+      tags: prepare
+
+    - name: copy config from server to local machine
+      ansible.posix.synchronize:
+        mode: pull
+        src: /etc/nixos/configuration.nix
+        dest: ../configs
+        rsync_opts: "--ignore-existing"
+      tags: prepare
+
+- name: configure github repository version
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+    - name: configure hash of the github repository
+      ansible.builtin.blockinfile:
+        path: ../configs/configuration.nix
+        insertafter: 'imports\s='
+        block: |2
+              let
+                SOPS_NIX_COMMIT = "{{ sops_nix_commit.stdout }}";
+                SOPS_NIX_SHA256 = "{{ sops_nix_sha256.sha256 }}";
+              in
+        marker: "    # {mark} ANSIBLE MANAGED BLOCK GITHUB HASH"
+      tags: prepare

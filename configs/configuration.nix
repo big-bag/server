@@ -6,11 +6,21 @@
 
 {
   imports =
+    # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
+    let
+      SOPS_NIX_COMMIT = "c36df4fe4bf4bb87759b1891cab21e7a05219500";
+      SOPS_NIX_SHA256 = "yTLL72q6aqGmzHq+C3rDp3rIjno7EJZkFLof6Ika7cE=";
+    in
+    # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./python.nix
       ./technical-account.nix
       ./disks.nix
+      "${builtins.fetchTarball {
+        url = "https://github.com/Mic92/sops-nix/archive/${SOPS_NIX_COMMIT}.tar.gz";
+        sha256 = "${SOPS_NIX_SHA256}";
+      }}/modules/sops"
       ./minio.nix
       ./mimir.nix
       ./prometheus.nix
@@ -80,6 +90,14 @@
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
 
+  sops = {
+    defaultSopsFile = ./secrets.yml;
+    age = {
+      keyFile = ./key.txt;
+      generateKey = false;
+    };
+  };
+
   # Define a user account. Don't forget to set a password with ‘passwd’.
   # users.users.jane = {
   #   isNormalUser = true;
@@ -120,7 +138,7 @@
     enable = true;
     permitRootLogin = "no";
     # BEGIN ANSIBLE MANAGED BLOCK SSH PORT
-    ports = [ {{ server_ssh_port }} ];
+    ports = [ (import ./connection-parameters.nix).ssh_port ];
     # END ANSIBLE MANAGED BLOCK SSH PORT
   };
 
@@ -134,110 +152,128 @@
   };
 
   systemd.services = {
-    self-signed-certificate = {
+    nginx-self-signed-certificates = {
       before = [ "nginx.service" ];
       serviceConfig = {
         Type = "oneshot";
       };
+      environment = {
+        DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+      };
       script = let
-        ca.cnf = "
-          [req]
-          default_bits       = 4096
-          distinguished_name = req_distinguished_name
-          prompt             = no
-          default_md         = sha256
-          req_extensions     = v3_req
+        ca_cnf = pkgs.writeTextFile {
+          name = "ca.cnf.template";
+          text = ''
+            [req]
+            default_bits       = 4096
+            distinguished_name = req_distinguished_name
+            prompt             = no
+            default_md         = sha256
+            req_extensions     = v3_req
 
-          [req_distinguished_name]
-          countryName         = RU
-          stateOrProvinceName = Moscow
-          localityName        = Moscow
-          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
-          commonName          = {{ internal_domain_name | replace('.','-') }}-ca
+            [req_distinguished_name]
+            countryName         = RU
+            stateOrProvinceName = Moscow
+            localityName        = Moscow
+            organizationName    = $ORGANIZATION_NAME, Ltd.
+            commonName          = $COMMON_NAME-ca
 
-          [v3_req]
-          basicConstraints     = critical, CA:true
-          keyUsage             = critical, keyCertSign, cRLSign
-          subjectKeyIdentifier = hash
-        ";
-        ca-intermediate.cnf = "
-          [req]
-          default_bits       = 4096
-          distinguished_name = req_distinguished_name
-          prompt             = no
-          default_md         = sha256
-          req_extensions     = v3_req
+            [v3_req]
+            basicConstraints     = critical, CA:true
+            keyUsage             = critical, keyCertSign, cRLSign
+            subjectKeyIdentifier = hash
+          '';
+        };
+        ca_intermediate_cnf = pkgs.writeTextFile {
+          name = "ca-intermediate.cnf.template";
+          text = ''
+            [req]
+            default_bits       = 4096
+            distinguished_name = req_distinguished_name
+            prompt             = no
+            default_md         = sha256
+            req_extensions     = v3_req
 
-          [req_distinguished_name]
-          countryName         = RU
-          stateOrProvinceName = Moscow
-          localityName        = Moscow
-          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
-          commonName          = {{ internal_domain_name | replace('.','-') }}-int-ca
+            [req_distinguished_name]
+            countryName         = RU
+            stateOrProvinceName = Moscow
+            localityName        = Moscow
+            organizationName    = $ORGANIZATION_NAME, Ltd.
+            commonName          = $COMMON_NAME-int-ca
 
-          [v3_req]
-          basicConstraints     = critical, CA:true
-          keyUsage             = critical, keyCertSign, cRLSign
-          subjectKeyIdentifier = hash
-        ";
-        server.cnf = "
-          [req]
-          prompt             = no
-          default_bits       = 4096
-          x509_extensions    = v3_req
-          req_extensions     = v3_req
-          default_md         = sha256
-          distinguished_name = req_distinguished_name
+            [v3_req]
+            basicConstraints     = critical, CA:true
+            keyUsage             = critical, keyCertSign, cRLSign
+            subjectKeyIdentifier = hash
+          '';
+        };
+        server_cnf = pkgs.writeTextFile {
+          name = "server.cnf.template";
+          text = ''
+            [req]
+            prompt             = no
+            default_bits       = 4096
+            x509_extensions    = v3_req
+            req_extensions     = v3_req
+            default_md         = sha256
+            distinguished_name = req_distinguished_name
 
-          [req_distinguished_name]
-          countryName         = RU
-          stateOrProvinceName = Moscow
-          localityName        = Moscow
-          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
-          commonName          = {{ internal_domain_name }}
+            [req_distinguished_name]
+            countryName         = RU
+            stateOrProvinceName = Moscow
+            localityName        = Moscow
+            organizationName    = $ORGANIZATION_NAME, Ltd.
+            commonName          = $DOMAIN_NAME_INTERNAL
 
-          [v3_req]
-          basicConstraints = CA:FALSE
-          keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
-          extendedKeyUsage = critical, serverAuth
-          subjectAltName   = @alt_names
+            [v3_req]
+            basicConstraints = CA:FALSE
+            keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
+            extendedKeyUsage = critical, serverAuth
+            subjectAltName   = @alt_names
 
-          [alt_names]
-          DNS.1 = {{ internal_domain_name }}
-          DNS.2 = gitlab.{{ internal_domain_name }}
-          DNS.3 = registry.{{ internal_domain_name }}
-          DNS.4 = pages.{{ internal_domain_name }}
-        ";
-        user.cnf = "
-          [req]
-          prompt             = no
-          default_bits       = 2048
-          x509_extensions    = v3_req
-          req_extensions     = v3_req
-          default_md         = sha256
-          distinguished_name = req_distinguished_name
+            [alt_names]
+            DNS.1 = $DOMAIN_NAME_INTERNAL
+            DNS.2 = gitlab.$DOMAIN_NAME_INTERNAL
+            DNS.3 = registry.$DOMAIN_NAME_INTERNAL
+            DNS.4 = pages.$DOMAIN_NAME_INTERNAL
+          '';
+        };
+        user_cnf = pkgs.writeTextFile {
+          name = "user.cnf.template";
+          text = ''
+            [req]
+            prompt             = no
+            default_bits       = 2048
+            x509_extensions    = v3_req
+            req_extensions     = v3_req
+            default_md         = sha256
+            distinguished_name = req_distinguished_name
 
-          [req_distinguished_name]
-          countryName         = RU
-          stateOrProvinceName = Moscow
-          localityName        = Moscow
-          organizationName    = {{ internal_domain_name | replace('.',' ') | title }}, Ltd.
-          commonName          = user.{{ internal_domain_name }}
+            [req_distinguished_name]
+            countryName         = RU
+            stateOrProvinceName = Moscow
+            localityName        = Moscow
+            organizationName    = $ORGANIZATION_NAME, Ltd.
+            commonName          = user.$DOMAIN_NAME_INTERNAL
 
-          [v3_req]
-          basicConstraints = CA:FALSE
-          keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
-          extendedKeyUsage = critical, clientAuth
-        ";
+            [v3_req]
+            basicConstraints = CA:FALSE
+            keyUsage         = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement
+            extendedKeyUsage = critical, clientAuth
+          '';
+        };
       in ''
         ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/ca
         ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/nginx
 
         cd /mnt/ssd/services/ca
 
+        export ORGANIZATION_NAME=$(${pkgs.coreutils}/bin/echo $DOMAIN_NAME_INTERNAL | ${pkgs.gnused}/bin/sed 's/\./ /g' | ${pkgs.gawk}/bin/awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
+        export COMMON_NAME=$(${pkgs.coreutils}/bin/echo $DOMAIN_NAME_INTERNAL | ${pkgs.gnused}/bin/sed 's/\./-/g')
+
         if ! [ -f ca.crt ]; then
           ${pkgs.coreutils}/bin/echo "Creating Self-Signed Root CA certificate and key"
-          ${pkgs.coreutils}/bin/echo '${ca.cnf}' > ca.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_cnf} > ca.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -251,7 +287,7 @@
 
         if ! [ -f ca.pem ]; then
           ${pkgs.coreutils}/bin/echo "Creating Intermediate CA certificate and key"
-          ${pkgs.coreutils}/bin/echo '${ca-intermediate.cnf}' > ca-intermediate.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_intermediate_cnf} > ca-intermediate.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -277,7 +313,7 @@
 
         if ! [ -f server.crt ]; then
           ${pkgs.coreutils}/bin/echo "Creating server (Nginx) certificate and key"
-          ${pkgs.coreutils}/bin/echo '${server.cnf}' > server.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${server_cnf} > server.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -300,7 +336,7 @@
 
         if ! [ -f user.pfx ]; then
           ${pkgs.coreutils}/bin/echo "Creating user certificate and key"
-          ${pkgs.coreutils}/bin/echo '${user.cnf}' > user.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${user_cnf} > user.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -337,73 +373,30 @@
     };
   };
 
-  services.nginx = {
+  services.nginx = let
+    IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+    DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+  in {
     enable = true;
-    sslDhparam = "${toString config.security.dhparams.path}/nginx.pem";
-    virtualHosts = {
-      "{{ internal_domain_name }}" = {
-        listen = [
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
-        ];
-        kTLS = true;
-        forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
-        # Authentication based on a client certificate
-        extraConfig = ''
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
-        '';
-      };
+    user = "nginx";
+    group = "nginx";
+    sslDhparam = "${config.security.dhparams.path}/nginx.pem";
+    virtualHosts.${DOMAIN_NAME_INTERNAL} = {
+      listen = [
+        { addr = "${IP_ADDRESS}"; port = 80; }
+        { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
+      ];
 
-      "gitlab.{{ internal_domain_name }}" = {
-        listen = [
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
-        ];
-        kTLS = true;
-        forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
-        # Authentication based on a client certificate
-        extraConfig = ''
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
-        '';
-      };
+      kTLS = true;
+      forceSSL = true;
+      sslCertificate = "/mnt/ssd/services/nginx/server.crt";
+      sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
 
-      "registry.{{ internal_domain_name }}" = {
-        listen = [
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
-        ];
-        kTLS = true;
-        forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
-        # Authentication based on a client certificate
-        extraConfig = ''
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
-        '';
-      };
-
-      "pages.{{ internal_domain_name }}" = {
-        listen = [
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 80; }
-          { addr = "{{ ansible_default_ipv4.address }}"; port = 443; ssl = true; }
-        ];
-        kTLS = true;
-        forceSSL = true;
-        sslCertificate = "/mnt/ssd/services/nginx/server.crt";
-        sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
-        # Authentication based on a client certificate
-        extraConfig = ''
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
-        '';
-      };
+      # Authentication based on a client certificate
+      extraConfig = ''
+        ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+        ssl_verify_client      on;
+      '';
     };
   };
 

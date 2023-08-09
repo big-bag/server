@@ -1,0 +1,314 @@
+---
+- name: create secrets
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+    - name: convert user ssh key to an age key
+      ansible.builtin.shell: ssh-to-age -private-key -i ../id_ed25519 > ../configs/key.txt
+      args:
+        creates: ../configs/key.txt
+      tags: secrets
+
+    - name: get user public key
+      ansible.builtin.command: age-keygen -y ../configs/key.txt
+      register: user_public_key
+      changed_when: false
+      tags: secrets
+
+    - name: create a temporary file to write secrets
+      ansible.builtin.tempfile:
+        path: /tmp
+        prefix: ansible.
+        suffix: .yml
+        state: file
+      register: temp_file_secrets
+      changed_when: false
+      tags: secrets
+
+    - name: create sops configuration file
+      ansible.builtin.copy:
+        content: |
+          keys:
+            - &user {{ user_public_key.stdout }}
+          creation_rules:
+            - path_regex: /tmp/ansible\.[^/]+\.yml$
+              key_groups:
+              - age:
+                - *user
+            - path_regex: configs/[^/]+\.yml$
+              key_groups:
+              - age:
+                - *user
+        dest: ../.sops.yaml
+      tags: secrets
+
+    - name: set seed variables
+      ansible.builtin.set_fact:
+        minio_username_seed: minio_username_random
+        minio_password_seed: minio_password_random
+
+        mimir_nginx_username_seed: mimir_nginx_username_random
+        mimir_nginx_password_seed: mimir_nginx_password_random
+
+        prometheus_nginx_username_seed: prometheus_nginx_username_random
+        prometheus_nginx_password_seed: prometheus_nginx_password_random
+
+        grafana_username_seed: grafana_username_random
+        grafana_password_seed: grafana_password_random
+        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
+        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
+        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
+
+        pgadmin_postgres_password_seed: pgadmin_postgres_password_random
+        pgadmin_nginx_username_seed: pgadmin_nginx_username_random
+        pgadmin_nginx_password_seed: pgadmin_nginx_password_random
+        grafana_agent_postgres_password_seed: grafana_agent_postgres_password_random
+
+        redis_database_password_seed: redis_database_password_random
+        redisinsight_nginx_username_seed: redisinsight_nginx_username_random
+        redisinsight_nginx_password_seed: redisinsight_nginx_password_random
+        grafana_agent_redis_password_seed: grafana_agent_redis_password_random
+
+        gitlab_password_seed: gitlab_password_random
+        gitlab_token_seed: gitlab_token_random
+        gitlab_postgres_password_seed: gitlab_postgres_password_random
+      tags:
+        - secrets
+        - dashboards
+
+    - name: create random but idempotent secrets
+      ansible.builtin.set_fact:
+        minio_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_username_seed) }}"
+        minio_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_password_seed) }}"
+
+        mimir_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=mimir_nginx_username_seed) }}"
+        mimir_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mimir_nginx_password_seed) }}"
+
+        prometheus_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=prometheus_nginx_username_seed) }}"
+        prometheus_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=prometheus_nginx_password_seed) }}"
+
+        grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_username_seed) }}"
+        grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
+        grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
+        grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
+        grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
+
+        pgadmin_postgres_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=pgadmin_postgres_password_seed) }}"
+        pgadmin_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=pgadmin_nginx_username_seed) }}"
+        pgadmin_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=pgadmin_nginx_password_seed) }}"
+        grafana_agent_postgres_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=grafana_agent_postgres_password_seed) }}"
+
+        redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
+        redisinsight_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=redisinsight_nginx_username_seed) }}"
+        redisinsight_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=redisinsight_nginx_password_seed) }}"
+        grafana_agent_redis_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,<>/? length=48', seed=grafana_agent_redis_password_seed) }}"
+
+        gitlab_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_password_seed) }}"
+        gitlab_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_token_seed) }}"
+        gitlab_postgres_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=gitlab_postgres_password_seed) }}"
+      tags:
+        - secrets
+        - dashboards
+
+    - name: create a temporary file to write basic auth credentials | mimir
+      ansible.builtin.tempfile:
+        path: /tmp
+        prefix: basic_auth.
+        suffix: .mimir
+        state: file
+      register: temp_file_mimir
+      changed_when: false
+      tags: secrets
+
+    - name: add basic auth credentials to a temporary file | mimir
+      community.general.htpasswd:
+        path: "{{ temp_file_mimir.path }}"
+        name: "{{ mimir_nginx_username }}"
+        password: "{{ mimir_nginx_password }}"
+      changed_when: false
+      tags: secrets
+
+    - name: read basic auth credentials from a temporary file | mimir
+      ansible.builtin.command: cat {{ temp_file_mimir.path }}
+      register: basic_auth_mimir
+      changed_when: false
+      tags: secrets
+
+    - name: create a temporary file to write basic auth credentials | prometheus
+      ansible.builtin.tempfile:
+        path: /tmp
+        prefix: basic_auth.
+        suffix: .prometheus
+        state: file
+      register: temp_file_prometheus
+      changed_when: false
+      tags: secrets
+
+    - name: add basic auth credentials to a temporary file | prometheus
+      community.general.htpasswd:
+        path: "{{ temp_file_prometheus.path }}"
+        name: "{{ prometheus_nginx_username }}"
+        password: "{{ prometheus_nginx_password }}"
+      changed_when: false
+      tags: secrets
+
+    - name: read basic auth credentials from a temporary file | prometheus
+      ansible.builtin.command: cat {{ temp_file_prometheus.path }}
+      register: basic_auth_prometheus
+      changed_when: false
+      tags: secrets
+
+    - name: create a temporary file to write basic auth credentials | pgadmin
+      ansible.builtin.tempfile:
+        path: /tmp
+        prefix: basic_auth.
+        suffix: .pgadmin
+        state: file
+      register: temp_file_pgadmin
+      changed_when: false
+      tags: secrets
+
+    - name: add basic auth credentials to a temporary file | pgadmin
+      community.general.htpasswd:
+        path: "{{ temp_file_pgadmin.path }}"
+        name: "{{ pgadmin_nginx_username }}"
+        password: "{{ pgadmin_nginx_password }}"
+      changed_when: false
+      tags: secrets
+
+    - name: read basic auth credentials from a temporary file | pgadmin
+      ansible.builtin.command: cat {{ temp_file_pgadmin.path }}
+      register: basic_auth_pgadmin
+      changed_when: false
+      tags: secrets
+
+    - name: create a temporary file to write basic auth credentials | redisinsight
+      ansible.builtin.tempfile:
+        path: /tmp
+        prefix: basic_auth.
+        suffix: .redisinsight
+        state: file
+      register: temp_file_redisinsight
+      changed_when: false
+      tags: secrets
+
+    - name: add basic auth credentials to a temporary file | redisinsight
+      community.general.htpasswd:
+        path: "{{ temp_file_redisinsight.path }}"
+        name: "{{ redisinsight_nginx_username }}"
+        password: "{{ redisinsight_nginx_password }}"
+      changed_when: false
+      tags: secrets
+
+    - name: read basic auth credentials from a temporary file | redisinsight
+      ansible.builtin.command: cat {{ temp_file_redisinsight.path }}
+      register: basic_auth_redisinsight
+      changed_when: false
+      tags: secrets
+
+    - name: write secrets in plain text to a temporary file
+      ansible.builtin.copy:
+        content: |
+          1password: |
+            OP_DEVICE={{ vault_1password_device_id }}
+            OP_MASTER_PASSWORD={{ vault_1password_master_password }}
+            OP_SUBDOMAIN={{ vault_1password_subdomain }}
+            OP_EMAIL_ADDRESS={{ vault_1password_email_address }}
+            OP_SECRET_KEY={{ vault_1password_secret_key }}
+          minio:
+            envs: |
+              MINIO_ROOT_USER={{ minio_username }}
+              MINIO_ROOT_PASSWORD={{ minio_password }}
+            file:
+              username: {{ minio_username }}
+              password: {{ minio_password }}
+          mimir:
+            nginx_file: {{ basic_auth_mimir.stdout }}
+            nginx_envs: |
+              MIMIR_NGINX_USERNAME={{ mimir_nginx_username }}
+              MIMIR_NGINX_PASSWORD={{ mimir_nginx_password }}
+          prometheus:
+            nginx_file: {{ basic_auth_prometheus.stdout }}
+            nginx_envs: |
+              PROMETHEUS_NGINX_USERNAME={{ prometheus_nginx_username }}
+              PROMETHEUS_NGINX_PASSWORD={{ prometheus_nginx_password }}
+          grafana: |
+            GRAFANA_USERNAME={{ grafana_username }}
+            GRAFANA_PASSWORD={{ grafana_password }}
+            GRAFANA_DATASOURCE_UID_MIMIR={{ grafana_datasource_uid_mimir }}
+            GRAFANA_DATASOURCE_UID_PROMETHEUS={{ grafana_datasource_uid_prometheus }}
+            GRAFANA_DATASOURCE_UID_LOKI={{ grafana_datasource_uid_loki }}
+          pgadmin:
+            postgres_envs: |
+              PGADMIN_POSTGRES_USERNAME={{ vault_pgadmin_postgres_username }}
+              PGADMIN_POSTGRES_PASSWORD={{ pgadmin_postgres_password }}
+            nginx_file: {{ basic_auth_pgadmin.stdout }}
+            nginx_envs: |
+              PGADMIN_NGINX_USERNAME={{ pgadmin_nginx_username }}
+              PGADMIN_NGINX_PASSWORD={{ pgadmin_nginx_password }}
+          postgres:
+            grafana_agent_envs: |
+              GRAFANA_AGENT_POSTGRES_USERNAME={{ vault_grafana_agent_postgres_username }}
+              GRAFANA_AGENT_POSTGRES_PASSWORD={{ grafana_agent_postgres_password }}
+            grafana_agent_file:
+              username: {{ vault_grafana_agent_postgres_username }}
+              password: {{ grafana_agent_postgres_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
+          redis:
+            database_password_file: {{ redis_database_password }}
+            database_password_envs: |
+              REDISCLI_AUTH={{ redis_database_password }}
+            grafana_agent_envs: |
+              GRAFANA_AGENT_REDIS_USERNAME={{ vault_grafana_agent_redis_username }}
+              GRAFANA_AGENT_REDIS_PASSWORD_CLI={{ grafana_agent_redis_password }}
+              GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD={{ grafana_agent_redis_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
+            grafana_agent_file:
+              username: {{ vault_grafana_agent_redis_username }}
+              password: '{{ grafana_agent_redis_password }}'
+          redisinsight:
+            nginx_file: {{ basic_auth_redisinsight.stdout }}
+            nginx_envs: |
+              REDISINSIGHT_NGINX_USERNAME={{ redisinsight_nginx_username }}
+              REDISINSIGHT_NGINX_PASSWORD={{ redisinsight_nginx_password }}
+          gitlab:
+            postgres_envs: |
+              GITLAB_POSTGRES_USERNAME={{ vault_gitlab_postgres_username }}
+              GITLAB_POSTGRES_PASSWORD={{ gitlab_postgres_password }}
+            postgres_file:
+              username: {{ vault_gitlab_postgres_username }}
+              password: '{{ gitlab_postgres_password }}'
+            password_file: {{ gitlab_password }}
+            password_envs: |
+              GITLAB_PASSWORD={{ gitlab_password }}
+            token: '{{ gitlab_token }}'
+        dest: "{{ temp_file_secrets.path }}"
+      changed_when: false
+      tags: secrets
+
+    - name: encrypt a temporary file
+      ansible.builtin.shell: sops -e {{ temp_file_secrets.path }} > ../configs/secrets.yml
+      changed_when: false
+      tags: secrets
+
+    - name: find the latest commit of the sops-nix repository
+      ansible.builtin.shell: git ls-remote --exit-code https://github.com/Mic92/sops-nix.git HEAD | awk '{print $1}'
+      register: sops_nix_commit
+      changed_when: false
+      tags: prepare
+
+    - name: find the sha256 of the latest commit of the sops-nix repository (1/2)
+      ansible.builtin.command: |
+        nix \
+          --extra-experimental-features nix-command \
+          shell -f '<nixpkgs>' nix-prefetch-github -c nix-prefetch-github \
+          --json --rev {{ sops_nix_commit.stdout }} Mic92 sops-nix
+      register: sops_nix_sha256_json
+      delegate_to: server
+      changed_when: false
+      become: false
+      tags: prepare
+
+    - name: find the sha256 of the latest commit of the sops-nix repository (2/2)
+      ansible.builtin.set_fact:
+        sops_nix_sha256: "{{ sops_nix_sha256_json.stdout | from_json }}"
+      tags: prepare

@@ -42,7 +42,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -109,7 +109,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "avg(\n  avg_over_time(up{job=~\"gitlab-(rails|unicorn)\",instance=~\"($node):.*\"}[$__interval])\n)",
           "format": "time_series",
@@ -125,7 +125,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -192,7 +192,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "avg(\n  avg_over_time(pg_up{instance=~\".*($node):.*\"}[$__interval])\n)",
@@ -210,7 +210,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -277,7 +277,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "avg(\n  avg_over_time(up{job=\"gitlab-sidekiq\",instance=~\"($node):.*\"}[$__interval])\n) ",
           "format": "time_series",
@@ -293,7 +293,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -360,7 +360,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "avg(\n  avg_over_time(up{job=\"gitlab-workhorse\",instance=~\"($node):.*\"}[$__interval])\n)",
           "format": "time_series",
@@ -376,7 +376,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -443,7 +443,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "avg(\n  avg_over_time(redis_up{instance=~\"($node):6379\"}[$__interval])\n)",
@@ -461,7 +461,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -528,7 +528,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "avg(\n  avg_over_time(up{job=\"gitlab-gitaly\",instance=~\"($node):.*\"}[$__interval])\n)",
@@ -546,7 +546,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -614,7 +614,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "(\n  node_memory_MemAvailable_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} or\n  (node_memory_MemFree_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} + node_memory_Buffers_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} + node_memory_Cached_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"})\n) / node_memory_MemTotal_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"}",
@@ -632,7 +632,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -700,7 +700,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(node_filesystem_avail_bytes{fstype!~\"tmpfs\",instance=~\".*:12345\",job=\"integrations/node_exporter\",mountpoint=\"/mnt/ssd\"}) / sum(node_filesystem_size_bytes{fstype!~\"tmpfs\",instance=~\".*:12345\",job=\"integrations/node_exporter\",mountpoint=\"/mnt/ssd\"})",
@@ -717,7 +717,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -785,7 +785,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "avg(\n  1 -\n  avg without (mode,cpu) (\n    rate(node_cpu_seconds_total{mode=\"idle\",instance=~\".*:12345\",job=\"integrations/node_exporter\"}[$__interval])\n  )\n)",
@@ -807,7 +807,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -851,7 +851,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum(\n  avg_over_time(\n    sidekiq_queue_size{instance=~\"($node):.*\"}[$__interval]\n  )\n)",
           "format": "time_series",
@@ -904,7 +904,7 @@
       "dataFormat": "tsbuckets",
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -977,7 +977,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum by (le) (\n  rate(gitlab_workhorse_http_request_duration_seconds_bucket{instance=~\"($node):9229\"}[$__interval])\n)",
           "format": "time_series",
@@ -1021,7 +1021,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ grafana_datasource_uid_mimir }}"
+          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "definition": "",
         "hide": 0,

@@ -31,7 +31,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -98,7 +98,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "avg_over_time(pg_up{job=\"integrations/postgres_exporter\",instance=~\"$instance\"}[$__interval]) or avg_over_time(up{job=\"integrations/postgres_exporter\",instance=~\"$instance\"}[$__interval]) ",
@@ -116,7 +116,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -183,7 +183,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "avg(time() - pg_postmaster_start_time_seconds{instance=~\"$instance\"})",
           "format": "time_series",
@@ -204,7 +204,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -246,7 +246,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum by (mode) (\n  avg_over_time(pg_locks_count{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -295,7 +295,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 0,
       "fillGradient": 0,
@@ -342,7 +342,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum(\n  rate(pg_slow_queries{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -354,7 +354,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum(\n  rate(pg_slow_queries{instance=~\"$instance\"}[$__interval] offset 1w)\n)",
           "format": "time_series",
@@ -398,7 +398,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -466,7 +466,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum(avg_over_time(pg_stat_activity_count{instance=~\"$instance\",state=\"active\"}[$__interval])) /\nsum(pg_settings_max_connections{instance=~\"$instance\"})",
           "format": "time_series",
@@ -482,7 +482,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fieldConfig": {
         "defaults": {
@@ -549,7 +549,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "expr": "sum(avg_over_time(pg_stat_activity_count{instance=~\"$instance\"}[$__interval])) /\nsum(pg_settings_max_connections{instance=~\"$instance\"})",
           "format": "time_series",
@@ -569,7 +569,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -611,7 +611,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_xact_commit{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -625,7 +625,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_xact_rollback{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -675,7 +675,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -717,7 +717,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_blks_hit{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -731,7 +731,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_blks_read{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -781,7 +781,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ grafana_datasource_uid_mimir }}"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -823,7 +823,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_tup_fetched{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -837,7 +837,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_tup_deleted{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -851,7 +851,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_tup_inserted{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -865,7 +865,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ grafana_datasource_uid_mimir }}"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
           "expr": "sum(\n  rate(pg_stat_database_tup_updated{instance=~\"$instance\",datname=\"gitlab\"}[$__interval])\n)",
@@ -922,7 +922,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ grafana_datasource_uid_mimir }}"
+          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "definition": "",
         "hide": 0,

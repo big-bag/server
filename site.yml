@@ -1,151 +1,17 @@
 ---
-- name: include a play for initial server setup
-  ansible.builtin.import_playbook: playbooks/prepare.yml
-  tags: [ never, prepare ]
-
-- name: include a play for upgrading the nixos
-  ansible.builtin.import_playbook: playbooks/upgrade.yml
-  tags: [ never, upgrade ]
-
-- name: get secrets from 1password
-  hosts: localhost
-  become: false
-  gather_facts: false
-  tasks:
-    - name: sign in to a 1password account
-      ansible.builtin.shell: |
-        echo {{ vault_1password_master_password }} | op account add \
-          --address {{ vault_1password_subdomain }}.1password.com \
-          --email {{ vault_1password_email_address }} \
-          --secret-key {{ vault_1password_secret_key }} \
-          --signin --raw
-      environment:
-        OP_DEVICE: "{{ vault_1password_device_id }}"
-      register: op_session_token
-      changed_when: false
-      no_log: true
-      tags: dashboards
-
-    - name: get secrets from 1password (1/2)
-      ansible.builtin.command: |
-        op item get 'Secrets (manually)' \
-          --vault 'Local server' \
-          --fields label={{ item }} \
-          --session {{ op_session_token.stdout }}
-      loop:
-        - "Domains.'internal domain name'"
-        - "'Technical account'.nixos"
-        - "'Technical account'.'postgres pgadmin username'"
-        - "'Technical account'.'postgres monitoring username'"
-        - "'Technical account'.'redis monitoring username'"
-        - "'Technical account'.'postgres gitlab username'"
-      register: secrets
-      changed_when: false
-      no_log: true
-      tags: dashboards
-
-    - name: get secrets from 1password (2/2)
-      ansible.builtin.command: |
-        op item get 'NixOS (generated)' \
-          --vault 'Local server' \
-          --fields label='ssh port' \
-          --session {{ op_session_token.stdout }}
-      register: server_ssh_port_generated
-      changed_when: false
-      no_log: true
+- name: include a play for server setup
+  ansible.builtin.import_playbook: playbooks/main.yml
+  tags: never
 
 - name: configure server
   hosts: server
   become: true
   gather_facts: false
   tasks:
-    - name: set global variables
-      ansible.builtin.set_fact:
-        internal_domain_name: "{{ hostvars['localhost']['secrets']['results'][0]['stdout'] }}"
-        nixos_technical_account: "{{ hostvars['localhost']['secrets']['results'][1]['stdout'] }}"
-        server_ssh_port: "{{ hostvars['localhost']['server_ssh_port_generated']['stdout'] }}"
-
-    - name: set seed variables
-      ansible.builtin.set_fact:
-        minio_access_key_seed: minio_access_key_random
-        minio_secret_key_seed: minio_secret_key_random
-
-        mimir_username_seed: mimir_username_random
-        mimir_password_seed: mimir_password_random
-
-        prometheus_username_seed: prometheus_username_random
-        prometheus_password_seed: prometheus_password_random
-
-        grafana_username_seed: grafana_username_random
-        grafana_password_seed: grafana_password_random
-        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
-        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
-        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
-
-        postgres_pgadmin_database_password_seed: postgres_pgadmin_database_password_random
-        postgres_pgadmin_gui_username_seed: postgres_pgadmin_gui_username_random
-        postgres_pgadmin_gui_password_seed: postgres_pgadmin_gui_password_random
-        postgres_monitoring_database_password_seed: postgres_monitoring_database_password_random
-
-        redis_database_password_seed: redis_database_password_random
-        redis_redisinsight_username_seed: redis_redisinsight_username_random
-        redis_redisinsight_password_seed: redis_redisinsight_password_random
-        redis_monitoring_database_password_seed: redis_monitoring_database_password_random
-
-        gitlab_password_seed: gitlab_password_random
-        gitlab_token_seed: gitlab_token_random
-        postgres_gitlab_database_password_seed: postgres_gitlab_database_password_random
-      tags: dashboards
-
-    - name: create random but idempotent secrets
-      ansible.builtin.set_fact:
-        minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_access_key_seed) }}"
-        minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_secret_key_seed) }}"
-
-        mimir_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=mimir_username_seed) }}"
-        mimir_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mimir_password_seed) }}"
-
-        prometheus_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=prometheus_username_seed) }}"
-        prometheus_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=prometheus_password_seed) }}"
-
-        grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=24', seed=grafana_username_seed) }}"
-        grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
-        grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
-        grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
-        grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
-
-        postgres_pgadmin_database_username: "{{ hostvars['localhost']['secrets']['results'][2]['stdout'] }}"
-        postgres_pgadmin_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_database_password_seed) }}"
-        postgres_pgadmin_gui_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=postgres_pgadmin_gui_username_seed) }}"
-        postgres_pgadmin_gui_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_pgadmin_gui_password_seed) }}"
-        postgres_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][3]['stdout'] }}"
-        postgres_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~%^&*()-_=+[]{}|;,.<>/? length=48', seed=postgres_monitoring_database_password_seed) }}"
-
-        redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
-        redis_redisinsight_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters length=24', seed=redis_redisinsight_username_seed) }}"
-        redis_redisinsight_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=redis_redisinsight_password_seed) }}"
-        redis_monitoring_database_username: "{{ hostvars['localhost']['secrets']['results'][4]['stdout'] }}"
-        redis_monitoring_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=redis_monitoring_database_password_seed) }}"
-
-        gitlab_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_password_seed) }}"
-        gitlab_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,punctuation length=48', seed=gitlab_token_seed) }}"
-        postgres_gitlab_database_username: "{{ hostvars['localhost']['secrets']['results'][5]['stdout'] }}"
-        postgres_gitlab_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=postgres_gitlab_database_password_seed) }}"
-      tags: dashboards
-
-    - name: collect only facts about default ipv4 address
-      ansible.builtin.setup:
-        gather_subset:
-          - '!all'
-          - '!min'
-          - default_ipv4
-        filter:
-          - default_ipv4
-
     - name: upload nixos configuration files
       ansible.builtin.template:
         src: "{{ item }}"
-        dest: "/etc/nixos/"
+        dest: /etc/nixos/
       with_fileglob: configs/*
       notify: apply config
 
@@ -179,7 +45,3 @@
       loop:
         - ca.pem
         - user.pfx
-
-- name: include a play to upload dashboards to the server
-  ansible.builtin.import_playbook: playbooks/dashboards.yml
-  tags: [ never, dashboards ]

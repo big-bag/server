@@ -1,0 +1,26 @@
+---
+- name: install requirements for ansible
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: install python3
+      ansible.builtin.raw: |
+        cat > /etc/nixos/python.nix << EOF
+        { pkgs, ... }:
+
+        {
+          environment.systemPackages = with pkgs; [
+            (let
+              my-python-packages = python-packages: with python-packages; [];
+              python-with-my-packages = python3.withPackages my-python-packages;
+            in
+            python-with-my-packages)
+          ];
+        }
+        EOF
+
+        grep -qxF '      ./python.nix' /etc/nixos/configuration.nix || sed -i '/.\/hardware-configuration.nix/a \      ./python.nix' /etc/nixos/configuration.nix
+
+        nixos-rebuild switch
+      changed_when: false

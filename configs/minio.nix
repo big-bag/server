@@ -1,5 +1,9 @@
 { config, pkgs, ... }:
 
+let
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+in
+
 {
   systemd.services = {
     minio-prepare = {
@@ -12,30 +16,36 @@
     };
   };
 
+  sops.secrets = {
+    "minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   services = {
-    minio = {
+    minio = let
+      IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+    in {
       enable = true;
-      listenAddress = "{{ ansible_default_ipv4.address }}:9000";
+      listenAddress = "${IP_ADDRESS}:9000";
       consoleAddress = "127.0.0.1:9001";
       dataDir = [ "/mnt/ssd/data-stores/minio/data" ];
       configDir = "/mnt/ssd/data-stores/minio/config";
       region = "eu-west-3";
       browser = true;
-      rootCredentialsFile = pkgs.writeTextFile {
-        name = ".env";
-        text = ''
-          MINIO_ROOT_USER={{ minio_access_key }}
-          MINIO_ROOT_PASSWORD={{ minio_secret_key }}
-          MINIO_PROMETHEUS_URL=http://127.0.0.1:9090/prometheus
-          MINIO_PROMETHEUS_JOB_ID=minio-job
-          MINIO_BROWSER_REDIRECT_URL=http://{{ internal_domain_name }}/minio
-        '';
-      };
+      rootCredentialsFile = config.sops.secrets."minio/envs".path;
     };
   };
 
   systemd.services = {
     minio = {
+      environment = {
+        MINIO_PROMETHEUS_URL = "http://127.0.0.1:9090/prometheus";
+        MINIO_PROMETHEUS_JOB_ID = "minio-job";
+        MINIO_BROWSER_REDIRECT_URL = "http://${DOMAIN_NAME_INTERNAL}/minio";
+      };
       serviceConfig = {
         CPUQuota = "3%";
         MemoryHigh = "973M";
@@ -52,7 +62,7 @@
 
   services = {
     nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/minio" = {
           extraConfig = ''
             rewrite ^/minio/(.*) /$1 break;
@@ -63,21 +73,27 @@
             proxy_set_header Upgrade    $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
           '';
-          proxyPass = "http://${toString config.services.minio.consoleAddress}";
+          proxyPass = "http://${config.services.minio.consoleAddress}";
         };
       };
     };
   };
 
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     minio-1password = {
-      after = [
-        "minio.service"
-        "nginx.service"
-      ];
+      after = [ "minio.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -88,16 +104,16 @@
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'MinIO (generated)' \
+            op item get MinIO \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'MinIO (generated)' \
-                website[url]=http://$INTERNAL_DOMAIN_NAME/minio \
-                username=$MINIO_ACCESS_KEY \
-                password=$MINIO_SECRET_KEY \
+                --title MinIO \
+                website[url]=http://${DOMAIN_NAME_INTERNAL}/minio \
+                username=$MINIO_ROOT_USER \
+                password=$MINIO_ROOT_PASSWORD \
                 notesPlain='username -> Access Key, password -> Secret Key' \
                 --session $SESSION_TOKEN > /dev/null
             fi
@@ -107,36 +123,14 @@
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            MINIO_ACCESS_KEY = {{ minio_access_key }}
-            MINIO_SECRET_KEY = {{ minio_secret_key }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name minio-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
-            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."minio/envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };

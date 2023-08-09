@@ -1,5 +1,11 @@
 { config, pkgs, ... }:
 
+let
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+in
+
 {
   systemd.services = {
     postgresql-prepare = {
@@ -33,7 +39,7 @@
         # "local" is for Unix domain socket connections only
         local   all             all                                     peer
         # IPv4 local connections:
-        host    all             all             {{ ansible_default_ipv4.address }}/32           md5
+        host    all             all             ${IP_ADDRESS}/32           md5
         # IPv4 docker connections
         host    all             all             172.17.0.0/16           md5
       '';
@@ -50,30 +56,6 @@
         random_page_cost = 1.1;             # measured on an arbitrary scale
         effective_cache_size = "1536MB";
         default_statistics_target = 100;    # range 1-10000
-      };
-      initialScript = pkgs.writeTextFile {
-        name = "initial.sh";
-        text = ''
-          CREATE ROLE {{ postgres_pgadmin_database_username }} WITH
-              LOGIN
-              CREATEDB
-              CREATEROLE
-              PASSWORD '{{ postgres_pgadmin_database_password }}';
-          GRANT CONNECT ON DATABASE postgres TO {{ postgres_pgadmin_database_username }};
-
-          CREATE ROLE {{ postgres_monitoring_database_username }} WITH
-              LOGIN
-              PASSWORD '{{ postgres_monitoring_database_password }}';
-          GRANT pg_monitor TO {{ postgres_monitoring_database_username }};
-
-          CREATE ROLE {{ postgres_gitlab_database_username }} WITH
-              LOGIN
-              PASSWORD '{{ postgres_gitlab_database_password }}';
-          CREATE DATABASE gitlab OWNER {{ postgres_gitlab_database_username }};
-          \c gitlab
-          CREATE EXTENSION IF NOT EXISTS pg_trgm;
-          CREATE EXTENSION IF NOT EXISTS btree_gist;
-        '';
       };
     };
   };
@@ -94,34 +76,68 @@
     };
   };
 
+  sops.secrets = {
+    "pgadmin/postgres_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    pgadmin-prepare = {
+      after = [ "postgresql.service" ];
+      before = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."pgadmin/postgres_envs".path;
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.coreutils}/bin/echo "Creating a pgAdmin account in the PostgreSQL"
+        ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
+          DO
+          \$do$
+          BEGIN
+              IF EXISTS (
+                  SELECT FROM pg_catalog.pg_roles
+                  WHERE rolname = '$PGADMIN_POSTGRES_USERNAME'
+              )
+              THEN
+                  RAISE NOTICE 'role "$PGADMIN_POSTGRES_USERNAME" already exists, skipping';
+              ELSE
+                  CREATE ROLE $PGADMIN_POSTGRES_USERNAME WITH
+                      LOGIN
+                      CREATEDB
+                      CREATEROLE
+                      ENCRYPTED PASSWORD '$PGADMIN_POSTGRES_PASSWORD';
+              END IF;
+          END
+          \$do$;
+
+          GRANT CONNECT ON DATABASE postgres TO $PGADMIN_POSTGRES_USERNAME;
+        EOSQL
+      '';
+      wantedBy = [
+        "postgresql.service"
+        "${CONTAINERS_BACKEND}-pgadmin.service"
+      ];
+    };
+  };
+
   virtualisation = {
     oci-containers = {
       containers = {
         pgadmin = {
           autoStart = true;
           ports = [ "127.0.0.1:5050:5050" ];
-          volumes = let
-            SERVERS = pkgs.writeTextFile {
-              name = "servers.json";
-              text = ''
-                {
-                    "Servers": {
-                        "1": {
-                            "Name": "Local",
-                            "Group": "Servers",
-                            "Host": "{{ ansible_default_ipv4.address }}",
-                            "Port": ${toString config.services.postgresql.port},
-                            "MaintenanceDB": "postgres",
-                            "Username": "{{ postgres_pgadmin_database_username }}",
-                            "PassFile": "/var/lib/pgadmin/.pgpass"
-                        }
-                    }
-                }
-              '';
-            };
-          in [ "${SERVERS}:/var/lib/pgadmin/servers.json" ];
+          environmentFiles = [ config.sops.secrets."pgadmin/postgres_envs".path ];
           environment = {
-            PGADMIN_DEFAULT_EMAIL = "default@{{ internal_domain_name }}";
+            PGADMIN_DEFAULT_EMAIL = "default@${DOMAIN_NAME_INTERNAL}";
             PGADMIN_DEFAULT_PASSWORD = "default";
             PGADMIN_DISABLE_POSTFIX = "True";
             PGADMIN_LISTEN_ADDRESS = "0.0.0.0";
@@ -138,10 +154,26 @@
           ];
           image = "dpage/pgadmin4:6.21";
           cmd = let
-            PG_PASS = "{{ ansible_default_ipv4.address }}:${toString config.services.postgresql.port}:postgres:{{ postgres_pgadmin_database_username }}:{{ postgres_pgadmin_database_password }}";
+            SERVERS = ''
+              {
+                  \"Servers\": {
+                      \"1\": {
+                          \"Name\": \"Local\",
+                          \"Group\": \"Servers\",
+                          \"Host\": \"${IP_ADDRESS}\",
+                          \"Port\": ${toString config.services.postgresql.port},
+                          \"MaintenanceDB\": \"postgres\",
+                          \"Username\": \"$PGADMIN_POSTGRES_USERNAME\",
+                          \"PassFile\": \"/var/lib/pgadmin/.pgpass\"
+                      }
+                  }
+              }
+            '';
+            PG_PASS = "${IP_ADDRESS}:${toString config.services.postgresql.port}:postgres:$PGADMIN_POSTGRES_USERNAME:$PGADMIN_POSTGRES_PASSWORD";
           in [
             "-c" "
-              echo '${PG_PASS}' >> /var/lib/pgadmin/.pgpass
+              echo \"${SERVERS}\" > /var/lib/pgadmin/servers.json
+              echo \"${PG_PASS}\" > /var/lib/pgadmin/.pgpass
               chmod 0600 /var/lib/pgadmin/.pgpass
               /entrypoint.sh
             "
@@ -151,9 +183,17 @@
     };
   };
 
+  sops.secrets = {
+    "pgadmin/nginx_file" = {
+      mode = "0400";
+      owner = config.services.nginx.user;
+      group = config.services.nginx.group;
+    };
+  };
+
   services = {
     nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/pgadmin4/" = {
           extraConfig = ''
             proxy_set_header X-Script-Name /pgadmin4;
@@ -161,23 +201,121 @@
             proxy_set_header Host $host;
             proxy_redirect off;
           '';
-          proxyPass = "http://127.0.0.1:${toString config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}/";
-          basicAuth = { {{ postgres_pgadmin_gui_username }} = "{{ postgres_pgadmin_gui_password }}"; };
+          proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}/";
+          basicAuthFile = config.sops.secrets."pgadmin/nginx_file".path;
         };
       };
     };
   };
 
+  sops.secrets = {
+    "postgres/grafana_agent_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
-    postgresql-1password = let
-      CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-    in {
-      after = [
-        "${CONTAINERS_BACKEND}-pgadmin.service"
-        "nginx.service"
+    postgresql-grafana-agent = {
+      after = [ "postgresql.service" ];
+      before = [ "grafana-agent.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."postgres/grafana_agent_envs".path;
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.coreutils}/bin/echo "Creating a Grafana Agent account in the PostgreSQL"
+        ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
+          DO
+          \$do$
+          BEGIN
+              IF EXISTS (
+                  SELECT FROM pg_catalog.pg_roles
+                  WHERE rolname = '$GRAFANA_AGENT_POSTGRES_USERNAME'
+              )
+              THEN
+                  RAISE NOTICE 'role "$GRAFANA_AGENT_POSTGRES_USERNAME" already exists, skipping';
+              ELSE
+                  CREATE ROLE $GRAFANA_AGENT_POSTGRES_USERNAME WITH
+                      LOGIN
+                      ENCRYPTED PASSWORD '$GRAFANA_AGENT_POSTGRES_PASSWORD';
+              END IF;
+          END
+          \$do$;
+
+          GRANT pg_monitor TO $GRAFANA_AGENT_POSTGRES_USERNAME;
+        EOSQL
+      '';
+      wantedBy = [
+        "postgresql.service"
+        "grafana-agent.service"
       ];
+    };
+  };
+
+  sops.secrets = {
+    "postgres/grafana_agent_file/username" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "postgres/grafana_agent_file/password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      credentials = {
+        GRAFANA_AGENT_POSTGRES_USERNAME = config.sops.secrets."postgres/grafana_agent_file/username".path;
+        GRAFANA_AGENT_POSTGRES_PASSWORD = config.sops.secrets."postgres/grafana_agent_file/password".path;
+      };
+      settings = {
+        integrations = {
+          postgres_exporter = {
+            enabled = true;
+            scrape_interval = "1m";
+            data_source_names = [ "postgresql://\${GRAFANA_AGENT_POSTGRES_USERNAME}:\${GRAFANA_AGENT_POSTGRES_PASSWORD}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
+            autodiscover_databases = true;
+          };
+        };
+      };
+    };
+  };
+
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "pgadmin/nginx_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    postgresql-1password = {
+      after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -188,18 +326,18 @@
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'PostgreSQL (generated)' \
+            op item get PostgreSQL \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'PostgreSQL (generated)' \
-                website[url]=http://$INTERNAL_DOMAIN_NAME/pgadmin4 \
-                username=$PGADMIN_GUI_USERNAME \
-                password=$PGADMIN_GUI_PASSWORD \
-                'DB connection command - pgAdmin'[password]="PGPASSWORD=\"$PGADMIN_DB_PASSWORD\" psql -h {{ ansible_default_ipv4.address }} -p 5432 -U $PGADMIN_DB_USERNAME postgres" \
-                'DB connection command - Monitoring'[password]="PGPASSWORD=\"$MONITORING_DB_PASSWORD\" psql -h {{ ansible_default_ipv4.address }} -p 5432 -U $MONITORING_DB_USERNAME postgres" \
+                --title PostgreSQL \
+                website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
+                username=$PGADMIN_NGINX_USERNAME \
+                password=$PGADMIN_NGINX_PASSWORD \
+                'DB connection command - pgAdmin'[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
+                'DB connection command - Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
                 --session $SESSION_TOKEN > /dev/null
             fi
           '';
@@ -208,63 +346,20 @@
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            PGADMIN_GUI_USERNAME = {{ postgres_pgadmin_gui_username }}
-            PGADMIN_GUI_PASSWORD = {{ postgres_pgadmin_gui_password }}
-            PGADMIN_DB_USERNAME = {{ postgres_pgadmin_database_username }}
-            PGADMIN_DB_PASSWORD = {{ postgres_pgadmin_database_password }}
-            MONITORING_DB_USERNAME = {{ postgres_monitoring_database_username }}
-            MONITORING_DB_PASSWORD = {{ postgres_monitoring_database_password }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name postgresql-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env PGADMIN_GUI_USERNAME=$PGADMIN_GUI_USERNAME \
-            --env PGADMIN_GUI_PASSWORD=$PGADMIN_GUI_PASSWORD \
-            --env PGADMIN_DB_USERNAME=$PGADMIN_DB_USERNAME \
-            --env PGADMIN_DB_PASSWORD=$PGADMIN_DB_PASSWORD \
-            --env MONITORING_DB_USERNAME=$MONITORING_DB_USERNAME \
-            --env MONITORING_DB_PASSWORD=$MONITORING_DB_PASSWORD \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."pgadmin/nginx_envs".path} \
+            --env-file ${config.sops.secrets."pgadmin/postgres_envs".path} \
+            --env-file ${config.sops.secrets."postgres/grafana_agent_envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };
       wantedBy = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
-    };
-  };
-
-  services = {
-    grafana-agent = {
-      settings = {
-        integrations = {
-          postgres_exporter = {
-            enabled = true;
-            scrape_interval = "1m";
-            data_source_names = [ "postgresql://{{ postgres_monitoring_database_username }}:{{ postgres_monitoring_database_password | replace('%', '%25') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}@{{ ansible_default_ipv4.address }}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
-            autodiscover_databases = true;
-          };
-        };
-      };
     };
   };
 }

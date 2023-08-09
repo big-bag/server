@@ -1,4 +1,11 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
+
+let
+  MINIO_ENDPOINT = config.services.minio.listenAddress;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  MINIO_REGION = config.services.minio.region;
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+in
 
 {
   systemd.services = {
@@ -21,52 +28,64 @@
     ];
   };
 
+  sops.secrets = {
+    "minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     mimir-minio = {
       before = [ "mimir.service" ];
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
 
-            mc alias set $ALIAS http://${toString config.services.minio.listenAddress} $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+            # args: host port
+            check_port_is_open() {
+              local exit_status_code
+              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+              exit_status_code=$?
+              case $exit_status_code in
+                49) return 0 ;;
+                *) return "$exit_status_code" ;;
+              esac
+            }
 
-            mc mb --ignore-existing $ALIAS/mimir-blocks
-            mc anonymous set public $ALIAS/mimir-blocks
+            while true; do
+              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
+              if [ $? == 0 ]; then
+                echo "Creating buckets in the MinIO"
 
-            mc mb --ignore-existing $ALIAS/mimir-ruler
-            mc anonymous set public $ALIAS/mimir-ruler
+                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
 
-            mc mb --ignore-existing $ALIAS/mimir-alertmanager
-            mc anonymous set public $ALIAS/mimir-alertmanager
+                mc mb --ignore-existing $ALIAS/mimir-blocks
+                mc mb --ignore-existing $ALIAS/mimir-ruler
+                mc mb --ignore-existing $ALIAS/mimir-alertmanager
+
+                break
+              fi
+              echo "Waiting for MinIO availability"
+              sleep 1
+            done
           '';
           executable = true;
         };
         MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            ALIAS = local
-            MINIO_ACCESS_KEY = {{ minio_access_key }}
-            MINIO_SECRET_KEY = {{ minio_secret_key }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name mimir-minio \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env ALIAS=$ALIAS \
-            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
-            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."minio/envs".path} \
+            --env ALIAS=local \
             --entrypoint /entrypoint.sh \
-            --cpus 0.03125 \
-            --memory-reservation 122m \
-            --memory 128m \
             ${MINIO_CLIENT_IMAGE}'
         '';
       };
@@ -75,86 +94,89 @@
   };
 
   services = {
-    mimir = {
-      enable = true;
-      configuration = {
-        multitenancy_enabled = false;
-        server = {
-          http_listen_address = "127.0.0.1";
-          http_listen_port = 9009;
-          grpc_listen_address = "127.0.0.1";
-          grpc_listen_port = 9095;
-          http_path_prefix = "/mimir/";
-        };
-        ingester = {
-          ring = {
-            replication_factor = 1;
-            instance_addr = "127.0.0.1";
-          };
-        };
-        blocks_storage = {
-          s3 = {
-            bucket_name = "mimir-blocks";
-          };
-          bucket_store = {
-            sync_dir = "./tsdb-sync/";
-          };
-          tsdb = {
-            dir = "./tsdb/";
-          };
-        };
-        compactor = {
-          data_dir = "./data-compactor/";
-        };
-        store_gateway = {
-          sharding_ring = {
-            replication_factor = 1;
-            instance_addr = "127.0.0.1";
-          };
-        };
-        activity_tracker = {
-          filepath = "./metrics-activity.log";
-        };
-        ruler = {
-          rule_path = "./data-ruler/";
-        };
-        ruler_storage = {
-          s3 = {
-            bucket_name = "mimir-ruler";
-          };
-        };
-        alertmanager = {
-          data_dir = "./data-alertmanager/";
-          sharding_ring = {
-            replication_factor = 1;
-          };
-        };
-        alertmanager_storage = {
-          s3 = {
-            bucket_name = "mimir-alertmanager";
-          };
-        };
-        memberlist = {
-          message_history_buffer_bytes = 10240;
-          bind_addr = [ "127.0.0.1" ];
-        };
-        common.storage = {
-          backend = "s3";
-          s3 = {
-            endpoint = "${toString config.services.minio.listenAddress}";
-            region = "${toString config.services.minio.region}";
-            secret_access_key = "{{ minio_secret_key }}";
-            access_key_id = "{{ minio_access_key }}";
-            insecure = true;
-          };
-        };
+    mimir = let
+      config = pkgs.writeTextFile {
+        name = "config.yml";
+        text = ''
+          multitenancy_enabled: false
+
+          server:
+            http_listen_address: 127.0.0.1
+            http_listen_port: 9009
+            grpc_listen_address: 127.0.0.1
+            grpc_listen_port: 9095
+            http_path_prefix: /mimir/
+
+          ingester:
+            ring:
+              replication_factor: 1
+              instance_addr: 127.0.0.1
+
+          blocks_storage:
+            s3:
+              bucket_name: mimir-blocks
+            bucket_store:
+              sync_dir: ./tsdb-sync/
+            tsdb:
+              dir: ./tsdb/
+
+          compactor:
+            data_dir: ./data-compactor/
+
+          store_gateway:
+            sharding_ring:
+              replication_factor: 1
+              instance_addr: 127.0.0.1
+
+          activity_tracker:
+            filepath: ./metrics-activity.log
+
+          ruler:
+            rule_path: ./data-ruler/
+
+          ruler_storage:
+            s3:
+              bucket_name: mimir-ruler
+
+          alertmanager:
+            data_dir: ./data-alertmanager/
+            sharding_ring:
+              replication_factor: 1
+
+          alertmanager_storage:
+            s3:
+              bucket_name: mimir-alertmanager
+
+          memberlist:
+            message_history_buffer_bytes: 10240
+            bind_addr: [ 127.0.0.1 ]
+
+          common:
+            storage:
+              backend: s3
+              s3:
+                endpoint: ${MINIO_ENDPOINT}
+                region: ${MINIO_REGION}
+                secret_access_key: ''${MINIO_ROOT_PASSWORD}
+                access_key_id: ''${MINIO_ROOT_USER}
+                insecure: true
+        '';
       };
+    in {
+      enable = true;
+      configFile = "${config}";
     };
   };
 
   systemd.services = {
     mimir = {
       serviceConfig = {
+        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        ExecStart = pkgs.lib.mkForce ''
+          ${pkgs.mimir}/bin/mimir \
+            -config.file=${config.services.mimir.configFile} \
+            -config.expand-env=true
+        '';
         StartLimitBurst = 0;
         CPUQuota = "6%";
         MemoryHigh = "1946M";
@@ -163,26 +185,47 @@
     };
   };
 
+  sops.secrets = {
+    "mimir/nginx_file" = {
+      mode = "0400";
+      owner = config.services.nginx.user;
+      group = config.services.nginx.group;
+    };
+  };
+
   services = {
     nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/mimir/" = {
-          proxyPass = "http://${toString config.services.mimir.configuration.server.http_listen_address}:${toString config.services.mimir.configuration.server.http_listen_port}";
-          basicAuth = { {{ mimir_username }} = "{{ mimir_password }}"; };
+          proxyPass = "http://127.0.0.1:9009";
+          basicAuthFile = config.sops.secrets."mimir/nginx_file".path;
         };
       };
     };
   };
 
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "mimir/nginx_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     mimir-1password = {
-      after = [
-        "mimir.service"
-        "nginx.service"
-      ];
+      after = [ "mimir.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -193,16 +236,16 @@
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'Mimir (generated)' \
+            op item get Mimir \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'Mimir (generated)' \
-                --url http://$INTERNAL_DOMAIN_NAME/mimir \
-                username=$MIMIR_USERNAME \
-                password=$MIMIR_PASSWORD \
+                --title Mimir \
+                --url http://${DOMAIN_NAME_INTERNAL}/mimir \
+                username=$MIMIR_NGINX_USERNAME \
+                password=$MIMIR_NGINX_PASSWORD \
                 --session $SESSION_TOKEN > /dev/null
             fi
           '';
@@ -211,36 +254,14 @@
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            MIMIR_USERNAME = {{ mimir_username }}
-            MIMIR_PASSWORD = {{ mimir_password }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name mimir-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env MIMIR_USERNAME=$MIMIR_USERNAME \
-            --env MIMIR_PASSWORD=$MIMIR_PASSWORD \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."mimir/nginx_envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };

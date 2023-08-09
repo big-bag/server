@@ -1,5 +1,9 @@
 { config, pkgs, ... }:
 
+let
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+in
+
 {
   systemd.services = {
     grafana-prepare = {
@@ -12,6 +16,14 @@
     };
   };
 
+  sops.secrets = {
+    grafana = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   services = {
     grafana = {
       enable = true;
@@ -21,13 +33,13 @@
           protocol = "http";
           http_addr = "127.0.0.1";
           http_port = 3000;
-          domain = "{{ internal_domain_name }}";
+          domain = "${DOMAIN_NAME_INTERNAL}";
           root_url = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
           enable_gzip = true;
         };
         security = {
-          admin_user = "{{ grafana_username }}";
-          admin_password = "{{ grafana_password }}";
+          admin_user = "$__env{GRAFANA_USERNAME}";
+          admin_password = "$__env{GRAFANA_PASSWORD}";
         };
       };
       provision = {
@@ -42,8 +54,8 @@
                 type: prometheus
                 access: proxy
                 orgId: 1
-                uid: {{ grafana_datasource_uid_mimir }}
-                url: http://${toString config.services.mimir.configuration.server.http_listen_address}:${toString config.services.mimir.configuration.server.http_listen_port}/mimir/prometheus
+                uid: $GRAFANA_DATASOURCE_UID_MIMIR
+                url: http://127.0.0.1:9009/mimir/prometheus
                 isDefault: false
                 jsonData:
                   manageAlerts: true
@@ -56,12 +68,12 @@
                 type: prometheus
                 access: proxy
                 orgId: 1
-                uid: {{ grafana_datasource_uid_prometheus }}
-                url: http://${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
+                uid: $GRAFANA_DATASOURCE_UID_PROMETHEUS
+                url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
                 isDefault: false
                 jsonData:
                   manageAlerts: true
-                  timeInterval: ${toString config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
+                  timeInterval: ${config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
                   httpMethod: POST
                   prometheusType: Prometheus
                 editable: true
@@ -70,8 +82,8 @@
                 type: loki
                 access: proxy
                 orgId: 1
-                uid: {{ grafana_datasource_uid_loki }}
-                url: http://${toString config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
+                uid: $GRAFANA_DATASOURCE_UID_LOKI
+                url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
                 isDefault: true
                 jsonData:
                   manageAlerts: true
@@ -103,6 +115,7 @@
   systemd.services = {
     grafana = {
       serviceConfig = {
+        EnvironmentFile = config.sops.secrets.grafana.path;
         CPUQuota = "6%";
         MemoryHigh = "1946M";
         MemoryMax = "2048M";
@@ -114,11 +127,11 @@
     nginx = {
       upstreams."grafana" = {
         servers = let
-          GRAFANA_ADDRESS = "${toString config.services.grafana.settings.server.http_addr}:${toString config.services.grafana.settings.server.http_port}";
+          GRAFANA_ADDRESS = "${config.services.grafana.settings.server.http_addr}:${toString config.services.grafana.settings.server.http_port}";
         in { "${GRAFANA_ADDRESS}" = {}; };
       };
 
-      virtualHosts."{{ internal_domain_name }}" = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/grafana/" = {
           extraConfig = ''
             rewrite ^/grafana/(.*) /$1 break;
@@ -143,15 +156,21 @@
     };
   };
 
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     grafana-1password = {
-      after = [
-        "grafana.service"
-        "nginx.service"
-      ];
+      after = [ "grafana.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -162,14 +181,14 @@
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'Grafana (generated)' \
+            op item get Grafana \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'Grafana (generated)' \
-                --url http://$INTERNAL_DOMAIN_NAME/grafana \
+                --title Grafana \
+                --url http://${DOMAIN_NAME_INTERNAL}/grafana \
                 username=$GRAFANA_USERNAME \
                 password=$GRAFANA_PASSWORD \
                 --session $SESSION_TOKEN > /dev/null
@@ -180,36 +199,14 @@
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            GRAFANA_USERNAME = {{ grafana_username }}
-            GRAFANA_PASSWORD = {{ grafana_password }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name grafana-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env GRAFANA_USERNAME=$GRAFANA_USERNAME \
-            --env GRAFANA_PASSWORD=$GRAFANA_PASSWORD \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets.grafana.path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };

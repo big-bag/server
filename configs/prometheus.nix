@@ -1,4 +1,10 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
+
+let
+  MINIO_ENDPOINT = config.services.minio.listenAddress;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+in
 
 {
   systemd.services = {
@@ -34,45 +40,63 @@
     ];
   };
 
+  sops.secrets = {
+    "minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     prometheus-minio = {
       before = [ "prometheus.service" ];
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
 
-            mc alias set $ALIAS http://${toString config.services.minio.listenAddress} $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-            mc admin prometheus generate $ALIAS | grep bearer_token | awk '{ print $2 }' | tr -d '\n' > /mnt/.minioScrapeBearerToken
+            # args: host port
+            check_port_is_open() {
+              local exit_status_code
+              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+              exit_status_code=$?
+              case $exit_status_code in
+                49) return 0 ;;
+                *) return "$exit_status_code" ;;
+              esac
+            }
+
+            while true; do
+              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
+              if [ $? == 0 ]; then
+                echo "Generating prometheus bearer token in the MinIO"
+
+                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
+                mc admin prometheus generate $ALIAS | grep bearer_token | awk '{ print $2 }' | tr -d '\n' > /mnt/.minioScrapeBearerToken
+
+                break
+              fi
+              echo "Waiting for MinIO availability"
+              sleep 1
+            done
           '';
           executable = true;
         };
         MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            ALIAS = local
-            MINIO_ACCESS_KEY = {{ minio_access_key }}
-            MINIO_SECRET_KEY = {{ minio_secret_key }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name prometheus-minio \
             --volume /mnt/ssd/monitoring/.minioScrapeBearerToken:/mnt/.minioScrapeBearerToken \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env ALIAS=$ALIAS \
-            --env MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
-            --env MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."minio/envs".path} \
+            --env ALIAS=local \
             --entrypoint /entrypoint.sh \
-            --cpus 0.03125 \
-            --memory-reservation 122m \
-            --memory 128m \
             ${MINIO_CLIENT_IMAGE}'
         '';
       };
@@ -85,7 +109,7 @@
       enable = true;
       listenAddress = "127.0.0.1";
       port = 9090;
-      webExternalUrl = "http://{{ internal_domain_name }}/prometheus";
+      webExternalUrl = "http://${DOMAIN_NAME_INTERNAL}/prometheus";
       stateDir = "prometheus2";
       retentionTime = "15d";
       checkConfig = "syntax-only";
@@ -100,7 +124,7 @@
           job_name = "minio-job";
           scheme = "http";
           static_configs = [{
-            targets = [ "${toString config.services.minio.listenAddress}" ];
+            targets = [ "${MINIO_ENDPOINT}" ];
           }];
           metrics_path = "/minio/v2/metrics/cluster";
           bearer_token_file = "/mnt/ssd/monitoring/.minioScrapeBearerToken";
@@ -109,20 +133,20 @@
           job_name = "prometheus";
           scheme = "http";
           static_configs = [{
-            targets = [ "${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}" ];
+            targets = [ "${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}" ];
           }];
           metrics_path = "/prometheus/metrics";
         }
       ];
       remoteWrite = [{
-        url = "http://${toString config.services.mimir.configuration.server.http_listen_address}:${toString config.services.mimir.configuration.server.http_listen_port}/mimir/api/v1/push";
+        url = "http://127.0.0.1:9009/mimir/api/v1/push";
         write_relabel_configs = [{
           source_labels = [
             "__name__"
             "instance"
             "job"
           ];
-          regex = ".*;${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port};prometheus";
+          regex = ".*;${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port};prometheus";
           action = "drop";
         }];
       }];
@@ -139,26 +163,47 @@
     };
   };
 
+  sops.secrets = {
+    "prometheus/nginx_file" = {
+      mode = "0400";
+      owner = config.services.nginx.user;
+      group = config.services.nginx.group;
+    };
+  };
+
   services = {
     nginx = {
-      virtualHosts."{{ internal_domain_name }}" = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/prometheus" = {
-          proxyPass = "http://${toString config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
-          basicAuth = { {{ prometheus_username }} = "{{ prometheus_password }}"; };
+          proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
+          basicAuthFile = config.sops.secrets."prometheus/nginx_file".path;
         };
       };
     };
   };
 
+  sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "prometheus/nginx_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     prometheus-1password = {
-      after = [
-        "prometheus.service"
-        "nginx.service"
-      ];
+      after = [ "prometheus.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
       serviceConfig = let
-        CONTAINERS_BACKEND = "${config.virtualisation.oci-containers.backend}";
-        ENTRYPOINT = pkgs.writeTextFile {
+        entrypoint = pkgs.writeTextFile {
           name = "entrypoint.sh";
           text = ''
             #!/bin/bash
@@ -169,16 +214,16 @@
               --secret-key $OP_SECRET_KEY \
               --signin --raw)
 
-            op item get 'Prometheus (generated)' \
+            op item get Prometheus \
               --vault 'Local server' \
               --session $SESSION_TOKEN > /dev/null
 
             if [ $? != 0 ]; then
               op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title 'Prometheus (generated)' \
-                --url http://$INTERNAL_DOMAIN_NAME/prometheus \
-                username=$PROMETHEUS_USERNAME \
-                password=$PROMETHEUS_PASSWORD \
+                --title Prometheus \
+                --url http://${DOMAIN_NAME_INTERNAL}/prometheus \
+                username=$PROMETHEUS_NGINX_USERNAME \
+                password=$PROMETHEUS_NGINX_PASSWORD \
                 --session $SESSION_TOKEN > /dev/null
             fi
           '';
@@ -187,36 +232,14 @@
         ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
       in {
         Type = "oneshot";
-        EnvironmentFile = pkgs.writeTextFile {
-          name = ".env";
-          text = ''
-            OP_DEVICE = {{ hostvars['localhost']['vault_1password_device_id'] }}
-            OP_MASTER_PASSWORD = {{ hostvars['localhost']['vault_1password_master_password'] }}
-            OP_SUBDOMAIN = {{ hostvars['localhost']['vault_1password_subdomain'] }}
-            OP_EMAIL_ADDRESS = {{ hostvars['localhost']['vault_1password_email_address'] }}
-            OP_SECRET_KEY = {{ hostvars['localhost']['vault_1password_secret_key'] }}
-            INTERNAL_DOMAIN_NAME = {{ internal_domain_name }}
-            PROMETHEUS_USERNAME = {{ prometheus_username }}
-            PROMETHEUS_PASSWORD = {{ prometheus_password }}
-          '';
-        };
         ExecStart = ''${pkgs.bash}/bin/bash -c ' \
           ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
             --rm \
             --name prometheus-1password \
-            --volume ${ENTRYPOINT}:/entrypoint.sh \
-            --env OP_DEVICE=$OP_DEVICE \
-            --env OP_MASTER_PASSWORD="$OP_MASTER_PASSWORD" \
-            --env OP_SUBDOMAIN=$OP_SUBDOMAIN \
-            --env OP_EMAIL_ADDRESS=$OP_EMAIL_ADDRESS \
-            --env OP_SECRET_KEY=$OP_SECRET_KEY \
-            --env INTERNAL_DOMAIN_NAME=$INTERNAL_DOMAIN_NAME \
-            --env PROMETHEUS_USERNAME=$PROMETHEUS_USERNAME \
-            --env PROMETHEUS_PASSWORD=$PROMETHEUS_PASSWORD \
+            --volume ${entrypoint}:/entrypoint.sh \
+            --env-file ${config.sops.secrets."1password".path} \
+            --env-file ${config.sops.secrets."prometheus/nginx_envs".path} \
             --entrypoint /entrypoint.sh \
-            --cpus 0.01563 \
-            --memory-reservation 61m \
-            --memory 64m \
             ${ONE_PASSWORD_IMAGE}'
         '';
       };
