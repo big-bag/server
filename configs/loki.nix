@@ -1,7 +1,7 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, ... }:
 
 let
-  MINIO_ENDPOINT = config.services.minio.listenAddress;
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
 in
 
 {
@@ -27,55 +27,43 @@ in
   systemd.services = {
     loki-minio = {
       before = [ "loki.service" ];
-      serviceConfig = let
-        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            # args: host port
-            check_port_is_open() {
-              local exit_status_code
-              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
-              exit_status_code=$?
-              case $exit_status_code in
-                49) return 0 ;;
-                *) return "$exit_status_code" ;;
-              esac
-            }
-
-            while true; do
-              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
-              if [ $? == 0 ]; then
-                echo "Creating buckets in the MinIO"
-
-                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
-                mc mb --ignore-existing $ALIAS/loki
-
-                break
-              fi
-              echo "Waiting for MinIO availability"
-              sleep 1
-            done
-          '';
-          executable = true;
-        };
-        MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name loki-minio \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."minio/envs".path} \
-            --env ALIAS=local \
-            --entrypoint /entrypoint.sh \
-            ${MINIO_CLIENT_IMAGE}'
-        '';
+        EnvironmentFile = config.sops.secrets."minio/envs".path;
       };
+      environment = {
+        ALIAS = "local";
+      };
+      path = [ pkgs.getent ];
+      script = ''
+        set +e
+
+        # args: host port
+        check_port_is_open() {
+          local exit_status_code
+          ${pkgs.curl}/bin/curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+          exit_status_code=$?
+          case $exit_status_code in
+            49) return 0 ;;
+            *) return "$exit_status_code" ;;
+          esac
+        }
+
+        while true; do
+          check_port_is_open ${IP_ADDRESS} 9000
+          if [ $? == 0 ]; then
+            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
+
+            ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/loki
+
+            break
+          fi
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+      '';
       wantedBy = [ "loki.service" ];
     };
   };
@@ -116,8 +104,8 @@ in
           aws = {
             s3forcepathstyle = true;
             bucketnames = "loki";
-            endpoint = "http://${MINIO_ENDPOINT}";
-            region = config.services.minio.region;
+            endpoint = "http://${IP_ADDRESS}:9000";
+            region = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
             access_key_id = "\${MINIO_ROOT_USER}";
             secret_access_key = "\${MINIO_ROOT_PASSWORD}";
             insecure = true;

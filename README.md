@@ -120,7 +120,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    ```
    services.openssh = {
      enable = true;
-     permitRootLogin = "yes";
+     settings.PermitRootLogin = "yes";
    };
    ```
 
@@ -218,7 +218,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
 7. run a playbook to upgrade NixOS to the latest version
    ```bash
-   docker run --rm -t \
+   docker run --rm -ti \
      --volume=$(pwd):/etc/ansible \
      ansible:2.15.1 \
        ansible-playbook site.yml --tags upgrade

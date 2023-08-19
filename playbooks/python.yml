@@ -4,6 +4,12 @@
   become: true
   gather_facts: false
   tasks:
+    - name: check if python3 is installed
+      ansible.builtin.raw: python3 --version
+      register: python3_installed
+      failed_when: false
+      changed_when: false
+
     - name: install python3
       ansible.builtin.raw: |
         cat > /etc/nixos/python.nix << EOF
@@ -23,4 +29,4 @@
         grep -qxF '      ./python.nix' /etc/nixos/configuration.nix || sed -i '/.\/hardware-configuration.nix/a \      ./python.nix' /etc/nixos/configuration.nix
 
         nixos-rebuild switch
-      changed_when: false
+      when: python3_installed.rc != 0

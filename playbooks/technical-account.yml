@@ -83,7 +83,7 @@
     - name: forbid root login
       ansible.builtin.replace:
         path: /etc/nixos/configuration.nix
-        regexp: '(permitRootLogin\s=\s").*(";)'
+        regexp: '(settings.PermitRootLogin\s=\s").*(";)'
         replace: '\1no\2'
         backup: true
       notify: apply config
@@ -91,7 +91,7 @@
     - name: configure server ssh port
       ansible.builtin.blockinfile:
         path: /etc/nixos/configuration.nix
-        insertafter: 'permitRootLogin\s=\s".*";'
+        insertafter: 'settings.PermitRootLogin\s=\s".*";'
         block: |2
               ports = [ (import ./connection-parameters.nix).ssh_port ];
         marker: "    # {mark} ANSIBLE MANAGED BLOCK SSH PORT"

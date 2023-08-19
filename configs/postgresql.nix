@@ -40,7 +40,7 @@ in
         local   all             all                                     peer
         # IPv4 local connections:
         host    all             all             ${IP_ADDRESS}/32           md5
-        # IPv4 docker connections
+        # IPv4 ${CONTAINERS_BACKEND} connections
         host    all             all             172.17.0.0/16           md5
       '';
       settings = {
@@ -152,7 +152,7 @@ in
             "--memory-reservation=243m"
             "--memory=256m"
           ];
-          image = "dpage/pgadmin4:6.21";
+          image = (import /etc/nixos/variables.nix).pgadmin_image;
           cmd = let
             SERVERS = ''
               {
@@ -260,6 +260,66 @@ in
   };
 
   sops.secrets = {
+    "1password" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "pgadmin/nginx_envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    postgresql-1password = {
+      after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."1password".path
+          config.sops.secrets."pgadmin/nginx_envs".path
+          config.sops.secrets."pgadmin/postgres_envs".path
+          config.sops.secrets."postgres/grafana_agent_envs".path
+        ];
+      };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get PostgreSQL \
+          --vault 'Local server' \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]; then
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+            --title PostgreSQL \
+            website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
+            username=$PGADMIN_NGINX_USERNAME \
+            password=$PGADMIN_NGINX_PASSWORD \
+            'DB connection command - pgAdmin'[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
+            'DB connection command - Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
+            --session $SESSION_TOKEN > /dev/null
+        fi
+      '';
+      wantedBy = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
+    };
+  };
+
+  sops.secrets = {
     "postgres/grafana_agent_file/username" = {
       mode = "0400";
       owner = config.users.users.root.name;
@@ -281,85 +341,53 @@ in
         GRAFANA_AGENT_POSTGRES_USERNAME = config.sops.secrets."postgres/grafana_agent_file/username".path;
         GRAFANA_AGENT_POSTGRES_PASSWORD = config.sops.secrets."postgres/grafana_agent_file/password".path;
       };
+
       settings = {
+        logs = {
+          configs = [{
+            name = "postgresql";
+            clients = [{
+              url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+            }];
+            positions = {
+              filename = "/var/lib/private/grafana-agent/positions/postgresql.yml";
+            };
+            scrape_configs = [{
+              job_name = "journal";
+              journal = {
+                json = false;
+                max_age = "12h";
+                labels = {
+                  job = "systemd-journal";
+                };
+                path = "/var/log/journal";
+              };
+              relabel_configs = [
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  regex = "(postgresql-prepare|var-lib-postgresql|postgresql|pgadmin-prepare|${CONTAINERS_BACKEND}-pgadmin|postgresql-grafana-agent|postgresql-1password).(service|mount)";
+                  action = "keep";
+                }
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  target_label = "unit";
+                  action = "replace";
+                }
+              ];
+            }];
+          }];
+        };
+
         integrations = {
           postgres_exporter = {
             enabled = true;
             scrape_interval = "1m";
+            scrape_timeout = "10s";
             data_source_names = [ "postgresql://\${GRAFANA_AGENT_POSTGRES_USERNAME}:\${GRAFANA_AGENT_POSTGRES_PASSWORD}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
             autodiscover_databases = true;
           };
         };
       };
-    };
-  };
-
-  sops.secrets = {
-    "1password" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  sops.secrets = {
-    "pgadmin/nginx_envs" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  systemd.services = {
-    postgresql-1password = {
-      after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
-              --address $OP_SUBDOMAIN.1password.com \
-              --email $OP_EMAIL_ADDRESS \
-              --secret-key $OP_SECRET_KEY \
-              --signin --raw)
-
-            op item get PostgreSQL \
-              --vault 'Local server' \
-              --session $SESSION_TOKEN > /dev/null
-
-            if [ $? != 0 ]; then
-              op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title PostgreSQL \
-                website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
-                username=$PGADMIN_NGINX_USERNAME \
-                password=$PGADMIN_NGINX_PASSWORD \
-                'DB connection command - pgAdmin'[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
-                'DB connection command - Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
-                --session $SESSION_TOKEN > /dev/null
-            fi
-          '';
-          executable = true;
-        };
-        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
-      in {
-        Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name postgresql-1password \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."1password".path} \
-            --env-file ${config.sops.secrets."pgadmin/nginx_envs".path} \
-            --env-file ${config.sops.secrets."pgadmin/postgres_envs".path} \
-            --env-file ${config.sops.secrets."postgres/grafana_agent_envs".path} \
-            --entrypoint /entrypoint.sh \
-            ${ONE_PASSWORD_IMAGE}'
-        '';
-      };
-      wantedBy = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
     };
   };
 }

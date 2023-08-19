@@ -1,9 +1,8 @@
 { config, pkgs, lib, ... }:
 
 let
-  MINIO_ENDPOINT = config.services.minio.listenAddress;
-  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
-  MINIO_REGION = config.services.minio.region;
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+  MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
@@ -39,56 +38,45 @@ in
   systemd.services = {
     mimir-minio = {
       before = [ "mimir.service" ];
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            # args: host port
-            check_port_is_open() {
-              local exit_status_code
-              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
-              exit_status_code=$?
-              case $exit_status_code in
-                49) return 0 ;;
-                *) return "$exit_status_code" ;;
-              esac
-            }
-
-            while true; do
-              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
-              if [ $? == 0 ]; then
-                echo "Creating buckets in the MinIO"
-
-                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
-                mc mb --ignore-existing $ALIAS/mimir-blocks
-                mc mb --ignore-existing $ALIAS/mimir-ruler
-                mc mb --ignore-existing $ALIAS/mimir-alertmanager
-
-                break
-              fi
-              echo "Waiting for MinIO availability"
-              sleep 1
-            done
-          '';
-          executable = true;
-        };
-        MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name mimir-minio \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."minio/envs".path} \
-            --env ALIAS=local \
-            --entrypoint /entrypoint.sh \
-            ${MINIO_CLIENT_IMAGE}'
-        '';
+        EnvironmentFile = config.sops.secrets."minio/envs".path;
       };
+      environment = {
+        ALIAS = "local";
+      };
+      path = [ pkgs.getent ];
+      script = ''
+        set +e
+
+        # args: host port
+        check_port_is_open() {
+          local exit_status_code
+          ${pkgs.curl}/bin/curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+          exit_status_code=$?
+          case $exit_status_code in
+            49) return 0 ;;
+            *) return "$exit_status_code" ;;
+          esac
+        }
+
+        while true; do
+          check_port_is_open ${IP_ADDRESS} 9000
+          if [ $? == 0 ]; then
+            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
+
+            ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-blocks
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-ruler
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-alertmanager
+
+            break
+          fi
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+      '';
       wantedBy = [ "mimir.service" ];
     };
   };
@@ -155,7 +143,7 @@ in
             storage:
               backend: s3
               s3:
-                endpoint: ${MINIO_ENDPOINT}
+                endpoint: ${IP_ADDRESS}:9000
                 region: ${MINIO_REGION}
                 secret_access_key: ''${MINIO_ROOT_PASSWORD}
                 access_key_id: ''${MINIO_ROOT_USER}
@@ -224,47 +212,38 @@ in
     mimir-1password = {
       after = [ "mimir.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
-              --address $OP_SUBDOMAIN.1password.com \
-              --email $OP_EMAIL_ADDRESS \
-              --secret-key $OP_SECRET_KEY \
-              --signin --raw)
-
-            op item get Mimir \
-              --vault 'Local server' \
-              --session $SESSION_TOKEN > /dev/null
-
-            if [ $? != 0 ]; then
-              op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title Mimir \
-                --url http://${DOMAIN_NAME_INTERNAL}/mimir \
-                username=$MIMIR_NGINX_USERNAME \
-                password=$MIMIR_NGINX_PASSWORD \
-                --session $SESSION_TOKEN > /dev/null
-            fi
-          '';
-          executable = true;
-        };
-        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name mimir-1password \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."1password".path} \
-            --env-file ${config.sops.secrets."mimir/nginx_envs".path} \
-            --entrypoint /entrypoint.sh \
-            ${ONE_PASSWORD_IMAGE}'
-        '';
+        EnvironmentFile = [
+          config.sops.secrets."1password".path
+          config.sops.secrets."mimir/nginx_envs".path
+        ];
       };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get Mimir \
+          --vault 'Local server' \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]; then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+            --title Mimir \
+            --url http://${DOMAIN_NAME_INTERNAL}/mimir \
+            username=$MIMIR_NGINX_USERNAME \
+            password=$MIMIR_NGINX_PASSWORD \
+            --session $SESSION_TOKEN > /dev/null
+        fi
+      '';
       wantedBy = [ "mimir.service" ];
     };
   };

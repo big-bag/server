@@ -60,9 +60,11 @@ RUN apk add --update --no-cache \
       py3-pip \
       sshpass \
       openssh-client \
+      age \
       git \
-      rsync \
-      age && \
+      curl \
+      jq \
+      rsync && \
     \
     addgroup -g $GID $GROUP && \
     adduser -h /home/$USER -s /bin/sh -G $GROUP -D -u $UID $USER && \

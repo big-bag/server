@@ -2,14 +2,14 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "c36df4fe4bf4bb87759b1891cab21e7a05219500";
-      SOPS_NIX_SHA256 = "yTLL72q6aqGmzHq+C3rDp3rIjno7EJZkFLof6Ika7cE=";
+      SOPS_NIX_COMMIT = "f81e73cf9a4ef4b949b9225be3daa1e586c096da";
+      SOPS_NIX_SHA256 = "+e9dD67mpGLBhhqdv7A7i1g/r2AT/PmqthWaYHyVZR4=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
@@ -25,8 +25,9 @@
       ./mimir.nix
       ./prometheus.nix
       ./loki.nix
-      ./grafana.nix
       ./grafana-agent.nix
+      ./node-exporter.nix
+      ./grafana.nix
       ./postgresql.nix
       ./redis.nix
       ./gitlab.nix
@@ -123,6 +124,10 @@
     # END ANSIBLE MANAGED BLOCK PARTED
   ];
 
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
+    "1password-cli"
+  ];
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;
@@ -136,7 +141,7 @@
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
-    permitRootLogin = "no";
+    settings.PermitRootLogin = "no";
     # BEGIN ANSIBLE MANAGED BLOCK SSH PORT
     ports = [ (import ./connection-parameters.nix).ssh_port ];
     # END ANSIBLE MANAGED BLOCK SSH PORT
@@ -152,7 +157,7 @@
   };
 
   systemd.services = {
-    nginx-self-signed-certificates = {
+    nginx-prepare = {
       before = [ "nginx.service" ];
       serviceConfig = {
         Type = "oneshot";

@@ -168,49 +168,99 @@ in
     grafana-1password = {
       after = [ "grafana.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
-      serviceConfig = let
-        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
-              --address $OP_SUBDOMAIN.1password.com \
-              --email $OP_EMAIL_ADDRESS \
-              --secret-key $OP_SECRET_KEY \
-              --signin --raw)
-
-            op item get Grafana \
-              --vault 'Local server' \
-              --session $SESSION_TOKEN > /dev/null
-
-            if [ $? != 0 ]; then
-              op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title Grafana \
-                --url http://${DOMAIN_NAME_INTERNAL}/grafana \
-                username=$GRAFANA_USERNAME \
-                password=$GRAFANA_PASSWORD \
-                --session $SESSION_TOKEN > /dev/null
-            fi
-          '';
-          executable = true;
-        };
-        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name grafana-1password \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."1password".path} \
-            --env-file ${config.sops.secrets.grafana.path} \
-            --entrypoint /entrypoint.sh \
-            ${ONE_PASSWORD_IMAGE}'
-        '';
+        EnvironmentFile = [
+          config.sops.secrets."1password".path
+          config.sops.secrets.grafana.path
+        ];
       };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get Grafana \
+          --vault 'Local server' \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]; then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+            --title Grafana \
+            --url http://${DOMAIN_NAME_INTERNAL}/grafana \
+            username=$GRAFANA_USERNAME \
+            password=$GRAFANA_PASSWORD \
+            --session $SESSION_TOKEN > /dev/null
+        fi
+      '';
       wantedBy = [ "grafana.service" ];
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      settings = {
+        metrics = {
+          configs = [{
+            name = "grafana";
+            scrape_configs = [{
+              job_name = "grafana";
+              scrape_interval = "1m";
+              scrape_timeout = "10s";
+              scheme = "http";
+              static_configs = [{
+                targets = [ "${config.services.grafana.settings.server.http_addr}:${toString config.services.grafana.settings.server.http_port}" ];
+              }];
+              metrics_path = "/metrics";
+            }];
+            remote_write = [{
+              url = "http://127.0.0.1:9009/mimir/api/v1/push";
+            }];
+          }];
+        };
+
+        logs = {
+          configs = [{
+            name = "grafana";
+            clients = [{
+              url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+            }];
+            positions = {
+              filename = "/var/lib/private/grafana-agent/positions/grafana.yml";
+            };
+            scrape_configs = [{
+              job_name = "journal";
+              journal = {
+                json = false;
+                max_age = "12h";
+                labels = {
+                  job = "systemd-journal";
+                };
+                path = "/var/log/journal";
+              };
+              relabel_configs = [
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  regex = "(grafana-prepare|grafana|grafana-1password).service";
+                  action = "keep";
+                }
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  target_label = "unit";
+                  action = "replace";
+                }
+              ];
+            }];
+          }];
+        };
+      };
     };
   };
 }

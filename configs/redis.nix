@@ -88,7 +88,7 @@ in
             "--memory-reservation=122m"
             "--memory=128m"
           ];
-          image = "redislabs/redisinsight:1.13.1";
+          image = (import /etc/nixos/variables.nix).redisinsight_image;
         };
       };
     };
@@ -202,42 +202,6 @@ in
   };
 
   sops.secrets = {
-    "redis/grafana_agent_file/username" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  sops.secrets = {
-    "redis/grafana_agent_file/password" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  services = {
-    grafana-agent = {
-      credentials = {
-        GRAFANA_AGENT_REDIS_USERNAME = config.sops.secrets."redis/grafana_agent_file/username".path;
-        GRAFANA_AGENT_REDIS_PASSWORD = config.sops.secrets."redis/grafana_agent_file/password".path;
-      };
-      settings = {
-        integrations = {
-          redis_exporter = {
-            enabled = true;
-            scrape_interval = "1m";
-            redis_addr = "${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
-            redis_user = "\${GRAFANA_AGENT_REDIS_USERNAME}";
-            redis_password = "\${GRAFANA_AGENT_REDIS_PASSWORD}";
-          };
-        };
-      };
-    };
-  };
-
-  sops.secrets = {
     "1password" = {
       mode = "0400";
       owner = config.users.users.root.name;
@@ -257,52 +221,115 @@ in
     redis-1password = {
       after = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
-              --address $OP_SUBDOMAIN.1password.com \
-              --email $OP_EMAIL_ADDRESS \
-              --secret-key $OP_SECRET_KEY \
-              --signin --raw)
-
-            op item get Redis \
-              --vault 'Local server' \
-              --session $SESSION_TOKEN > /dev/null
-
-            if [ $? != 0 ]; then
-              op item template get Database --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title Redis \
-                website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
-                username=$REDISINSIGHT_NGINX_USERNAME \
-                password=$REDISINSIGHT_NGINX_PASSWORD \
-                'DB connection command - ${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
-                'DB connection command - Grafana Agent'[password]="redis-cli -u 'redis://$GRAFANA_AGENT_REDIS_USERNAME:$GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
-                --session $SESSION_TOKEN > /dev/null
-            fi
-          '';
-          executable = true;
-        };
-        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name redis-1password \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."1password".path} \
-            --env-file ${config.sops.secrets."redisinsight/nginx_envs".path} \
-            --env-file ${config.sops.secrets."redis/database_password_envs".path} \
-            --env-file ${config.sops.secrets."redis/grafana_agent_envs".path} \
-            --entrypoint /entrypoint.sh \
-            ${ONE_PASSWORD_IMAGE}'
-        '';
+        EnvironmentFile = [
+          config.sops.secrets."1password".path
+          config.sops.secrets."redisinsight/nginx_envs".path
+          config.sops.secrets."redis/database_password_envs".path
+          config.sops.secrets."redis/grafana_agent_envs".path
+        ];
       };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get Redis \
+          --vault 'Local server' \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]; then
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+            --title Redis \
+            website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
+            username=$REDISINSIGHT_NGINX_USERNAME \
+            password=$REDISINSIGHT_NGINX_PASSWORD \
+            'DB connection command - ${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
+            'DB connection command - Grafana Agent'[password]="redis-cli -u 'redis://$GRAFANA_AGENT_REDIS_USERNAME:$GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
+            --session $SESSION_TOKEN > /dev/null
+        fi
+      '';
       wantedBy = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
+    };
+  };
+
+  sops.secrets = {
+    "redis/grafana_agent_file/username" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "redis/grafana_agent_file/password" = {
+      mode = "0404";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      credentials = {
+        GRAFANA_AGENT_REDIS_USERNAME = config.sops.secrets."redis/grafana_agent_file/username".path;
+      };
+
+      settings = {
+        logs = {
+          configs = [{
+            name = "redis";
+            clients = [{
+              url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+            }];
+            positions = {
+              filename = "/var/lib/private/grafana-agent/positions/redis.yml";
+            };
+            scrape_configs = [{
+              job_name = "journal";
+              journal = {
+                json = false;
+                max_age = "12h";
+                labels = {
+                  job = "systemd-journal";
+                };
+                path = "/var/log/journal";
+              };
+              relabel_configs = [
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  regex = "(redis-prepare|var-lib-redis\\x2d${REDIS_INSTANCE}|redis-${REDIS_INSTANCE}|${CONTAINERS_BACKEND}-redisinsight|redisinsight-configure|redis-grafana-agent|redis-1password).(service|mount)";
+                  action = "keep";
+                }
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  target_label = "unit";
+                  action = "replace";
+                }
+              ];
+            }];
+          }];
+        };
+
+        integrations = {
+          redis_exporter = {
+            enabled = true;
+            scrape_interval = "1m";
+            scrape_timeout = "10s";
+            redis_addr = "${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
+            redis_user = "\${GRAFANA_AGENT_REDIS_USERNAME}";
+            redis_password_file = config.sops.secrets."redis/grafana_agent_file/password".path;
+          };
+        };
+      };
     };
   };
 }

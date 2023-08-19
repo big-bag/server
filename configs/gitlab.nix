@@ -1,8 +1,7 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, ... }:
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
-  MINIO_ENDPOINT = config.services.minio.listenAddress;
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
   REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
@@ -34,64 +33,53 @@ in
   systemd.services = {
     gitlab-minio = {
       before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            # args: host port
-            check_port_is_open() {
-              local exit_status_code
-              curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
-              exit_status_code=$?
-              case $exit_status_code in
-                49) return 0 ;;
-                *) return "$exit_status_code" ;;
-              esac
-            }
-
-            while true; do
-              check_port_is_open ${lib.strings.stringAsChars (x: if x == ":" then " " else x) MINIO_ENDPOINT}
-              if [ $? == 0 ]; then
-                echo "Creating buckets in the MinIO"
-
-                mc alias set $ALIAS http://${MINIO_ENDPOINT} $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
-                mc mb --ignore-existing $ALIAS/gitlab-artifacts
-                mc mb --ignore-existing $ALIAS/gitlab-external-diffs
-                mc mb --ignore-existing $ALIAS/gitlab-lfs
-                mc mb --ignore-existing $ALIAS/gitlab-uploads
-                mc mb --ignore-existing $ALIAS/gitlab-packages
-                mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
-                mc mb --ignore-existing $ALIAS/gitlab-terraform-state
-                mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
-                mc mb --ignore-existing $ALIAS/gitlab-pages
-                mc mb --ignore-existing $ALIAS/gitlab-backup
-                mc mb --ignore-existing $ALIAS/gitlab-registry
-
-                break
-              fi
-              echo "Waiting for MinIO availability"
-              sleep 1
-            done
-          '';
-          executable = true;
-        };
-        MINIO_CLIENT_IMAGE = (import /etc/nixos/variables.nix).minio_client_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name gitlab-minio \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."minio/envs".path} \
-            --env ALIAS=local \
-            --entrypoint /entrypoint.sh \
-            ${MINIO_CLIENT_IMAGE}'
-        '';
+        EnvironmentFile = config.sops.secrets."minio/envs".path;
       };
+      environment = {
+        ALIAS = "local";
+      };
+      path = [ pkgs.getent ];
+      script = ''
+        set +e
+
+        # args: host port
+        check_port_is_open() {
+          local exit_status_code
+          ${pkgs.curl}/bin/curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+          exit_status_code=$?
+          case $exit_status_code in
+            49) return 0 ;;
+            *) return "$exit_status_code" ;;
+          esac
+        }
+
+        while true; do
+          check_port_is_open ${IP_ADDRESS} 9000
+          if [ $? == 0 ]; then
+            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
+
+            ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-artifacts
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-external-diffs
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-lfs
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-uploads
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-packages
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-dependency-proxy
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-terraform-state
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-ci-secure-files
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-pages
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-backup
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-registry
+
+            break
+          fi
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+      '';
       wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
     };
   };
@@ -239,7 +227,7 @@ in
             "${config.sops.secrets."redis/database_password_file".path}:/run/secrets/redis_password"
           ];
           environment = let
-            MINIO_REGION = config.services.minio.region;
+            MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
           in {
             GITLAB_OMNIBUS_CONFIG = ''
               external_url 'http://gitlab.${DOMAIN_NAME_INTERNAL}'
@@ -252,7 +240,7 @@ in
               gitlab_rails['object_store']['enabled'] = true
               gitlab_rails['object_store']['connection'] = {
                 'provider' => 'AWS',
-                'endpoint' => 'http://${MINIO_ENDPOINT}',
+                'endpoint' => 'http://${IP_ADDRESS}:9000',
                 'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
                 'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
@@ -271,7 +259,7 @@ in
 
               gitlab_rails['backup_upload_connection'] = {
                 'provider' => 'AWS',
-                'endpoint' => 'http://${MINIO_ENDPOINT}',
+                'endpoint' => 'http://${IP_ADDRESS}:9000',
                 'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
                 'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
@@ -299,7 +287,7 @@ in
               registry['storage'] = {
                 's3' => {
                   'provider' => 'AWS',
-                  'regionendpoint' => 'http://${MINIO_ENDPOINT}',
+                  'regionendpoint' => 'http://${IP_ADDRESS}:9000',
                   'region' => '${MINIO_REGION}',
                   'path_style' => 'true',
                   'accesskey' => File.read('/run/secrets/minio_user').gsub("\n", ""),
@@ -352,7 +340,9 @@ in
 
               prometheus_monitoring['enable'] = false
 
-              gitaly['prometheus_listen_addr'] = '0.0.0.0:9236'
+              gitaly['configuration'] = {
+                prometheus_listen_addr: '0.0.0.0:9236',
+              }
             '';
           };
           extraOptions = [
@@ -361,7 +351,7 @@ in
             "--memory-reservation=3891m"
             "--memory=4096m"
           ];
-          image = "gitlab/gitlab-ce:15.10.2-ce.0";
+          image = (import /etc/nixos/variables.nix).gitlab_image;
         };
       };
     };
@@ -553,49 +543,40 @@ in
     gitlab-1password = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
-      serviceConfig = let
-        entrypoint = pkgs.writeTextFile {
-          name = "entrypoint.sh";
-          text = ''
-            #!/bin/bash
-
-            SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | op account add \
-              --address $OP_SUBDOMAIN.1password.com \
-              --email $OP_EMAIL_ADDRESS \
-              --secret-key $OP_SECRET_KEY \
-              --signin --raw)
-
-            op item get GitLab \
-              --vault 'Local server' \
-              --session $SESSION_TOKEN > /dev/null
-
-            if [ $? != 0 ]; then
-              op item template get Login --session $SESSION_TOKEN | op item create --vault 'Local server' - \
-                --title GitLab \
-                --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
-                username=root \
-                password=$GITLAB_PASSWORD \
-                'DB connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
-                --session $SESSION_TOKEN > /dev/null
-            fi
-          '';
-          executable = true;
-        };
-        ONE_PASSWORD_IMAGE = (import /etc/nixos/variables.nix).one_password_image;
-      in {
+      serviceConfig = {
         Type = "oneshot";
-        ExecStart = ''${pkgs.bash}/bin/bash -c ' \
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} run \
-            --rm \
-            --name gitlab-1password \
-            --volume ${entrypoint}:/entrypoint.sh \
-            --env-file ${config.sops.secrets."1password".path} \
-            --env-file ${config.sops.secrets."gitlab/password_envs".path} \
-            --env-file ${config.sops.secrets."gitlab/postgres_envs".path} \
-            --entrypoint /entrypoint.sh \
-            ${ONE_PASSWORD_IMAGE}'
-        '';
+        EnvironmentFile = [
+          config.sops.secrets."1password".path
+          config.sops.secrets."gitlab/password_envs".path
+          config.sops.secrets."gitlab/postgres_envs".path
+        ];
       };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get GitLab \
+          --vault 'Local server' \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]; then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+            --title GitLab \
+            --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
+            username=root \
+            password=$GITLAB_PASSWORD \
+            'DB connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
+            --session $SESSION_TOKEN > /dev/null
+        fi
+      '';
       wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
     };
   };
@@ -676,6 +657,47 @@ in
           metrics_path = "/metrics";
         }
       ];
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      settings = {
+        logs = {
+          configs = [{
+            name = "gitlab";
+            clients = [{
+              url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+            }];
+            positions = {
+              filename = "/var/lib/private/grafana-agent/positions/gitlab.yml";
+            };
+            scrape_configs = [{
+              job_name = "journal";
+              journal = {
+                json = false;
+                max_age = "12h";
+                labels = {
+                  job = "systemd-journal";
+                };
+                path = "/var/log/journal";
+              };
+              relabel_configs = [
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  regex = "(gitlab-prepare|gitlab-minio|gitlab-postgres|${CONTAINERS_BACKEND}-gitlab|gitlab-1password).service";
+                  action = "keep";
+                }
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  target_label = "unit";
+                  action = "replace";
+                }
+              ];
+            }];
+          }];
+        };
+      };
     };
   };
 }

@@ -3,7 +3,16 @@
   hosts: server
   become: true
   gather_facts: false
+  vars:
+    minio_repository: minio/minio
+    pgadmin_repository: dpage/pgadmin4
+    redisinsight_repository: redislabs/redisinsight
+    gitlab_repository: gitlab/gitlab-ce
+
   tasks:
+
+    # ------------------- nixos ------------------- #
+
     - name: find the current version of nixos
       ansible.builtin.shell: nixos-version | cut -f 1-2 -d "."
       register: nixos_current_version
@@ -23,19 +32,130 @@
 
     - name: display output if warning occurs
       ansible.builtin.debug:
-        msg: "{{ build_result }}"
+        msg: "{{ build_result.stderr_lines }}"
       when:
         - build_result.changed
         - "'warning' in build_result.stderr"
 
+    - name: pause to confirm the operating system upgrade
+      ansible.builtin.pause:
+        prompt: "Confirm the operating system upgrade from {{ nixos_current_version.stdout }} to {{ nixos_latest_version.stdout }} version (yes/no)"
+      register: confirm_upgrade
+      when: build_result.changed
+
     - name: switch to the latest stable nixos channel for servers
       ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ nixos_latest_version.stdout }}-small nixos
       when:
-        - build_result.changed
-        - "'warning' not in build_result.stderr"
+        - confirm_upgrade.user_input is defined
+        - confirm_upgrade.user_input | bool
 
     - name: upgrade nixos to the latest version
       ansible.builtin.command: nixos-rebuild switch --upgrade
       when:
-        - build_result.changed
-        - "'warning' not in build_result.stderr"
+        - confirm_upgrade.user_input is defined
+        - confirm_upgrade.user_input | bool
+
+    # ------------------- docker hub ------------------- #
+
+    - name: split a docker repository name
+      ansible.builtin.set_fact:
+        minio_repo_split: "{{ minio_repository.split('/') }}"
+        pgadmin_repo_split: "{{ pgadmin_repository.split('/') }}"
+        redisinsight_repo_split: "{{ redisinsight_repository.split('/') }}"
+        gitlab_repo_split: "{{ gitlab_repository.split('/') }}"
+
+    - name: find digest of the latest docker image
+      ansible.builtin.shell: |
+        curl --silent --request GET https://hub.docker.com/v2/namespaces/{{ item.namespace }}/repositories/{{ item.repository }}/tags |
+          jq '.results[] |
+            select(.name | contains ("latest")) |
+              .images[] |
+                select(.architecture | contains ("amd64")) |
+          .digest'
+      loop:
+        - {
+            namespace: '{{ minio_repo_split.0 }}',
+            repository: '{{ minio_repo_split.1 }}'
+          }
+        - {
+            namespace: '{{ pgadmin_repo_split.0 }}',
+            repository: '{{ pgadmin_repo_split.1 }}'
+          }
+        - {
+            namespace: '{{ redisinsight_repo_split.0 }}',
+            repository: '{{ redisinsight_repo_split.1 }}'
+          }
+        - {
+            namespace: '{{ gitlab_repo_split.0 }}',
+            repository: '{{ gitlab_repo_split.1 }}'
+          }
+      register: docker_image_digest
+      delegate_to: localhost
+      changed_when: false
+      become: false
+
+    - name: find a fixed tag by digest
+      ansible.builtin.shell: |
+        curl --silent --request GET https://hub.docker.com/v2/namespaces/{{ item.namespace }}/repositories/{{ item.repository }}/tags |
+          jq '.results[] |
+            select(.images[] |
+              select(.digest == "{{ item.digest }}")) |
+          .name | select(. | test("{{ item.filter }}"))'
+      loop:
+        - {
+            namespace: '{{ minio_repo_split.0 }}',
+            repository: '{{ minio_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.0.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # RELEASE.2023-08-16T20-17-30Z
+            # RELEASE.2022-01-27T03-53-02Z.hotfix.d5384ae51
+            filter: '[A-Z]\\.[0-9]+-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Z]\\.?[a-z]?\\.?[0-9a-z]?'
+          }
+        - {
+            namespace: '{{ pgadmin_repo_split.0 }}',
+            repository: '{{ pgadmin_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.1.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # 7.5
+            filter: '[0-9]\\.[0-9]'
+          }
+        - {
+            namespace: '{{ redisinsight_repo_split.0 }}',
+            repository: '{{ redisinsight_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.2.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # 1.14.0
+            filter: '[0-9]\\.[0-9]+\\.[0-9]'
+          }
+        - {
+            namespace: '{{ gitlab_repo_split.0 }}',
+            repository: '{{ gitlab_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.3.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # 16.2.4-ce.0
+            filter: '[0-9]\\.[0-9]\\.[0-9]-[a-z]+\\.[0-9]'
+          }
+      register: docker_image_tag
+      delegate_to: localhost
+      changed_when: false
+      become: false
+
+    - name: set a docker image
+      ansible.builtin.set_fact:
+        minio_image: "{{ minio_repository }}:{{ docker_image_tag.results.0.stdout | replace('\"','') }}"
+        pgadmin_image: "{{ pgadmin_repository }}:{{ docker_image_tag.results.1.stdout | replace('\"','') }}"
+        redisinsight_image: "{{ redisinsight_repository }}:{{ docker_image_tag.results.2.stdout | replace('\"','') }}"
+        gitlab_image: "{{ gitlab_repository }}:{{ docker_image_tag.results.3.stdout | replace('\"','') }}"
+
+    - name: update a docker image
+      ansible.builtin.replace:
+        path: ../configs/variables.nix
+        regexp: '({{ item.regexp }}\s=\s").*(";)'
+        replace: '\1{{ item.replace }}\2'
+      loop:
+        - { regexp: 'minio_image', replace: '{{ minio_image }}' }
+        - { regexp: 'pgadmin_image', replace: '{{ pgadmin_image }}' }
+        - { regexp: 'redisinsight_image', replace: '{{ redisinsight_image }}' }
+        - { regexp: 'gitlab_image', replace: '{{ gitlab_image }}' }
+      delegate_to: localhost
+      become: false
