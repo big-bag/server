@@ -10,15 +10,18 @@
           - '!all'
           - '!min'
           - default_ipv4
+          - dns
         filter:
           - default_ipv4
+          - dns
 
     - name: create a file
       ansible.builtin.copy:
         content: |
           {
-            ip_address = "{{ ansible_default_ipv4.address }}";
+            ip_address = "{{ ansible_facts.default_ipv4.address }}";
             ssh_port = {{ hostvars['localhost']['server_ssh_port_generated'] }};
             domain_name_internal = "{{ hostvars['localhost']['vault_domain_name_internal'] }}";
+            nameserver = "{{ ansible_facts.dns.nameservers.0 }}";
           }
         dest: /etc/nixos/connection-parameters.nix

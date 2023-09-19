@@ -70,6 +70,12 @@ in
     };
   };
 
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 9000 ];
+    };
+  };
+
   services = {
     nginx = {
       upstreams."minio_console" = {

@@ -37,7 +37,15 @@
           - '!all'
           - '!min'
 
-    - name: copy ca and client certificates from server to local machine
+    - name: get stats of ca and client certificate files
+      ansible.builtin.stat:
+        path: /mnt/ssd/services/ca/{{ item }}
+      loop:
+        - ca.pem
+        - user.pfx
+      register: certificates
+
+    - name: copy ca and client certificate from server to local machine
       ansible.posix.synchronize:
         mode: pull
         src: /mnt/ssd/services/ca/{{ item }}
@@ -45,3 +53,6 @@
       loop:
         - ca.pem
         - user.pfx
+      when:
+        - certificates.results.0.stat.exists
+        - certificates.results.1.stat.exists

@@ -8,8 +8,8 @@
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "f81e73cf9a4ef4b949b9225be3daa1e586c096da";
-      SOPS_NIX_SHA256 = "+e9dD67mpGLBhhqdv7A7i1g/r2AT/PmqthWaYHyVZR4=";
+      SOPS_NIX_COMMIT = "4d284ca58ce5f48df79d99ab75b1ae3c3032b9ad";
+      SOPS_NIX_SHA256 = "xA7RVYauw4vnkceUl2aIDONfwuhnUbxVavbCvNS9ed4=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
@@ -270,6 +270,7 @@
       in ''
         ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/ca
         ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/nginx
+        ${pkgs.coreutils}/bin/mkdir -p /tmp/nginx_client_body
 
         cd /mnt/ssd/services/ca
 
@@ -378,13 +379,19 @@
     };
   };
 
+  # generated 2023-09-18, Mozilla Guideline v5.7, nginx 1.24.0, OpenSSL 3.0.10, modern configuration
+  # https://ssl-config.mozilla.org/#server=nginx&version=1.24.0&config=modern&openssl=3.0.10&guideline=5.7
   services.nginx = let
     IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
     DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+    NAMESERVER = (import ./connection-parameters.nix).nameserver;
   in {
     enable = true;
     user = "nginx";
     group = "nginx";
+    appendHttpConfig = "client_body_temp_path /tmp/nginx_client_body 1 2;";
+    sslProtocols = "TLSv1.3";
+    sslCiphers = null;
     sslDhparam = "${config.security.dhparams.path}/nginx.pem";
     virtualHosts.${DOMAIN_NAME_INTERNAL} = {
       listen = [
@@ -392,16 +399,36 @@
         { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
       ];
 
+      http2 = true;
       kTLS = true;
       forceSSL = true;
       sslCertificate = "/mnt/ssd/services/nginx/server.crt";
       sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+      # verify chain of trust of OCSP response using Root CA and Intermediate certs
+      sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
-      # Authentication based on a client certificate
       extraConfig = ''
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+        ssl_session_tickets off;
+
+        ssl_prefer_server_ciphers off;
+
+        # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+        add_header Strict-Transport-Security "max-age=63072000" always;
+
+        # OCSP stapling
+        ssl_stapling on;
+        ssl_stapling_verify on;
+
+        # Authentication based on a client certificate
         ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
         ssl_verify_client      on;
       '';
+    };
+
+    resolver = {
+      addresses = ["${NAMESERVER}:53"];
     };
   };
 

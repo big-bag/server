@@ -409,13 +409,29 @@ in
           { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
         ];
 
+        http2 = true;
         kTLS = true;
         forceSSL = true;
         sslCertificate = "/mnt/ssd/services/nginx/server.crt";
         sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # verify chain of trust of OCSP response using Root CA and Intermediate certs
+        sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
-        # Authentication based on a client certificate
         extraConfig = ''
+          ssl_session_timeout 1d;
+          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+          ssl_session_tickets off;
+
+          ssl_prefer_server_ciphers off;
+
+          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+          add_header Strict-Transport-Security "max-age=63072000" always;
+
+          # OCSP stapling
+          ssl_stapling on;
+          ssl_stapling_verify on;
+
+          # Authentication based on a client certificate
           ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
           ssl_verify_client      on;
         '';
@@ -456,13 +472,29 @@ in
           { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
         ];
 
+        http2 = true;
         kTLS = true;
         forceSSL = true;
         sslCertificate = "/mnt/ssd/services/nginx/server.crt";
         sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # verify chain of trust of OCSP response using Root CA and Intermediate certs
+        sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
-        # Authentication based on a client certificate
         extraConfig = ''
+          ssl_session_timeout 1d;
+          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+          ssl_session_tickets off;
+
+          ssl_prefer_server_ciphers off;
+
+          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+          add_header Strict-Transport-Security "max-age=63072000" always;
+
+          # OCSP stapling
+          ssl_stapling on;
+          ssl_stapling_verify on;
+
+          # Authentication based on a client certificate
           ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
           ssl_verify_client      on;
         '';
@@ -493,13 +525,29 @@ in
           { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
         ];
 
+        http2 = true;
         kTLS = true;
         forceSSL = true;
         sslCertificate = "/mnt/ssd/services/nginx/server.crt";
         sslCertificateKey = "/mnt/ssd/services/nginx/server.key";
+        # verify chain of trust of OCSP response using Root CA and Intermediate certs
+        sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
-        # Authentication based on a client certificate
         extraConfig = ''
+          ssl_session_timeout 1d;
+          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+          ssl_session_tickets off;
+
+          ssl_prefer_server_ciphers off;
+
+          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+          add_header Strict-Transport-Security "max-age=63072000" always;
+
+          # OCSP stapling
+          ssl_stapling on;
+          ssl_stapling_verify on;
+
+          # Authentication based on a client certificate
           ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
           ssl_verify_client      on;
         '';
