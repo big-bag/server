@@ -33,7 +33,7 @@
       "collapsed": false,
       "datasource": {
         "type": "loki",
-        "uid": "1q5yMjJo-"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
       },
       "gridPos": {
         "h": 1,
@@ -48,7 +48,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "1q5yMjJo-"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
           },
           "refId": "A"
         }
@@ -97,7 +97,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -195,7 +195,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -294,7 +294,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -389,7 +389,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -449,7 +449,7 @@
       "collapsed": false,
       "datasource": {
         "type": "loki",
-        "uid": "1q5yMjJo-"
+        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
       },
       "gridPos": {
         "h": 1,
@@ -464,7 +464,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "1q5yMjJo-"
+            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
           },
           "refId": "A"
         }
@@ -514,7 +514,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -611,7 +611,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -710,7 +710,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -825,7 +825,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "9.5.7",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -885,7 +885,7 @@
     }
   ],
   "refresh": "1m",
-  "schemaVersion": 37,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [
     "managed",
@@ -896,7 +896,7 @@
     "list": [
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "Mimir",
           "value": "Mimir"
         },
@@ -908,7 +908,7 @@
         "query": "prometheus",
         "queryValue": "",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },

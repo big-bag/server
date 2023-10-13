@@ -30,18 +30,61 @@ in
     };
   };
 
+  sops.secrets = {
+    "gitlab/minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     gitlab-minio = {
       before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = [
+          config.sops.secrets."minio/envs".path
+          config.sops.secrets."gitlab/minio/envs".path
+        ];
       };
       environment = {
         ALIAS = "local";
       };
       path = [ pkgs.getent ];
-      script = ''
+      script = let
+        policy_json = pkgs.writeTextFile {
+          name = "policy.json";
+          text = ''
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": [
+                            "arn:aws:s3:::gitlab-artifacts/*",
+                            "arn:aws:s3:::gitlab-external-diffs/*",
+                            "arn:aws:s3:::gitlab-lfs/*",
+                            "arn:aws:s3:::gitlab-uploads/*",
+                            "arn:aws:s3:::gitlab-packages/*",
+                            "arn:aws:s3:::gitlab-dependency-proxy/*",
+                            "arn:aws:s3:::gitlab-terraform-state/*",
+                            "arn:aws:s3:::gitlab-ci-secure-files/*",
+                            "arn:aws:s3:::gitlab-pages/*",
+                            "arn:aws:s3:::gitlab-backup/*",
+                            "arn:aws:s3:::gitlab-registry/*"
+                        ]
+                    }
+                ]
+            }
+          '';
+        };
+      in ''
         set +e
 
         # args: host port
@@ -58,8 +101,6 @@ in
         while true; do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
-            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
-
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
 
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-artifacts
@@ -74,9 +115,30 @@ in
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-backup
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-registry
 
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $GITLAB_MINIO_ACCESS_KEY
+
+            if [ $? != 0 ]
+            then
+              ${pkgs.minio-client}/bin/mc admin user svcacct add \
+                --access-key $GITLAB_MINIO_ACCESS_KEY \
+                --secret-key $GITLAB_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                --comment gitlab \
+                $ALIAS \
+                $MINIO_ROOT_USER > /dev/null
+
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$GITLAB_MINIO_ACCESS_KEY\`."
+            else
+              ${pkgs.minio-client}/bin/mc admin user svcacct edit \
+                --secret-key $GITLAB_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                $ALIAS \
+                $GITLAB_MINIO_ACCESS_KEY
+            fi
+
             break
           fi
-          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
       '';
@@ -85,7 +147,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/postgres_envs" = {
+    "gitlab/postgres/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -98,15 +160,14 @@ in
       before = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."gitlab/postgres_envs".path;
+        EnvironmentFile = config.sops.secrets."gitlab/postgres/envs".path;
       };
       script = ''
-        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        ${pkgs.coreutils}/bin/echo "Creating a GitLab account in the PostgreSQL"
         ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
           DO
           \$do$
@@ -133,6 +194,7 @@ in
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
           CREATE EXTENSION IF NOT EXISTS btree_gist;
         EOSQL
+        ${pkgs.coreutils}/bin/echo "GitLab account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -142,7 +204,7 @@ in
   };
 
   sops.secrets = {
-    "minio/file/username" = {
+    "gitlab/minio/file/access_key" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -150,7 +212,7 @@ in
   };
 
   sops.secrets = {
-    "minio/file/password" = {
+    "gitlab/minio/file/secret_key" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -158,7 +220,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/password_file" = {
+    "gitlab/password/file" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -174,7 +236,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/postgres_file/username" = {
+    "gitlab/postgres/file/username" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -182,7 +244,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/postgres_file/password" = {
+    "gitlab/postgres/file/password" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -190,7 +252,7 @@ in
   };
 
   sops.secrets = {
-    "redis/database_password_file" = {
+    "redis/database_password/file" = {
       mode = "0400";
       owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
       group = config.services.redis.servers.${REDIS_INSTANCE}.user;
@@ -218,13 +280,13 @@ in
             "/mnt/ssd/services/gitlab/config:/etc/gitlab"
             "/mnt/ssd/services/gitlab/logs:/var/log/gitlab"
             "/mnt/ssd/services/gitlab/data:/var/opt/gitlab"
-            "${config.sops.secrets."minio/file/username".path}:/run/secrets/minio_user"
-            "${config.sops.secrets."minio/file/password".path}:/run/secrets/minio_password"
-            "${config.sops.secrets."gitlab/password_file".path}:/run/secrets/gitlab_password"
+            "${config.sops.secrets."gitlab/minio/file/access_key".path}:/run/secrets/minio_access_key"
+            "${config.sops.secrets."gitlab/minio/file/secret_key".path}:/run/secrets/minio_secret_key"
+            "${config.sops.secrets."gitlab/password/file".path}:/run/secrets/gitlab_password"
             "${config.sops.secrets."gitlab/token".path}:/run/secrets/gitlab_token"
-            "${config.sops.secrets."gitlab/postgres_file/username".path}:/run/secrets/postgres_username"
-            "${config.sops.secrets."gitlab/postgres_file/password".path}:/run/secrets/postgres_password"
-            "${config.sops.secrets."redis/database_password_file".path}:/run/secrets/redis_password"
+            "${config.sops.secrets."gitlab/postgres/file/username".path}:/run/secrets/postgres_username"
+            "${config.sops.secrets."gitlab/postgres/file/password".path}:/run/secrets/postgres_password"
+            "${config.sops.secrets."redis/database_password/file".path}:/run/secrets/redis_password"
           ];
           environment = let
             MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
@@ -243,8 +305,8 @@ in
                 'endpoint' => 'http://${IP_ADDRESS}:9000',
                 'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
-                'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
-                'aws_secret_access_key' => File.read('/run/secrets/minio_password').gsub("\n", "")
+                'aws_access_key_id' => File.read('/run/secrets/minio_access_key').gsub("\n", ""),
+                'aws_secret_access_key' => File.read('/run/secrets/minio_secret_key').gsub("\n", "")
               }
               gitlab_rails['object_store']['proxy_download'] = true
               gitlab_rails['object_store']['objects']['artifacts']['bucket'] = 'gitlab-artifacts'
@@ -262,8 +324,8 @@ in
                 'endpoint' => 'http://${IP_ADDRESS}:9000',
                 'region' => '${MINIO_REGION}',
                 'path_style' => 'true',
-                'aws_access_key_id' => File.read('/run/secrets/minio_user').gsub("\n", ""),
-                'aws_secret_access_key' => File.read('/run/secrets/minio_password').gsub("\n", "")
+                'aws_access_key_id' => File.read('/run/secrets/minio_access_key').gsub("\n", ""),
+                'aws_secret_access_key' => File.read('/run/secrets/minio_secret_key').gsub("\n", "")
               }
               gitlab_rails['backup_upload_remote_directory'] = 'gitlab-backup'
 
@@ -290,8 +352,8 @@ in
                   'regionendpoint' => 'http://${IP_ADDRESS}:9000',
                   'region' => '${MINIO_REGION}',
                   'path_style' => 'true',
-                  'accesskey' => File.read('/run/secrets/minio_user').gsub("\n", ""),
-                  'secretkey' => File.read('/run/secrets/minio_password').gsub("\n", ""),
+                  'accesskey' => File.read('/run/secrets/minio_access_key').gsub("\n", ""),
+                  'secretkey' => File.read('/run/secrets/minio_secret_key').gsub("\n", ""),
                   'bucket' => 'gitlab-registry'
                 }
               }
@@ -432,8 +494,8 @@ in
           ssl_stapling_verify on;
 
           # Authentication based on a client certificate
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
+          #ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+          #ssl_verify_client      on;
         '';
 
         locations."/" = {
@@ -572,7 +634,7 @@ in
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -580,7 +642,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/password_envs" = {
+    "gitlab/password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -590,13 +652,14 @@ in
   systemd.services = {
     gitlab-1password = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
-          config.sops.secrets."gitlab/password_envs".path
-          config.sops.secrets."gitlab/postgres_envs".path
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."gitlab/password/envs".path
+          config.sops.secrets."gitlab/minio/envs".path
+          config.sops.secrets."gitlab/postgres/envs".path
         ];
       };
       environment = {
@@ -612,17 +675,34 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get GitLab \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title GitLab \
             --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
             username=root \
             password=$GITLAB_PASSWORD \
-            'DB connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
+            MinIO.'Access Key'[text]=$GITLAB_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$GITLAB_MINIO_SECRET_KEY \
+            PostgreSQL.'Connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit GitLab \
+            --vault Server \
+            --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
+            username=root \
+            password=$GITLAB_PASSWORD \
+            MinIO.'Access Key'[text]=$GITLAB_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$GITLAB_MINIO_SECRET_KEY \
+            PostgreSQL.'Connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];

@@ -125,7 +125,7 @@ in
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -135,11 +135,11 @@ in
   systemd.services = {
     minio-1password = {
       after = [ "${CONTAINERS_BACKEND}-minio.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
+          config.sops.secrets."1password/envs".path
           config.sops.secrets."minio/envs".path
         ];
       };
@@ -156,17 +156,30 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get MinIO \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title MinIO \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/minio \
             username=$MINIO_ROOT_USER \
             password=$MINIO_ROOT_PASSWORD \
             notesPlain='username -> Access Key, password -> Secret Key' \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit MinIO \
+            --vault Server \
+            website[url]=http://${DOMAIN_NAME_INTERNAL}/minio \
+            username=$MINIO_ROOT_USER \
+            password=$MINIO_ROOT_PASSWORD \
+            notesPlain='username -> Access Key, password -> Secret Key' \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-minio.service" ];

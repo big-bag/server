@@ -78,6 +78,13 @@
             replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_prometheus'] }}{% endraw %}"
           with_fileglob: ../dashboards/Prometheus/*
 
+        - name: change loki datasource uid to variable
+          ansible.builtin.replace:
+            path: "{{ item }}"
+            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}{% endraw %}"
+          with_fileglob: ../dashboards/GitLab/*
+
         - name: reset location number in folder
           ansible.builtin.replace:
             path: "{{ item }}"

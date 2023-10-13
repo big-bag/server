@@ -8,8 +8,8 @@
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "4d284ca58ce5f48df79d99ab75b1ae3c3032b9ad";
-      SOPS_NIX_SHA256 = "xA7RVYauw4vnkceUl2aIDONfwuhnUbxVavbCvNS9ed4=";
+      SOPS_NIX_COMMIT = "f995ea159252a53b25fa99824f2891e3b479d511";
+      SOPS_NIX_SHA256 = "xxp2sB+4vqB6S6zC/L5J8LlRKgVbgIZOcYl9/TDrEzI=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
@@ -278,7 +278,7 @@
         export COMMON_NAME=$(${pkgs.coreutils}/bin/echo $DOMAIN_NAME_INTERNAL | ${pkgs.gnused}/bin/sed 's/\./-/g')
 
         if ! [ -f ca.crt ]; then
-          ${pkgs.coreutils}/bin/echo "Creating Self-Signed Root CA certificate and key"
+          ${pkgs.coreutils}/bin/echo "Creating Self-Signed Root CA certificate and key."
           ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_cnf} > ca.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
@@ -292,7 +292,7 @@
         fi
 
         if ! [ -f ca.pem ]; then
-          ${pkgs.coreutils}/bin/echo "Creating Intermediate CA certificate and key"
+          ${pkgs.coreutils}/bin/echo "Creating Intermediate CA certificate and key."
           ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_intermediate_cnf} > ca-intermediate.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
@@ -313,12 +313,12 @@
             -extensions v3_req \
             -days 365 # 1 year
           ${pkgs.openssl}/bin/openssl verify -CAfile ca.crt ca_int.crt
-          ${pkgs.coreutils}/bin/echo "Creating CA chain"
+          ${pkgs.coreutils}/bin/echo "Creating CA chain."
           ${pkgs.coreutils}/bin/cat ca_int.crt ca.crt > ca.pem
         fi
 
         if ! [ -f server.crt ]; then
-          ${pkgs.coreutils}/bin/echo "Creating server (Nginx) certificate and key"
+          ${pkgs.coreutils}/bin/echo "Creating server (Nginx) certificate and key."
           ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${server_cnf} > server.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
@@ -341,7 +341,7 @@
         fi
 
         if ! [ -f user.pfx ]; then
-          ${pkgs.coreutils}/bin/echo "Creating user certificate and key"
+          ${pkgs.coreutils}/bin/echo "Creating user certificate and key."
           ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${user_cnf} > user.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \

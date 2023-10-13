@@ -131,7 +131,7 @@
 
     - name: check if vault in 1password has been created
       ansible.builtin.command: |
-        op vault get 'Local server' \
+        op vault get Server \
           --session {{ op_session_token.stdout }}
       register: vault_created
       delegate_to: localhost
@@ -142,7 +142,7 @@
 
     - name: create a vault
       ansible.builtin.command: |
-        op vault create 'Local server' \
+        op vault create Server \
           --session {{ op_session_token.stdout }}
       delegate_to: localhost
       become: false
@@ -151,7 +151,7 @@
     - name: check if item in vault has been created
       ansible.builtin.command: |
         op item get NixOS \
-          --vault 'Local server' \
+          --vault Server \
           --session {{ op_session_token.stdout }}
       register: item_created
       delegate_to: localhost
@@ -162,17 +162,32 @@
 
     - name: create an item in vault with credentials for technical account
       ansible.builtin.shell: |
-        op item template get Server --session {{ op_session_token.stdout }} | op item create --vault 'Local server' - \
+        op item template get Server --session {{ op_session_token.stdout }} | op item create --vault Server - \
           --title NixOS \
           'Root account'.username[text]=root \
           'Root account'.password[password]='{{ hostvars['localhost']['vault_server_root_account_password'] }}' \
           'Technical account'.'connection command'[text]="ssh {{ hostvars['localhost']['vault_server_technical_account_username'] }}@{{ hostvars['localhost']['vault_server_ip_address'] }} -i id_ed25519 -p {{ hostvars['localhost']['server_ssh_port_generated'] }}" \
-          'Technical account'.[file]=../id_ed25519 \
+          'Technical account'.id_ed25519[file]=../id_ed25519 \
           --session {{ op_session_token.stdout }}
       delegate_to: localhost
       become: false
       no_log: true
       when: item_created.rc != 0
+
+    - name: edit an item in vault with credentials for technical account
+      ansible.builtin.shell: |
+        op item edit NixOS \
+          --vault Server \
+          'Root account'.username[text]=root \
+          'Root account'.password[password]='{{ hostvars['localhost']['vault_server_root_account_password'] }}' \
+          'Technical account'.'connection command'[text]="ssh {{ hostvars['localhost']['vault_server_technical_account_username'] }}@{{ hostvars['localhost']['vault_server_ip_address'] }} -i id_ed25519 -p {{ hostvars['localhost']['server_ssh_port_generated'] }}" \
+          'Technical account'.id_ed25519[file]=../id_ed25519 \
+          --session {{ op_session_token.stdout }}
+      delegate_to: localhost
+      changed_when: false
+      become: false
+      no_log: true
+      when: item_created.rc == 0
 
     - name: add a host to the ansible-playbook in-memory inventory
       ansible.builtin.add_host:

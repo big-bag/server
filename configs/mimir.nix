@@ -35,18 +35,62 @@ in
     };
   };
 
+  sops.secrets = {
+    "mimir/minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     mimir-minio = {
       before = [ "mimir.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = [
+          config.sops.secrets."minio/envs".path
+          config.sops.secrets."mimir/minio/envs".path
+        ];
       };
       environment = {
         ALIAS = "local";
       };
       path = [ pkgs.getent ];
-      script = ''
+      script = let
+        policy_json = pkgs.writeTextFile {
+          name = "policy.json";
+          text = ''
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "s3:ListBucket",
+                        "Resource": [
+                            "arn:aws:s3:::mimir-blocks",
+                            "arn:aws:s3:::mimir-ruler",
+                            "arn:aws:s3:::mimir-alertmanager"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": [
+                            "arn:aws:s3:::mimir-blocks/*",
+                            "arn:aws:s3:::mimir-ruler/*",
+                            "arn:aws:s3:::mimir-alertmanager/*"
+                        ]
+                    }
+                ]
+            }
+          '';
+        };
+      in ''
         set +e
 
         # args: host port
@@ -63,17 +107,36 @@ in
         while true; do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
-            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
-
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
 
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-blocks
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-ruler
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-alertmanager
 
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MIMIR_MINIO_ACCESS_KEY
+
+            if [ $? != 0 ]
+            then
+              ${pkgs.minio-client}/bin/mc admin user svcacct add \
+                --access-key $MIMIR_MINIO_ACCESS_KEY \
+                --secret-key $MIMIR_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                --comment mimir \
+                $ALIAS \
+                $MINIO_ROOT_USER > /dev/null
+
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MIMIR_MINIO_ACCESS_KEY\`."
+            else
+              ${pkgs.minio-client}/bin/mc admin user svcacct edit \
+                --secret-key $MIMIR_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                $ALIAS \
+                $MIMIR_MINIO_ACCESS_KEY
+            fi
+
             break
           fi
-          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
       '';
@@ -145,8 +208,8 @@ in
               s3:
                 endpoint: ${IP_ADDRESS}:9000
                 region: ${MINIO_REGION}
-                secret_access_key: ''${MINIO_ROOT_PASSWORD}
-                access_key_id: ''${MINIO_ROOT_USER}
+                secret_access_key: ''${MIMIR_MINIO_SECRET_KEY}
+                access_key_id: ''${MIMIR_MINIO_ACCESS_KEY}
                 insecure: true
         '';
       };
@@ -159,7 +222,7 @@ in
   systemd.services = {
     mimir = {
       serviceConfig = {
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = config.sops.secrets."mimir/minio/envs".path;
         ExecStart = pkgs.lib.mkForce ''
           ${pkgs.mimir}/bin/mimir \
             -config.file=${config.services.mimir.configFile} \
@@ -174,7 +237,7 @@ in
   };
 
   sops.secrets = {
-    "mimir/nginx_file" = {
+    "mimir/nginx/file" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -186,14 +249,14 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/mimir/" = {
           proxyPass = "http://127.0.0.1:9009";
-          basicAuthFile = config.sops.secrets."mimir/nginx_file".path;
+          basicAuthFile = config.sops.secrets."mimir/nginx/file".path;
         };
       };
     };
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -201,7 +264,7 @@ in
   };
 
   sops.secrets = {
-    "mimir/nginx_envs" = {
+    "mimir/nginx/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -211,12 +274,13 @@ in
   systemd.services = {
     mimir-1password = {
       after = [ "mimir.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
-          config.sops.secrets."mimir/nginx_envs".path
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."mimir/nginx/envs".path
+          config.sops.secrets."mimir/minio/envs".path
         ];
       };
       environment = {
@@ -232,16 +296,32 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get Mimir \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Mimir \
             --url http://${DOMAIN_NAME_INTERNAL}/mimir \
             username=$MIMIR_NGINX_USERNAME \
             password=$MIMIR_NGINX_PASSWORD \
+            MinIO.'Access Key'[text]=$MIMIR_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MIMIR_MINIO_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit Mimir \
+            --vault Server \
+            --url http://${DOMAIN_NAME_INTERNAL}/mimir \
+            username=$MIMIR_NGINX_USERNAME \
+            password=$MIMIR_NGINX_PASSWORD \
+            MinIO.'Access Key'[text]=$MIMIR_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MIMIR_MINIO_SECRET_KEY \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "mimir.service" ];

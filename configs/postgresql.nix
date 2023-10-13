@@ -44,9 +44,10 @@ in
         host    all             all             172.17.0.0/16           md5
       '';
       settings = {
-        max_connections = 100;              # (change requires restart)
+        max_connections = 60;               # (change requires restart)
         shared_buffers = "512MB";           # min 128kB (change requires restart)
-        work_mem = "1310kB";                # min 64kB
+        huge_pages = "off";                 # on, off, or try (change requires restart)
+        work_mem = "2184kB";                # min 64kB
         maintenance_work_mem = "128MB";     # min 1MB
         effective_io_concurrency = 200;     # 1-1000; 0 disables prefetching
         wal_buffers = "16MB";               # min 32kB, -1 sets based on shared_buffers (change requires restart)
@@ -77,7 +78,7 @@ in
   };
 
   sops.secrets = {
-    "pgadmin/postgres_envs" = {
+    "pgadmin/postgres/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -90,15 +91,14 @@ in
       before = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."pgadmin/postgres_envs".path;
+        EnvironmentFile = config.sops.secrets."pgadmin/postgres/envs".path;
       };
       script = ''
-        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        ${pkgs.coreutils}/bin/echo "Creating a pgAdmin account in the PostgreSQL"
         ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
           DO
           \$do$
@@ -121,6 +121,7 @@ in
 
           GRANT CONNECT ON DATABASE postgres TO $PGADMIN_POSTGRES_USERNAME;
         EOSQL
+        ${pkgs.coreutils}/bin/echo "pgAdmin account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -135,7 +136,7 @@ in
         pgadmin = {
           autoStart = true;
           ports = [ "127.0.0.1:5050:5050" ];
-          environmentFiles = [ config.sops.secrets."pgadmin/postgres_envs".path ];
+          environmentFiles = [ config.sops.secrets."pgadmin/postgres/envs".path ];
           environment = {
             PGADMIN_DEFAULT_EMAIL = "default@${DOMAIN_NAME_INTERNAL}";
             PGADMIN_DEFAULT_PASSWORD = "default";
@@ -184,7 +185,7 @@ in
   };
 
   sops.secrets = {
-    "pgadmin/nginx_file" = {
+    "pgadmin/nginx/file" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -202,14 +203,14 @@ in
             proxy_redirect off;
           '';
           proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}/";
-          basicAuthFile = config.sops.secrets."pgadmin/nginx_file".path;
+          basicAuthFile = config.sops.secrets."pgadmin/nginx/file".path;
         };
       };
     };
   };
 
   sops.secrets = {
-    "postgres/grafana_agent_envs" = {
+    "postgres/grafana_agent/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -222,15 +223,14 @@ in
       before = [ "grafana-agent.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."postgres/grafana_agent_envs".path;
+        EnvironmentFile = config.sops.secrets."postgres/grafana_agent/envs".path;
       };
       script = ''
-        ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability"
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        ${pkgs.coreutils}/bin/echo "Creating a Grafana Agent account in the PostgreSQL"
         ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
           DO
           \$do$
@@ -251,6 +251,7 @@ in
 
           GRANT pg_monitor TO $GRAFANA_AGENT_POSTGRES_USERNAME;
         EOSQL
+        ${pkgs.coreutils}/bin/echo "Grafana Agent account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -260,7 +261,7 @@ in
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -268,7 +269,7 @@ in
   };
 
   sops.secrets = {
-    "pgadmin/nginx_envs" = {
+    "pgadmin/nginx/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -278,14 +279,14 @@ in
   systemd.services = {
     postgresql-1password = {
       after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
-          config.sops.secrets."pgadmin/nginx_envs".path
-          config.sops.secrets."pgadmin/postgres_envs".path
-          config.sops.secrets."postgres/grafana_agent_envs".path
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."pgadmin/nginx/envs".path
+          config.sops.secrets."pgadmin/postgres/envs".path
+          config.sops.secrets."postgres/grafana_agent/envs".path
         ];
       };
       environment = {
@@ -301,18 +302,32 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get PostgreSQL \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title PostgreSQL \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
             username=$PGADMIN_NGINX_USERNAME \
             password=$PGADMIN_NGINX_PASSWORD \
-            'DB connection command - pgAdmin'[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
-            'DB connection command - Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
+            'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
+            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit PostgreSQL \
+            --vault Server \
+            website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
+            username=$PGADMIN_NGINX_USERNAME \
+            password=$PGADMIN_NGINX_PASSWORD \
+            'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
+            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
@@ -320,7 +335,7 @@ in
   };
 
   sops.secrets = {
-    "postgres/grafana_agent_file/username" = {
+    "postgres/grafana_agent/file/username" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -328,7 +343,7 @@ in
   };
 
   sops.secrets = {
-    "postgres/grafana_agent_file/password" = {
+    "postgres/grafana_agent/file/password" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -338,8 +353,8 @@ in
   services = {
     grafana-agent = {
       credentials = {
-        GRAFANA_AGENT_POSTGRES_USERNAME = config.sops.secrets."postgres/grafana_agent_file/username".path;
-        GRAFANA_AGENT_POSTGRES_PASSWORD = config.sops.secrets."postgres/grafana_agent_file/password".path;
+        GRAFANA_AGENT_POSTGRES_USERNAME = config.sops.secrets."postgres/grafana_agent/file/username".path;
+        GRAFANA_AGENT_POSTGRES_PASSWORD = config.sops.secrets."postgres/grafana_agent/file/password".path;
       };
 
       settings = {

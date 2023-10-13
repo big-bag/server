@@ -68,15 +68,12 @@ in
         while true; do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
-            ${pkgs.coreutils}/bin/echo "Generating prometheus bearer token in the MinIO"
-
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
             ${pkgs.minio-client}/bin/mc admin prometheus generate $ALIAS | ${pkgs.gnugrep}/bin/grep bearer_token | ${pkgs.gawk}/bin/awk '{ print $2 }' | ${pkgs.coreutils}/bin/tr -d '\n' > /mnt/ssd/monitoring/.minioScrapeBearerToken
-
+            ${pkgs.coreutils}/bin/echo "Prometheus bearer token generated successfully."
             break
           fi
-          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
       '';
@@ -143,8 +140,14 @@ in
     };
   };
 
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 9090 ];
+    };
+  };
+
   sops.secrets = {
-    "prometheus/nginx_file" = {
+    "prometheus/nginx/file" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -156,14 +159,14 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/prometheus" = {
           proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
-          basicAuthFile = config.sops.secrets."prometheus/nginx_file".path;
+          basicAuthFile = config.sops.secrets."prometheus/nginx/file".path;
         };
       };
     };
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -171,7 +174,7 @@ in
   };
 
   sops.secrets = {
-    "prometheus/nginx_envs" = {
+    "prometheus/nginx/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -181,12 +184,12 @@ in
   systemd.services = {
     prometheus-1password = {
       after = [ "prometheus.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
-          config.sops.secrets."prometheus/nginx_envs".path
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."prometheus/nginx/envs".path
         ];
       };
       environment = {
@@ -202,16 +205,28 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get Prometheus \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Prometheus \
             --url http://${DOMAIN_NAME_INTERNAL}/prometheus \
             username=$PROMETHEUS_NGINX_USERNAME \
             password=$PROMETHEUS_NGINX_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit Prometheus \
+            --vault Server \
+            --url http://${DOMAIN_NAME_INTERNAL}/prometheus \
+            username=$PROMETHEUS_NGINX_USERNAME \
+            password=$PROMETHEUS_NGINX_PASSWORD \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "prometheus.service" ];

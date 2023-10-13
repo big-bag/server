@@ -24,18 +24,54 @@ in
     };
   };
 
+  sops.secrets = {
+    "loki/minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     loki-minio = {
       before = [ "loki.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = [
+          config.sops.secrets."minio/envs".path
+          config.sops.secrets."loki/minio/envs".path
+        ];
       };
       environment = {
         ALIAS = "local";
       };
       path = [ pkgs.getent ];
-      script = ''
+      script = let
+        policy_json = pkgs.writeTextFile {
+          name = "policy.json";
+          text = ''
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "s3:ListBucket",
+                        "Resource": "arn:aws:s3:::loki"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": "arn:aws:s3:::loki/*"
+                    }
+                ]
+            }
+          '';
+        };
+      in ''
         set +e
 
         # args: host port
@@ -52,15 +88,33 @@ in
         while true; do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
-            ${pkgs.coreutils}/bin/echo "Creating buckets in the MinIO"
-
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/loki
+
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $LOKI_MINIO_ACCESS_KEY
+
+            if [ $? != 0 ]
+            then
+              ${pkgs.minio-client}/bin/mc admin user svcacct add \
+                --access-key $LOKI_MINIO_ACCESS_KEY \
+                --secret-key $LOKI_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                --comment loki \
+                $ALIAS \
+                $MINIO_ROOT_USER > /dev/null
+
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$LOKI_MINIO_ACCESS_KEY\`."
+            else
+              ${pkgs.minio-client}/bin/mc admin user svcacct edit \
+                --secret-key $LOKI_MINIO_SECRET_KEY \
+                --policy ${policy_json} \
+                $ALIAS \
+                $LOKI_MINIO_ACCESS_KEY
+            fi
 
             break
           fi
-          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability"
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
       '';
@@ -106,8 +160,8 @@ in
             bucketnames = "loki";
             endpoint = "http://${IP_ADDRESS}:9000";
             region = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
-            access_key_id = "\${MINIO_ROOT_USER}";
-            secret_access_key = "\${MINIO_ROOT_PASSWORD}";
+            access_key_id = "\${LOKI_MINIO_ACCESS_KEY}";
+            secret_access_key = "\${LOKI_MINIO_SECRET_KEY}";
             insecure = true;
           };
           boltdb_shipper = {
@@ -143,12 +197,62 @@ in
   systemd.services = {
     loki = {
       serviceConfig = {
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = config.sops.secrets."loki/minio/envs".path;
         StartLimitBurst = 0;
         CPUQuota = "2%";
         MemoryHigh = "486M";
         MemoryMax = "512M";
       };
+    };
+  };
+
+  systemd.services = {
+    loki-1password = {
+      after = [ "loki.service" ];
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."loki/minio/envs".path
+        ];
+      };
+      environment = {
+        OP_CONFIG_DIR = "~/.config/op";
+      };
+      script = ''
+        set +e
+
+        SESSION_TOKEN=$(echo "$OP_MASTER_PASSWORD" | ${pkgs._1password}/bin/op account add \
+          --address $OP_SUBDOMAIN.1password.com \
+          --email $OP_EMAIL_ADDRESS \
+          --secret-key $OP_SECRET_KEY \
+          --signin --raw)
+
+        ${pkgs._1password}/bin/op item get Loki \
+          --vault Server \
+          --session $SESSION_TOKEN > /dev/null
+
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
+            --title Loki \
+            MinIO.'Access Key'[text]=$LOKI_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$LOKI_MINIO_SECRET_KEY \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit Loki \
+            --vault Server \
+            MinIO.'Access Key'[text]=$LOKI_MINIO_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$LOKI_MINIO_SECRET_KEY \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+        fi
+      '';
+      wantedBy = [ "loki.service" ];
     };
   };
 }

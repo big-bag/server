@@ -17,7 +17,7 @@ in
   };
 
   sops.secrets = {
-    grafana = {
+    "grafana/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -115,7 +115,7 @@ in
   systemd.services = {
     grafana = {
       serviceConfig = {
-        EnvironmentFile = config.sops.secrets.grafana.path;
+        EnvironmentFile = config.sops.secrets."grafana/envs".path;
         CPUQuota = "6%";
         MemoryHigh = "1946M";
         MemoryMax = "2048M";
@@ -157,7 +157,7 @@ in
   };
 
   sops.secrets = {
-    "1password" = {
+    "1password/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -167,12 +167,12 @@ in
   systemd.services = {
     grafana-1password = {
       after = [ "grafana.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 21))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password".path
-          config.sops.secrets.grafana.path
+          config.sops.secrets."1password/envs".path
+          config.sops.secrets."grafana/envs".path
         ];
       };
       environment = {
@@ -188,16 +188,28 @@ in
           --signin --raw)
 
         ${pkgs._1password}/bin/op item get Grafana \
-          --vault 'Local server' \
+          --vault Server \
           --session $SESSION_TOKEN > /dev/null
 
-        if [ $? != 0 ]; then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault 'Local server' - \
+        if [ $? != 0 ]
+        then
+          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Grafana \
             --url http://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$GRAFANA_USERNAME \
             password=$GRAFANA_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item created successfully."
+        else
+          ${pkgs._1password}/bin/op item edit Grafana \
+            --vault Server \
+            --url http://${DOMAIN_NAME_INTERNAL}/grafana \
+            username=$GRAFANA_USERNAME \
+            password=$GRAFANA_PASSWORD \
+            --session $SESSION_TOKEN > /dev/null
+
+          ${pkgs.coreutils}/bin/echo "Item edited successfully."
         fi
       '';
       wantedBy = [ "grafana.service" ];
