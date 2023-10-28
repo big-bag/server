@@ -12,13 +12,13 @@ in
       serviceConfig = {
         Type = "oneshot";
       };
-      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/data-stores";
+      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/hdd/data-stores";
       wantedBy = [ "${CONTAINERS_BACKEND}-minio.service" ];
     };
   };
 
   sops.secrets = {
-    "minio/envs" = {
+    "minio/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -37,10 +37,10 @@ in
             "127.0.0.1:9001:9001"
           ];
           volumes = [
-            "/mnt/ssd/data-stores/minio/data:/data"
-            "/mnt/ssd/data-stores/minio/config:/config"
+            "/mnt/hdd/data-stores/minio/data:/data"
+            "/mnt/hdd/data-stores/minio/config:/config"
           ];
-          environmentFiles = [ config.sops.secrets."minio/envs".path ];
+          environmentFiles = [ config.sops.secrets."minio/application/envs".path ];
           environment = {
             MINIO_REGION = "eu-west-3";
             MINIO_BROWSER = "on";
@@ -125,7 +125,7 @@ in
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -139,8 +139,8 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
-          config.sops.secrets."minio/envs".path
+          config.sops.secrets."1password/application/envs".path
+          config.sops.secrets."minio/application/envs".path
         ];
       };
       environment = {

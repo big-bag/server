@@ -33,7 +33,7 @@ in
   };
 
   sops.secrets = {
-    "minio/envs" = {
+    "minio/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -45,7 +45,7 @@ in
       before = [ "prometheus.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."minio/envs".path;
+        EnvironmentFile = config.sops.secrets."minio/application/envs".path;
       };
       environment = {
         ALIAS = "local";
@@ -147,7 +147,7 @@ in
   };
 
   sops.secrets = {
-    "prometheus/nginx/file" = {
+    "prometheus/nginx/file/basic_auth" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -159,14 +159,14 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/prometheus" = {
           proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
-          basicAuthFile = config.sops.secrets."prometheus/nginx/file".path;
+          basicAuthFile = config.sops.secrets."prometheus/nginx/file/basic_auth".path;
         };
       };
     };
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -188,7 +188,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
+          config.sops.secrets."1password/application/envs".path
           config.sops.secrets."prometheus/nginx/envs".path
         ];
       };

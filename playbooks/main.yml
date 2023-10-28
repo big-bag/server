@@ -79,10 +79,6 @@
 - name: include a play to create secrets
   ansible.builtin.import_playbook: sops-nix.yml
 
-- name: include a play to upgrade nixos
-  ansible.builtin.import_playbook: upgrade.yml
-  tags: upgrade
-
 - name: include a play to upload dashboards to the server
   ansible.builtin.import_playbook: dashboards.yml
   tags: dashboards
@@ -108,19 +104,12 @@
         rsync_opts: "--ignore-existing"
       tags: prepare
 
-- name: configure github repository version
-  hosts: localhost
-  become: false
-  gather_facts: false
-  tasks:
-    - name: configure hash of the github repository
-      ansible.builtin.blockinfile:
-        path: ../configs/configuration.nix
-        insertafter: 'imports\s='
-        block: |2
-              let
-                SOPS_NIX_COMMIT = "{{ sops_nix_commit.stdout }}";
-                SOPS_NIX_SHA256 = "{{ sops_nix_sha256.sha256 }}";
-              in
-        marker: "    # {mark} ANSIBLE MANAGED BLOCK GITHUB HASH"
-      tags: prepare
+- name: include a play to upgrade nixos
+  ansible.builtin.import_playbook: upgrade-nixos.yml
+  tags: upgrade
+
+- name: include a play to upgrade services
+  ansible.builtin.import_playbook: upgrade-services.yml
+  tags:
+    - prepare
+    - upgrade

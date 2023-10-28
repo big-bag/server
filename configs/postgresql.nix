@@ -130,22 +130,29 @@ in
     };
   };
 
+  sops.secrets = {
+    "pgadmin/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   virtualisation = {
     oci-containers = {
       containers = {
         pgadmin = {
           autoStart = true;
           ports = [ "127.0.0.1:5050:5050" ];
-          environmentFiles = [ config.sops.secrets."pgadmin/postgres/envs".path ];
+          environmentFiles = [
+            config.sops.secrets."pgadmin/application/envs".path
+            config.sops.secrets."pgadmin/postgres/envs".path
+          ];
           environment = {
-            PGADMIN_DEFAULT_EMAIL = "default@${DOMAIN_NAME_INTERNAL}";
-            PGADMIN_DEFAULT_PASSWORD = "default";
             PGADMIN_DISABLE_POSTFIX = "True";
             PGADMIN_LISTEN_ADDRESS = "0.0.0.0";
             PGADMIN_LISTEN_PORT = "5050";
             PGADMIN_SERVER_JSON_FILE = "/var/lib/pgadmin/servers.json";
-            PGADMIN_CONFIG_SERVER_MODE = "False";
-            PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED = "False";
           };
           entrypoint = "/bin/sh";
           extraOptions = [
@@ -165,7 +172,7 @@ in
                           \"Port\": ${toString config.services.postgresql.port},
                           \"MaintenanceDB\": \"postgres\",
                           \"Username\": \"$PGADMIN_POSTGRES_USERNAME\",
-                          \"PassFile\": \"/var/lib/pgadmin/.pgpass\"
+                          \"PassFile\": \"/.pgpass\"
                       }
                   }
               }
@@ -174,21 +181,19 @@ in
           in [
             "-c" "
               echo \"${SERVERS}\" > /var/lib/pgadmin/servers.json
-              echo \"${PG_PASS}\" > /var/lib/pgadmin/.pgpass
-              chmod 0600 /var/lib/pgadmin/.pgpass
+              export HOME_DIR=$(echo $PGADMIN_DEFAULT_EMAIL | sed 's/@/_/')
+
+              mkdir -p /var/lib/pgadmin/storage/$HOME_DIR
+              chmod 0700 /var/lib/pgadmin/storage/$HOME_DIR
+
+              echo \"${PG_PASS}\" > /var/lib/pgadmin/storage/$HOME_DIR/.pgpass
+              chmod 0600 /var/lib/pgadmin/storage/$HOME_DIR/.pgpass
+
               /entrypoint.sh
             "
           ];
         };
       };
-    };
-  };
-
-  sops.secrets = {
-    "pgadmin/nginx/file" = {
-      mode = "0400";
-      owner = config.services.nginx.user;
-      group = config.services.nginx.group;
     };
   };
 
@@ -203,7 +208,6 @@ in
             proxy_redirect off;
           '';
           proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}/";
-          basicAuthFile = config.sops.secrets."pgadmin/nginx/file".path;
         };
       };
     };
@@ -261,15 +265,7 @@ in
   };
 
   sops.secrets = {
-    "1password/envs" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  sops.secrets = {
-    "pgadmin/nginx/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -283,8 +279,8 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
-          config.sops.secrets."pgadmin/nginx/envs".path
+          config.sops.secrets."1password/application/envs".path
+          config.sops.secrets."pgadmin/application/envs".path
           config.sops.secrets."pgadmin/postgres/envs".path
           config.sops.secrets."postgres/grafana_agent/envs".path
         ];
@@ -310,8 +306,8 @@ in
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title PostgreSQL \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
-            username=$PGADMIN_NGINX_USERNAME \
-            password=$PGADMIN_NGINX_PASSWORD \
+            username=$PGADMIN_DEFAULT_EMAIL \
+            password=$PGADMIN_DEFAULT_PASSWORD \
             'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
             'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
             --session $SESSION_TOKEN > /dev/null
@@ -321,8 +317,8 @@ in
           ${pkgs._1password}/bin/op item edit PostgreSQL \
             --vault Server \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
-            username=$PGADMIN_NGINX_USERNAME \
-            password=$PGADMIN_NGINX_PASSWORD \
+            username=$PGADMIN_DEFAULT_EMAIL \
+            password=$PGADMIN_DEFAULT_PASSWORD \
             'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
             'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
             --session $SESSION_TOKEN > /dev/null

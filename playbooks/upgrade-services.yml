@@ -1,61 +1,49 @@
 ---
-- name: upgrade nixos
-  hosts: server
-  become: true
+- name: upgrade services
+  hosts: localhost
+  become: false
   gather_facts: false
   vars:
     minio_repository: minio/minio
     pgadmin_repository: dpage/pgadmin4
     redisinsight_repository: redislabs/redisinsight
     gitlab_repository: gitlab/gitlab-ce
-
   tasks:
 
-    # ------------------- nixos ------------------- #
+    # ------------------- sops-nix ------------------- #
 
-    - name: find the current version of nixos
-      ansible.builtin.shell: nixos-version | cut -f 1-2 -d "."
-      register: nixos_current_version
+    - name: find the latest commit of the sops-nix repository
+      ansible.builtin.shell: git ls-remote --exit-code https://github.com/Mic92/sops-nix.git HEAD | awk '{print $1}'
+      register: sops_nix_commit
       changed_when: false
 
-    - name: find the latest version of nixos
-      ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
-      register: nixos_latest_version
-      delegate_to: localhost
+    - name: find the sha256 of the latest commit of the sops-nix repository (1/2)
+      ansible.builtin.command: |
+        nix \
+          --extra-experimental-features nix-command \
+          shell -f '<nixpkgs>' nix-prefetch-github -c nix-prefetch-github \
+          --json --rev {{ sops_nix_commit.stdout }} Mic92 sops-nix
+      register: sops_nix_sha256_json
+      delegate_to: server
       changed_when: false
       become: false
 
-    - name: try to upgrade without switching to the latest nixos channel
-      ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ nixos_latest_version.stdout }}.tar.gz build
-      register: build_result
-      when: nixos_current_version.stdout < nixos_latest_version.stdout
+    - name: find the sha256 of the latest commit of the sops-nix repository (2/2)
+      ansible.builtin.set_fact:
+        sops_nix_sha256: "{{ sops_nix_sha256_json.stdout | from_json }}"
 
-    - name: display output if warning occurs
-      ansible.builtin.debug:
-        msg: "{{ build_result.stderr_lines }}"
-      when:
-        - build_result.changed
-        - "'warning' in build_result.stderr"
+    - name: configure hash of the github repository
+      ansible.builtin.blockinfile:
+        path: ../configs/configuration.nix
+        insertafter: 'imports\s='
+        block: |2
+              let
+                SOPS_NIX_COMMIT = "{{ sops_nix_commit.stdout }}";
+                SOPS_NIX_SHA256 = "{{ sops_nix_sha256.sha256 }}";
+              in
+        marker: "    # {mark} ANSIBLE MANAGED BLOCK GITHUB HASH"
 
-    - name: pause to confirm the operating system upgrade
-      ansible.builtin.pause:
-        prompt: "Confirm the operating system upgrade from {{ nixos_current_version.stdout }} to {{ nixos_latest_version.stdout }} version (yes/no)"
-      register: confirm_upgrade
-      when: build_result.changed
-
-    - name: switch to the latest stable nixos channel for servers
-      ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ nixos_latest_version.stdout }}-small nixos
-      when:
-        - confirm_upgrade.user_input is defined
-        - confirm_upgrade.user_input | bool
-
-    - name: upgrade nixos to the latest version
-      ansible.builtin.command: nixos-rebuild switch --upgrade
-      when:
-        - confirm_upgrade.user_input is defined
-        - confirm_upgrade.user_input | bool
-
-    # ------------------- docker hub ------------------- #
+    # ------------------- docker images ------------------- #
 
     - name: split a docker repository name
       ansible.builtin.set_fact:
@@ -90,9 +78,7 @@
             repository: '{{ gitlab_repo_split.1 }}'
           }
       register: docker_image_digest
-      delegate_to: localhost
       changed_when: false
-      become: false
 
     - name: find a fixed tag by digest
       ansible.builtin.shell: |
@@ -136,9 +122,7 @@
             filter: '[0-9]\\.[0-9]\\.[0-9]-[a-z]+\\.[0-9]'
           }
       register: docker_image_tag
-      delegate_to: localhost
       changed_when: false
-      become: false
 
     - name: set a docker image
       ansible.builtin.set_fact:
@@ -147,15 +131,14 @@
         redisinsight_image: "{{ redisinsight_repository }}:{{ docker_image_tag.results.2.stdout | replace('\"','') }}"
         gitlab_image: "{{ gitlab_repository }}:{{ docker_image_tag.results.3.stdout | replace('\"','') }}"
 
-    - name: update a docker image
-      ansible.builtin.replace:
-        path: ../configs/variables.nix
-        regexp: '({{ item.regexp }}\s=\s").*(";)'
-        replace: '\1{{ item.replace }}\2'
-      loop:
-        - { regexp: 'minio_image', replace: '{{ minio_image }}' }
-        - { regexp: 'pgadmin_image', replace: '{{ pgadmin_image }}' }
-        - { regexp: 'redisinsight_image', replace: '{{ redisinsight_image }}' }
-        - { regexp: 'gitlab_image', replace: '{{ gitlab_image }}' }
-      delegate_to: localhost
-      become: false
+    - name: update variables
+      ansible.builtin.copy:
+        content: |
+          {
+            minio_image = "{{ minio_image }}";
+            pgadmin_image = "{{ pgadmin_image }}";
+            redis_instance = "gitlab";
+            redisinsight_image = "{{ redisinsight_image }}";
+            gitlab_image = "{{ gitlab_image }}";
+          }
+        dest: ../configs/variables.nix

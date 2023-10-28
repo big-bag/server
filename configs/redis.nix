@@ -28,7 +28,7 @@ in
   };
 
   sops.secrets = {
-    "redis/database_password/file" = {
+    "redis/database/file/password" = {
       mode = "0400";
       owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
       group = config.services.redis.servers.${REDIS_INSTANCE}.user;
@@ -46,9 +46,9 @@ in
           user = "redis-${REDIS_INSTANCE}";
           bind = "${IP_ADDRESS}";
           port = 6379;
-          requirePassFile = config.sops.secrets."redis/database_password/file".path;
+          requirePassFile = config.sops.secrets."redis/database/file/password".path;
           appendOnly = true;
-          maxclients = 150;
+          maxclients = 200;
           settings = {
             maxmemory = "973mb";
           };
@@ -58,6 +58,8 @@ in
   };
 
   systemd.services."redis-${REDIS_INSTANCE}" = {
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
     serviceConfig = {
       CPUQuota = "3%";
       MemoryHigh = "973M";
@@ -96,7 +98,7 @@ in
   };
 
   sops.secrets = {
-    "redis/database_password/envs" = {
+    "redis/database/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -111,7 +113,7 @@ in
       ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."redis/database_password/envs".path;
+        EnvironmentFile = config.sops.secrets."redis/database/envs".path;
       };
       script = ''
         post_data()
@@ -145,7 +147,7 @@ in
   };
 
   sops.secrets = {
-    "redisinsight/nginx/file" = {
+    "redisinsight/nginx/file/basic_auth" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -161,7 +163,7 @@ in
             proxy_set_header   Host $host;
           '';
           proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
-          basicAuthFile = config.sops.secrets."redisinsight/nginx/file".path;
+          basicAuthFile = config.sops.secrets."redisinsight/nginx/file/basic_auth".path;
         };
       };
     };
@@ -182,7 +184,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."redis/database_password/envs".path
+          config.sops.secrets."redis/database/envs".path
           config.sops.secrets."redis/grafana_agent/envs".path
         ];
       };
@@ -203,7 +205,7 @@ in
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -225,9 +227,9 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
+          config.sops.secrets."1password/application/envs".path
           config.sops.secrets."redisinsight/nginx/envs".path
-          config.sops.secrets."redis/database_password/envs".path
+          config.sops.secrets."redis/database/envs".path
           config.sops.secrets."redis/grafana_agent/envs".path
         ];
       };

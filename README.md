@@ -216,15 +216,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
        ansible-playbook site.yml --tags secrets
    ```
 
-7. run a playbook to upgrade NixOS to the latest version
-   ```bash
-   docker run --rm -ti \
-     --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
-       ansible-playbook site.yml --tags upgrade
-   ```
-
-8. run a playbook to upload grafana dashboards
+7. run a playbook to upload grafana dashboards
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
@@ -232,7 +224,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
        ansible-playbook site.yml --tags dashboards
    ```
 
-9. grafana dashboard sources
+8. grafana dashboard sources
 
    | Dashboard name/group | Dashboard source (based on) |
    | :--- | :--- |
@@ -261,6 +253,14 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |
+
+9. run a playbook to upgrade NixOS and services to the latest version
+   ```bash
+   docker run --rm -ti \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.15.1 \
+       ansible-playbook site.yml --tags upgrade
+   ```
 
 </details>
 

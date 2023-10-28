@@ -17,7 +17,7 @@ in
   };
 
   sops.secrets = {
-    "grafana/envs" = {
+    "grafana/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -115,7 +115,7 @@ in
   systemd.services = {
     grafana = {
       serviceConfig = {
-        EnvironmentFile = config.sops.secrets."grafana/envs".path;
+        EnvironmentFile = config.sops.secrets."grafana/application/envs".path;
         CPUQuota = "6%";
         MemoryHigh = "1946M";
         MemoryMax = "2048M";
@@ -157,7 +157,7 @@ in
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -171,8 +171,8 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
-          config.sops.secrets."grafana/envs".path
+          config.sops.secrets."1password/application/envs".path
+          config.sops.secrets."grafana/application/envs".path
         ];
       };
       environment = {

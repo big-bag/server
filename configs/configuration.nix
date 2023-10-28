@@ -8,8 +8,8 @@
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "f995ea159252a53b25fa99824f2891e3b479d511";
-      SOPS_NIX_SHA256 = "xxp2sB+4vqB6S6zC/L5J8LlRKgVbgIZOcYl9/TDrEzI=";
+      SOPS_NIX_COMMIT = "014e44d334a39481223a5d163530d4c4ca2e75cb";
+      SOPS_NIX_SHA256 = "swsqg/ckSVJnravx7ie9NFQSKIH27owtlk0wh4+xStk=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.

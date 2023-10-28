@@ -17,7 +17,7 @@ in
   };
 
   sops.secrets = {
-    "minio/envs" = {
+    "minio/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -38,7 +38,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."minio/envs".path
+          config.sops.secrets."minio/application/envs".path
           config.sops.secrets."loki/minio/envs".path
         ];
       };
@@ -213,7 +213,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
+          config.sops.secrets."1password/application/envs".path
           config.sops.secrets."loki/minio/envs".path
         ];
       };

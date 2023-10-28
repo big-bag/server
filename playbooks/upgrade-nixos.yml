@@ -1,0 +1,47 @@
+---
+- name: upgrade nixos
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: find the current version of nixos
+      ansible.builtin.shell: nixos-version | cut -f 1-2 -d "."
+      register: nixos_current_version
+      changed_when: false
+
+    - name: find the latest version of nixos
+      ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
+      register: nixos_latest_version
+      delegate_to: localhost
+      changed_when: false
+      become: false
+
+    - name: try to upgrade without switching to the latest nixos channel
+      ansible.builtin.command: nixos-rebuild -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/refs/tags/{{ nixos_latest_version.stdout }}.tar.gz build
+      register: build_result
+      when: nixos_current_version.stdout < nixos_latest_version.stdout
+
+    - name: display output if warning occurs
+      ansible.builtin.debug:
+        msg: "{{ build_result.stderr_lines }}"
+      when:
+        - build_result.changed
+        - "'warning' in build_result.stderr"
+
+    - name: pause to confirm the operating system upgrade
+      ansible.builtin.pause:
+        prompt: "Confirm the operating system upgrade from {{ nixos_current_version.stdout }} to {{ nixos_latest_version.stdout }} version (yes/no)"
+      register: confirm_upgrade
+      when: build_result.changed
+
+    - name: switch to the latest stable nixos channel for servers
+      ansible.builtin.command: nix-channel --add https://nixos.org/channels/nixos-{{ nixos_latest_version.stdout }}-small nixos
+      when:
+        - confirm_upgrade.user_input is defined
+        - confirm_upgrade.user_input | bool
+
+    - name: upgrade nixos to the latest version
+      ansible.builtin.command: nixos-rebuild switch --upgrade
+      when:
+        - confirm_upgrade.user_input is defined
+        - confirm_upgrade.user_input | bool

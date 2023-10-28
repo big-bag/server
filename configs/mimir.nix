@@ -28,7 +28,7 @@ in
   };
 
   sops.secrets = {
-    "minio/envs" = {
+    "minio/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -49,7 +49,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."minio/envs".path
+          config.sops.secrets."minio/application/envs".path
           config.sops.secrets."mimir/minio/envs".path
         ];
       };
@@ -237,7 +237,7 @@ in
   };
 
   sops.secrets = {
-    "mimir/nginx/file" = {
+    "mimir/nginx/file/basic_auth" = {
       mode = "0400";
       owner = config.services.nginx.user;
       group = config.services.nginx.group;
@@ -249,14 +249,14 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/mimir/" = {
           proxyPass = "http://127.0.0.1:9009";
-          basicAuthFile = config.sops.secrets."mimir/nginx/file".path;
+          basicAuthFile = config.sops.secrets."mimir/nginx/file/basic_auth".path;
         };
       };
     };
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -278,7 +278,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
+          config.sops.secrets."1password/application/envs".path
           config.sops.secrets."mimir/nginx/envs".path
           config.sops.secrets."mimir/minio/envs".path
         ];

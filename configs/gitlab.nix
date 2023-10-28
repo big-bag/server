@@ -23,7 +23,7 @@ in
   };
 
   sops.secrets = {
-    "minio/envs" = {
+    "minio/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -44,7 +44,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."minio/envs".path
+          config.sops.secrets."minio/application/envs".path
           config.sops.secrets."gitlab/minio/envs".path
         ];
       };
@@ -220,7 +220,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/password/file" = {
+    "gitlab/application/file/password" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -228,7 +228,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/token" = {
+    "gitlab/application/file/token" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -252,7 +252,7 @@ in
   };
 
   sops.secrets = {
-    "redis/database_password/file" = {
+    "redis/database/file/password" = {
       mode = "0400";
       owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
       group = config.services.redis.servers.${REDIS_INSTANCE}.user;
@@ -282,11 +282,11 @@ in
             "/mnt/ssd/services/gitlab/data:/var/opt/gitlab"
             "${config.sops.secrets."gitlab/minio/file/access_key".path}:/run/secrets/minio_access_key"
             "${config.sops.secrets."gitlab/minio/file/secret_key".path}:/run/secrets/minio_secret_key"
-            "${config.sops.secrets."gitlab/password/file".path}:/run/secrets/gitlab_password"
-            "${config.sops.secrets."gitlab/token".path}:/run/secrets/gitlab_token"
+            "${config.sops.secrets."gitlab/application/file/password".path}:/run/secrets/gitlab_password"
+            "${config.sops.secrets."gitlab/application/file/token".path}:/run/secrets/gitlab_token"
             "${config.sops.secrets."gitlab/postgres/file/username".path}:/run/secrets/postgres_username"
             "${config.sops.secrets."gitlab/postgres/file/password".path}:/run/secrets/postgres_password"
-            "${config.sops.secrets."redis/database_password/file".path}:/run/secrets/redis_password"
+            "${config.sops.secrets."redis/database/file/password".path}:/run/secrets/redis_password"
           ];
           environment = let
             MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
@@ -503,7 +503,7 @@ in
             access_log /var/log/nginx/gitlab_access.log gitlab_ssl_access;
             error_log  /var/log/nginx/gitlab_error.log;
 
-            client_max_body_size 250m;
+            client_max_body_size 700m;
             gzip off;
 
             # Some requests take more than 30 seconds.
@@ -634,7 +634,7 @@ in
   };
 
   sops.secrets = {
-    "1password/envs" = {
+    "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -642,7 +642,7 @@ in
   };
 
   sops.secrets = {
-    "gitlab/password/envs" = {
+    "gitlab/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -656,8 +656,8 @@ in
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."1password/envs".path
-          config.sops.secrets."gitlab/password/envs".path
+          config.sops.secrets."1password/application/envs".path
+          config.sops.secrets."gitlab/application/envs".path
           config.sops.secrets."gitlab/minio/envs".path
           config.sops.secrets."gitlab/postgres/envs".path
         ];
