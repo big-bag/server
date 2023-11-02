@@ -1,6 +1,7 @@
 { config, pkgs, ... }:
 
 let
+  MINIO_BUCKET = "loki";
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
 in
 
@@ -56,7 +57,7 @@ in
                     {
                         "Effect": "Allow",
                         "Action": "s3:ListBucket",
-                        "Resource": "arn:aws:s3:::loki"
+                        "Resource": "arn:aws:s3:::${MINIO_BUCKET}"
                     },
                     {
                         "Effect": "Allow",
@@ -65,7 +66,7 @@ in
                             "s3:GetObject",
                             "s3:DeleteObject"
                         ],
-                        "Resource": "arn:aws:s3:::loki/*"
+                        "Resource": "arn:aws:s3:::${MINIO_BUCKET}/*"
                     }
                 ]
             }
@@ -89,27 +90,27 @@ in
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/loki
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/${MINIO_BUCKET}
 
-            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $LOKI_MINIO_ACCESS_KEY
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
 
             if [ $? != 0 ]
             then
               ${pkgs.minio-client}/bin/mc admin user svcacct add \
-                --access-key $LOKI_MINIO_ACCESS_KEY \
-                --secret-key $LOKI_MINIO_SECRET_KEY \
+                --access-key $MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 --comment loki \
                 $ALIAS \
                 $MINIO_ROOT_USER > /dev/null
-
-              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$LOKI_MINIO_ACCESS_KEY\`."
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             else
               ${pkgs.minio-client}/bin/mc admin user svcacct edit \
-                --secret-key $LOKI_MINIO_SECRET_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 $ALIAS \
-                $LOKI_MINIO_ACCESS_KEY
+                $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
+              ${pkgs.coreutils}/bin/echo "Service account updated successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             fi
 
             break
@@ -157,11 +158,11 @@ in
         storage_config = {
           aws = {
             s3forcepathstyle = true;
-            bucketnames = "loki";
+            bucketnames = "${MINIO_BUCKET}";
             endpoint = "http://${IP_ADDRESS}:9000";
             region = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
-            access_key_id = "\${LOKI_MINIO_ACCESS_KEY}";
-            secret_access_key = "\${LOKI_MINIO_SECRET_KEY}";
+            access_key_id = "\${MINIO_SERVICE_ACCOUNT_ACCESS_KEY}";
+            secret_access_key = "\${MINIO_SERVICE_ACCOUNT_SECRET_KEY}";
             insecure = true;
           };
           boltdb_shipper = {
@@ -209,7 +210,7 @@ in
   systemd.services = {
     loki-1password = {
       after = [ "loki.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -237,19 +238,17 @@ in
         then
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Loki \
-            MinIO.'Access Key'[text]=$LOKI_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$LOKI_MINIO_SECRET_KEY \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Loki \
             --vault Server \
-            MinIO.'Access Key'[text]=$LOKI_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$LOKI_MINIO_SECRET_KEY \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "loki.service" ];

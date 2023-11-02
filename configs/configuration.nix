@@ -8,8 +8,8 @@
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "014e44d334a39481223a5d163530d4c4ca2e75cb";
-      SOPS_NIX_SHA256 = "swsqg/ckSVJnravx7ie9NFQSKIH27owtlk0wh4+xStk=";
+      SOPS_NIX_COMMIT = "84d6b27dc71ac02422e192c35806d06915d2bf67";
+      SOPS_NIX_SHA256 = "TmROaV9W6HArdTUgxLN334Kw+CradxWHw1HYM/3H6xI=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
@@ -30,6 +30,7 @@
       ./grafana.nix
       ./postgresql.nix
       ./redis.nix
+      ./mattermost.nix
       ./gitlab.nix
     ];
 
@@ -414,12 +415,18 @@
 
         ssl_prefer_server_ciphers off;
 
-        # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+        # HSTS (ngx_http_headers_module is required) (63072000 seconds = two years)
         add_header Strict-Transport-Security "max-age=63072000" always;
 
         # OCSP stapling
+        # fetch OCSP records from URL in ssl_certificate and cache them
         ssl_stapling on;
         ssl_stapling_verify on;
+
+        # Enable TLSv1.3's 0-RTT
+        # Use $ssl_early_data when reverse proxying to prevent replay attacks
+        # https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data
+        ssl_early_data on;
 
         # Authentication based on a client certificate
         ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;

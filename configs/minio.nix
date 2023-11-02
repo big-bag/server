@@ -37,8 +37,8 @@ in
             "127.0.0.1:9001:9001"
           ];
           volumes = [
-            "/mnt/hdd/data-stores/minio/data:/data"
-            "/mnt/hdd/data-stores/minio/config:/config"
+            "/mnt/hdd/data-stores/minio/data:/data:rw"
+            "/mnt/hdd/data-stores/minio/config:/config:rw"
           ];
           environmentFiles = [ config.sops.secrets."minio/application/envs".path ];
           environment = {
@@ -135,7 +135,7 @@ in
   systemd.services = {
     minio-1password = {
       after = [ "${CONTAINERS_BACKEND}-minio.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -168,7 +168,6 @@ in
             password=$MINIO_ROOT_PASSWORD \
             notesPlain='username -> Access Key, password -> Secret Key' \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit MinIO \
@@ -178,8 +177,7 @@ in
             password=$MINIO_ROOT_PASSWORD \
             notesPlain='username -> Access Key, password -> Secret Key' \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-minio.service" ];

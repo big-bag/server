@@ -197,7 +197,12 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    vault_pgadmin_postgres_username: [VALUE]
    vault_grafana_agent_postgres_username: [VALUE]
    vault_grafana_agent_redis_username: [VALUE]
+
+   vault_mattermost_postgres_username: [VALUE]
+   vault_mattermost_postgres_database: [VALUE]
+
    vault_gitlab_postgres_username: [VALUE]
+   vault_gitlab_postgres_database: [VALUE]
    ```
 
 5. run a playbook to do an initial configuration on a server and configure a local environment

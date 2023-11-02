@@ -115,25 +115,25 @@ in
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-backup
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/gitlab-registry
 
-            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $GITLAB_MINIO_ACCESS_KEY
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
 
             if [ $? != 0 ]
             then
               ${pkgs.minio-client}/bin/mc admin user svcacct add \
-                --access-key $GITLAB_MINIO_ACCESS_KEY \
-                --secret-key $GITLAB_MINIO_SECRET_KEY \
+                --access-key $MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 --comment gitlab \
                 $ALIAS \
                 $MINIO_ROOT_USER > /dev/null
-
-              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$GITLAB_MINIO_ACCESS_KEY\`."
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             else
               ${pkgs.minio-client}/bin/mc admin user svcacct edit \
-                --secret-key $GITLAB_MINIO_SECRET_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 $ALIAS \
-                $GITLAB_MINIO_ACCESS_KEY
+                $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
+              ${pkgs.coreutils}/bin/echo "Service account updated successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             fi
 
             break
@@ -172,29 +172,39 @@ in
           DO
           \$do$
           BEGIN
-              IF EXISTS (
+              IF NOT EXISTS (
                   SELECT FROM pg_catalog.pg_roles
-                  WHERE rolname = '$GITLAB_POSTGRES_USERNAME'
+                  WHERE rolname = '$POSTGRESQL_USERNAME'
               )
               THEN
-                  RAISE NOTICE 'role "$GITLAB_POSTGRES_USERNAME" already exists, skipping';
-              ELSE
-                  CREATE ROLE $GITLAB_POSTGRES_USERNAME WITH
+                  CREATE ROLE $POSTGRESQL_USERNAME WITH
                       LOGIN
-                      ENCRYPTED PASSWORD '$GITLAB_POSTGRES_PASSWORD';
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" created successfully.';
+              ELSE
+                  ALTER ROLE $POSTGRESQL_USERNAME WITH
+                      LOGIN
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" updated successfully.';
               END IF;
           END
           \$do$;
 
-          SELECT 'CREATE DATABASE gitlab OWNER $GITLAB_POSTGRES_USERNAME'
-              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'gitlab');
+          SELECT 'CREATE DATABASE $POSTGRESQL_DATABASE OWNER $POSTGRESQL_USERNAME'
+              WHERE NOT EXISTS (
+                  SELECT FROM pg_database
+                  WHERE datname = '$POSTGRESQL_DATABASE'
+              );
           \gexec
 
-          \c gitlab
+          \c $POSTGRESQL_DATABASE
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
           CREATE EXTENSION IF NOT EXISTS btree_gist;
         EOSQL
-        ${pkgs.coreutils}/bin/echo "GitLab account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -229,6 +239,14 @@ in
 
   sops.secrets = {
     "gitlab/application/file/token" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "gitlab/postgres/file/database" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -277,16 +295,17 @@ in
             "127.0.0.1:9236:9236"
           ];
           volumes = [
-            "/mnt/ssd/services/gitlab/config:/etc/gitlab"
-            "/mnt/ssd/services/gitlab/logs:/var/log/gitlab"
-            "/mnt/ssd/services/gitlab/data:/var/opt/gitlab"
-            "${config.sops.secrets."gitlab/minio/file/access_key".path}:/run/secrets/minio_access_key"
-            "${config.sops.secrets."gitlab/minio/file/secret_key".path}:/run/secrets/minio_secret_key"
-            "${config.sops.secrets."gitlab/application/file/password".path}:/run/secrets/gitlab_password"
-            "${config.sops.secrets."gitlab/application/file/token".path}:/run/secrets/gitlab_token"
-            "${config.sops.secrets."gitlab/postgres/file/username".path}:/run/secrets/postgres_username"
-            "${config.sops.secrets."gitlab/postgres/file/password".path}:/run/secrets/postgres_password"
-            "${config.sops.secrets."redis/database/file/password".path}:/run/secrets/redis_password"
+            "/mnt/ssd/services/gitlab/config:/etc/gitlab:rw"
+            "/mnt/ssd/services/gitlab/logs:/var/log/gitlab:rw"
+            "/mnt/ssd/services/gitlab/data:/var/opt/gitlab:rw"
+            "${config.sops.secrets."gitlab/minio/file/access_key".path}:/run/secrets/minio_access_key:ro"
+            "${config.sops.secrets."gitlab/minio/file/secret_key".path}:/run/secrets/minio_secret_key:ro"
+            "${config.sops.secrets."gitlab/application/file/password".path}:/run/secrets/gitlab_password:ro"
+            "${config.sops.secrets."gitlab/application/file/token".path}:/run/secrets/gitlab_token:ro"
+            "${config.sops.secrets."gitlab/postgres/file/database".path}:/run/secrets/postgres_database:ro"
+            "${config.sops.secrets."gitlab/postgres/file/username".path}:/run/secrets/postgres_username:ro"
+            "${config.sops.secrets."gitlab/postgres/file/password".path}:/run/secrets/postgres_password:ro"
+            "${config.sops.secrets."redis/database/file/password".path}:/run/secrets/redis_password:ro"
           ];
           environment = let
             MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
@@ -333,7 +352,7 @@ in
               gitlab_rails['initial_shared_runners_registration_token'] = File.read('/run/secrets/gitlab_token').gsub("\n", "")
               gitlab_rails['store_initial_root_password'] = false
 
-              gitlab_rails['db_database'] = 'gitlab'
+              gitlab_rails['db_database'] = File.read('/run/secrets/postgres_database').gsub("\n", "")
               gitlab_rails['db_username'] = File.read('/run/secrets/postgres_username').gsub("\n", "")
               gitlab_rails['db_password'] = File.read('/run/secrets/postgres_password').gsub("\n", "")
               gitlab_rails['db_host'] = '${IP_ADDRESS}'
@@ -420,7 +439,32 @@ in
   };
 
   services = {
-    nginx = {
+    nginx = let
+      CONFIG_SERVER = ''
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+        ssl_session_tickets off;
+
+        ssl_prefer_server_ciphers off;
+
+        # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+        add_header Strict-Transport-Security "max-age=63072000" always;
+
+        # OCSP stapling
+        ssl_stapling on;
+        ssl_stapling_verify on;
+
+        # Authentication based on a client certificate
+        # ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
+        # ssl_verify_client on;
+      '';
+      CONFIG_LOCATION = ''
+        proxy_set_header Host $host; # required for docker client's sake (registry.domain.com)
+        proxy_set_header X-Real-IP $remote_addr; # pass on real client's IP
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      '';
+    in {
       upstreams."gitlab-workhorse" = {
         servers = { "127.0.0.1:8181 fail_timeout=0" = {}; };
       };
@@ -480,50 +524,32 @@ in
         sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
         extraConfig = ''
-          ssl_session_timeout 1d;
-          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
-          ssl_session_tickets off;
-
-          ssl_prefer_server_ciphers off;
-
-          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
-          add_header Strict-Transport-Security "max-age=63072000" always;
-
-          # OCSP stapling
-          ssl_stapling on;
-          ssl_stapling_verify on;
-
-          # Authentication based on a client certificate
-          #ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          #ssl_verify_client      on;
+          ${CONFIG_SERVER}
         '';
 
         locations."/" = {
           extraConfig = ''
-            access_log /var/log/nginx/gitlab_access.log gitlab_ssl_access;
-            error_log  /var/log/nginx/gitlab_error.log;
+            ${CONFIG_LOCATION}
+
+            access_log /var/log/nginx/gitlab.workhorse.access.log gitlab_ssl_access;
+            error_log /var/log/nginx/gitlab.workhorse.error.log;
 
             client_max_body_size 700m;
             gzip off;
 
             # Some requests take more than 30 seconds.
-            proxy_read_timeout    300;
+            proxy_read_timeout 300;
             proxy_connect_timeout 300;
-            proxy_redirect        off;
+            proxy_redirect off;
 
             proxy_http_version 1.1;
 
-            proxy_set_header Host              $host;
-            proxy_set_header X-Real-IP         $remote_addr;
-            proxy_set_header X-Forwarded-Ssl   on;
-            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Upgrade           $http_upgrade;
-            proxy_set_header Connection        $connection_upgrade_gitlab_ssl;
+            proxy_set_header X-Forwarded-Ssl on;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade_gitlab_ssl;
 
             proxy_cache off;
           '';
-
           proxyPass = "http://gitlab-workhorse";
         };
       };
@@ -543,40 +569,21 @@ in
         sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
         extraConfig = ''
-          ssl_session_timeout 1d;
-          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
-          ssl_session_tickets off;
-
-          ssl_prefer_server_ciphers off;
-
-          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
-          add_header Strict-Transport-Security "max-age=63072000" always;
-
-          # OCSP stapling
-          ssl_stapling on;
-          ssl_stapling_verify on;
-
-          # Authentication based on a client certificate
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
+          ${CONFIG_SERVER}
         '';
 
         locations."/" = {
           extraConfig = ''
-            access_log /var/log/nginx/gitlab_registry_access.log;
-            error_log  /var/log/nginx/gitlab_registry_error.log;
+            ${CONFIG_LOCATION}
+
+            access_log /var/log/nginx/gitlab.registry.access.log;
+            error_log /var/log/nginx/gitlab.registry.error.log;
 
             client_max_body_size 250m;
             chunked_transfer_encoding on;
 
-            proxy_set_header Host              $host;        # required for docker client's sake
-            proxy_set_header X-Real-IP         $remote_addr; # pass on real client's IP
-            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-
             proxy_read_timeout 900;
           '';
-
           proxyPass = "http://127.0.0.1:5000";
         };
       };
@@ -596,37 +603,18 @@ in
         sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
         extraConfig = ''
-          ssl_session_timeout 1d;
-          ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
-          ssl_session_tickets off;
-
-          ssl_prefer_server_ciphers off;
-
-          # HSTS (ngx_http_headers_module is required) (63072000 seconds)
-          add_header Strict-Transport-Security "max-age=63072000" always;
-
-          # OCSP stapling
-          ssl_stapling on;
-          ssl_stapling_verify on;
-
-          # Authentication based on a client certificate
-          ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client      on;
+          ${CONFIG_SERVER}
         '';
 
         locations."/" = {
           extraConfig = ''
-            access_log /var/log/nginx/gitlab_pages_access.log;
-            error_log  /var/log/nginx/gitlab_pages_error.log;
+            ${CONFIG_LOCATION}
 
-            proxy_set_header Host              $host;
-            proxy_set_header X-Real-IP         $remote_addr;
-            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            access_log /var/log/nginx/gitlab.pages.access.log;
+            error_log /var/log/nginx/gitlab.pages.error.log;
 
             proxy_cache off;
           '';
-
           proxyPass = "http://127.0.0.1:8090";
         };
       };
@@ -652,7 +640,7 @@ in
   systemd.services = {
     gitlab-1password = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -683,26 +671,26 @@ in
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title GitLab \
             --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
+            'Admin Area'[url]=http://gitlab.${DOMAIN_NAME_INTERNAL}/admin \
             username=root \
-            password=$GITLAB_PASSWORD \
-            MinIO.'Access Key'[text]=$GITLAB_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$GITLAB_MINIO_SECRET_KEY \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
+            password=$PASSWORD \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
+            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit GitLab \
             --vault Server \
             --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
+            'Admin Area'[url]=http://gitlab.${DOMAIN_NAME_INTERNAL}/admin \
             username=root \
-            password=$GITLAB_PASSWORD \
-            MinIO.'Access Key'[text]=$GITLAB_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$GITLAB_MINIO_SECRET_KEY \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$GITLAB_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GITLAB_POSTGRES_USERNAME gitlab" \
+            password=$PASSWORD \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
+            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];

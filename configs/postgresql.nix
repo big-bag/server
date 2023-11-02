@@ -86,7 +86,7 @@ in
   };
 
   systemd.services = {
-    pgadmin-prepare = {
+    pgadmin-postgres = {
       after = [ "postgresql.service" ];
       before = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
       serviceConfig = {
@@ -103,25 +103,30 @@ in
           DO
           \$do$
           BEGIN
-              IF EXISTS (
+              IF NOT EXISTS (
                   SELECT FROM pg_catalog.pg_roles
-                  WHERE rolname = '$PGADMIN_POSTGRES_USERNAME'
+                  WHERE rolname = '$POSTGRESQL_USERNAME_PGADMIN'
               )
               THEN
-                  RAISE NOTICE 'role "$PGADMIN_POSTGRES_USERNAME" already exists, skipping';
-              ELSE
-                  CREATE ROLE $PGADMIN_POSTGRES_USERNAME WITH
+                  CREATE ROLE $POSTGRESQL_USERNAME_PGADMIN WITH
                       LOGIN
-                      CREATEDB
-                      CREATEROLE
-                      ENCRYPTED PASSWORD '$PGADMIN_POSTGRES_PASSWORD';
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD_PGADMIN';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME_PGADMIN" created successfully.';
+              ELSE
+                  ALTER ROLE $POSTGRESQL_USERNAME_PGADMIN WITH
+                      LOGIN
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD_PGADMIN';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME_PGADMIN" updated successfully.';
               END IF;
           END
           \$do$;
 
-          GRANT CONNECT ON DATABASE postgres TO $PGADMIN_POSTGRES_USERNAME;
+          GRANT CONNECT ON DATABASE postgres TO $POSTGRESQL_USERNAME_PGADMIN;
         EOSQL
-        ${pkgs.coreutils}/bin/echo "pgAdmin account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -171,13 +176,13 @@ in
                           \"Host\": \"${IP_ADDRESS}\",
                           \"Port\": ${toString config.services.postgresql.port},
                           \"MaintenanceDB\": \"postgres\",
-                          \"Username\": \"$PGADMIN_POSTGRES_USERNAME\",
+                          \"Username\": \"$POSTGRESQL_USERNAME_PGADMIN\",
                           \"PassFile\": \"/.pgpass\"
                       }
                   }
               }
             '';
-            PG_PASS = "${IP_ADDRESS}:${toString config.services.postgresql.port}:postgres:$PGADMIN_POSTGRES_USERNAME:$PGADMIN_POSTGRES_PASSWORD";
+            PG_PASS = "${IP_ADDRESS}:${toString config.services.postgresql.port}:postgres:$POSTGRESQL_USERNAME_PGADMIN:$POSTGRESQL_PASSWORD_PGADMIN";
           in [
             "-c" "
               echo \"${SERVERS}\" > /var/lib/pgadmin/servers.json
@@ -222,7 +227,7 @@ in
   };
 
   systemd.services = {
-    postgresql-grafana-agent = {
+    grafana-agent-postgres = {
       after = [ "postgresql.service" ];
       before = [ "grafana-agent.service" ];
       serviceConfig = {
@@ -239,23 +244,30 @@ in
           DO
           \$do$
           BEGIN
-              IF EXISTS (
+              IF NOT EXISTS (
                   SELECT FROM pg_catalog.pg_roles
-                  WHERE rolname = '$GRAFANA_AGENT_POSTGRES_USERNAME'
+                  WHERE rolname = '$POSTGRESQL_USERNAME_GRAFANA_AGENT'
               )
               THEN
-                  RAISE NOTICE 'role "$GRAFANA_AGENT_POSTGRES_USERNAME" already exists, skipping';
-              ELSE
-                  CREATE ROLE $GRAFANA_AGENT_POSTGRES_USERNAME WITH
+                  CREATE ROLE $POSTGRESQL_USERNAME_GRAFANA_AGENT WITH
                       LOGIN
-                      ENCRYPTED PASSWORD '$GRAFANA_AGENT_POSTGRES_PASSWORD';
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD_GRAFANA_AGENT';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME_GRAFANA_AGENT" created successfully.';
+              ELSE
+                  ALTER ROLE $POSTGRESQL_USERNAME_GRAFANA_AGENT WITH
+                      LOGIN
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD_GRAFANA_AGENT';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME_GRAFANA_AGENT" updated successfully.';
               END IF;
           END
           \$do$;
 
-          GRANT pg_monitor TO $GRAFANA_AGENT_POSTGRES_USERNAME;
+          GRANT pg_monitor TO $POSTGRESQL_USERNAME_GRAFANA_AGENT;
         EOSQL
-        ${pkgs.coreutils}/bin/echo "Grafana Agent account created successfully."
       '';
       wantedBy = [
         "postgresql.service"
@@ -275,7 +287,7 @@ in
   systemd.services = {
     postgresql-1password = {
       after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -308,10 +320,9 @@ in
             website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
             username=$PGADMIN_DEFAULT_EMAIL \
             password=$PGADMIN_DEFAULT_PASSWORD \
-            'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
-            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
+            'DB connection command'.pgAdmin[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_PGADMIN' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_PGADMIN postgres" \
+            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_GRAFANA_AGENT' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_GRAFANA_AGENT postgres" \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit PostgreSQL \
@@ -319,11 +330,10 @@ in
             website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
             username=$PGADMIN_DEFAULT_EMAIL \
             password=$PGADMIN_DEFAULT_PASSWORD \
-            'DB connection command'.pgAdmin[password]="PGPASSWORD='$PGADMIN_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $PGADMIN_POSTGRES_USERNAME postgres" \
-            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$GRAFANA_AGENT_POSTGRES_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $GRAFANA_AGENT_POSTGRES_USERNAME postgres" \
+            'DB connection command'.pgAdmin[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_PGADMIN' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_PGADMIN postgres" \
+            'DB connection command'.'Grafana Agent'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_GRAFANA_AGENT' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_GRAFANA_AGENT postgres" \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
@@ -349,8 +359,8 @@ in
   services = {
     grafana-agent = {
       credentials = {
-        GRAFANA_AGENT_POSTGRES_USERNAME = config.sops.secrets."postgres/grafana_agent/file/username".path;
-        GRAFANA_AGENT_POSTGRES_PASSWORD = config.sops.secrets."postgres/grafana_agent/file/password".path;
+        POSTGRESQL_USERNAME_GRAFANA_AGENT = config.sops.secrets."postgres/grafana_agent/file/username".path;
+        POSTGRESQL_PASSWORD_GRAFANA_AGENT = config.sops.secrets."postgres/grafana_agent/file/password".path;
       };
 
       settings = {
@@ -376,7 +386,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(postgresql-prepare|var-lib-postgresql|postgresql|pgadmin-prepare|${CONTAINERS_BACKEND}-pgadmin|postgresql-grafana-agent|postgresql-1password).(service|mount)";
+                  regex = "(postgresql-prepare|var-lib-postgresql|postgresql|pgadmin-postgres|${CONTAINERS_BACKEND}-pgadmin|grafana-agent-postgres|postgresql-1password).(service|mount)";
                   action = "keep";
                 }
                 {
@@ -394,7 +404,7 @@ in
             enabled = true;
             scrape_interval = "1m";
             scrape_timeout = "10s";
-            data_source_names = [ "postgresql://\${GRAFANA_AGENT_POSTGRES_USERNAME}:\${GRAFANA_AGENT_POSTGRES_PASSWORD}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
+            data_source_names = [ "postgresql://\${POSTGRESQL_USERNAME_GRAFANA_AGENT}:\${POSTGRESQL_PASSWORD_GRAFANA_AGENT}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
             autodiscover_databases = true;
           };
         };

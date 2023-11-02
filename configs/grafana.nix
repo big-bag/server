@@ -38,8 +38,8 @@ in
           enable_gzip = true;
         };
         security = {
-          admin_user = "$__env{GRAFANA_USERNAME}";
-          admin_password = "$__env{GRAFANA_PASSWORD}";
+          admin_user = "$__env{USERNAME}";
+          admin_password = "$__env{PASSWORD}";
         };
       };
       provision = {
@@ -54,7 +54,7 @@ in
                 type: prometheus
                 access: proxy
                 orgId: 1
-                uid: $GRAFANA_DATASOURCE_UID_MIMIR
+                uid: $DATASOURCE_UID_MIMIR
                 url: http://127.0.0.1:9009/mimir/prometheus
                 isDefault: false
                 jsonData:
@@ -68,7 +68,7 @@ in
                 type: prometheus
                 access: proxy
                 orgId: 1
-                uid: $GRAFANA_DATASOURCE_UID_PROMETHEUS
+                uid: $DATASOURCE_UID_PROMETHEUS
                 url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
                 isDefault: false
                 jsonData:
@@ -82,7 +82,7 @@ in
                 type: loki
                 access: proxy
                 orgId: 1
-                uid: $GRAFANA_DATASOURCE_UID_LOKI
+                uid: $DATASOURCE_UID_LOKI
                 url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
                 isDefault: true
                 jsonData:
@@ -146,9 +146,9 @@ in
             rewrite ^/grafana/(.*) /$1 break;
             proxy_http_version 1.1;
 
-            proxy_set_header Upgrade    $http_upgrade;
+            proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
-            proxy_set_header Host       $host;
+            proxy_set_header Host $host;
           '';
           proxyPass = "http://grafana";
         };
@@ -167,7 +167,7 @@ in
   systemd.services = {
     grafana-1password = {
       after = [ "grafana.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -196,20 +196,18 @@ in
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Grafana \
             --url http://${DOMAIN_NAME_INTERNAL}/grafana \
-            username=$GRAFANA_USERNAME \
-            password=$GRAFANA_PASSWORD \
+            username=$USERNAME \
+            password=$PASSWORD \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Grafana \
             --vault Server \
             --url http://${DOMAIN_NAME_INTERNAL}/grafana \
-            username=$GRAFANA_USERNAME \
-            password=$GRAFANA_PASSWORD \
+            username=$USERNAME \
+            password=$PASSWORD \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "grafana.service" ];

@@ -129,7 +129,7 @@ in
         EOF
         }
 
-        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | grep "OK"; do
+        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | ${pkgs.gnugrep}/bin/grep "OK"; do
           ${pkgs.coreutils}/bin/echo "Waiting for RedisInsight availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -160,7 +160,7 @@ in
         locations."/redisinsight/" = {
           extraConfig = ''
             proxy_read_timeout 900;
-            proxy_set_header   Host $host;
+            proxy_set_header Host $host;
           '';
           proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
           basicAuthFile = config.sops.secrets."redisinsight/nginx/file/basic_auth".path;
@@ -178,7 +178,7 @@ in
   };
 
   systemd.services = {
-    redis-grafana-agent = {
+    grafana-agent-redis = {
       after = [ "redis-${REDIS_INSTANCE}.service" ];
       before = [ "grafana-agent.service" ];
       serviceConfig = {
@@ -194,7 +194,7 @@ in
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        ${pkgs.coreutils}/bin/echo "ACL SETUSER $GRAFANA_AGENT_REDIS_USERNAME +client +ping +info +config|get +cluster|info +slowlog +latency +memory +select +get +scan +xinfo +type +pfcount +strlen +llen +scard +zcard +hlen +xlen +eval allkeys on >$GRAFANA_AGENT_REDIS_PASSWORD_CLI" | ${pkgs.redis}/bin/redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
+        ${pkgs.coreutils}/bin/echo "ACL SETUSER $REDIS_USERNAME +client +ping +info +config|get +cluster|info +slowlog +latency +memory +select +get +scan +xinfo +type +pfcount +strlen +llen +scard +zcard +hlen +xlen +eval allkeys on >$REDIS_PASSWORD_CLI" | ${pkgs.redis}/bin/redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
         ${pkgs.coreutils}/bin/echo "Grafana Agent account created successfully."
       '';
       wantedBy = [
@@ -223,7 +223,7 @@ in
   systemd.services = {
     redis-1password = {
       after = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -254,24 +254,22 @@ in
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Redis \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
-            username=$REDISINSIGHT_NGINX_USERNAME \
-            password=$REDISINSIGHT_NGINX_PASSWORD \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
             'DB connection command'.'${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
-            'DB connection command'.'Grafana Agent'[password]="redis-cli -u 'redis://$GRAFANA_AGENT_REDIS_USERNAME:$GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
+            'DB connection command'.'Grafana Agent'[password]="redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Redis \
             --vault Server \
             website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
-            username=$REDISINSIGHT_NGINX_USERNAME \
-            password=$REDISINSIGHT_NGINX_PASSWORD \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
             'DB connection command'.'${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
-            'DB connection command'.'Grafana Agent'[password]="redis-cli -u 'redis://$GRAFANA_AGENT_REDIS_USERNAME:$GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
+            'DB connection command'.'Grafana Agent'[password]="redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-redisinsight.service" ];
@@ -297,7 +295,7 @@ in
   services = {
     grafana-agent = {
       credentials = {
-        GRAFANA_AGENT_REDIS_USERNAME = config.sops.secrets."redis/grafana_agent/file/username".path;
+        REDIS_USERNAME = config.sops.secrets."redis/grafana_agent/file/username".path;
       };
 
       settings = {
@@ -323,7 +321,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(redis-prepare|var-lib-redis\\x2d${REDIS_INSTANCE}|redis-${REDIS_INSTANCE}|${CONTAINERS_BACKEND}-redisinsight|redisinsight-configure|redis-grafana-agent|redis-1password).(service|mount)";
+                  regex = "(redis-prepare|var-lib-redis\\x2d${REDIS_INSTANCE}|redis-${REDIS_INSTANCE}|${CONTAINERS_BACKEND}-redisinsight|redisinsight-configure|grafana-agent-redis|redis-1password).(service|mount)";
                   action = "keep";
                 }
                 {
@@ -342,7 +340,7 @@ in
             scrape_interval = "1m";
             scrape_timeout = "10s";
             redis_addr = "${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
-            redis_user = "\${GRAFANA_AGENT_REDIS_USERNAME}";
+            redis_user = "\${REDIS_USERNAME}";
             redis_password_file = config.sops.secrets."redis/grafana_agent/file/password".path;
           };
         };

@@ -184,7 +184,7 @@ in
   systemd.services = {
     prometheus-1password = {
       after = [ "prometheus.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -213,20 +213,18 @@ in
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Prometheus \
             --url http://${DOMAIN_NAME_INTERNAL}/prometheus \
-            username=$PROMETHEUS_NGINX_USERNAME \
-            password=$PROMETHEUS_NGINX_PASSWORD \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Prometheus \
             --vault Server \
             --url http://${DOMAIN_NAME_INTERNAL}/prometheus \
-            username=$PROMETHEUS_NGINX_USERNAME \
-            password=$PROMETHEUS_NGINX_PASSWORD \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "prometheus.service" ];

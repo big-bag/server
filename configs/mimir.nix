@@ -113,25 +113,25 @@ in
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-ruler
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-alertmanager
 
-            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MIMIR_MINIO_ACCESS_KEY
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
 
             if [ $? != 0 ]
             then
               ${pkgs.minio-client}/bin/mc admin user svcacct add \
-                --access-key $MIMIR_MINIO_ACCESS_KEY \
-                --secret-key $MIMIR_MINIO_SECRET_KEY \
+                --access-key $MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 --comment mimir \
                 $ALIAS \
                 $MINIO_ROOT_USER > /dev/null
-
-              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MIMIR_MINIO_ACCESS_KEY\`."
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             else
               ${pkgs.minio-client}/bin/mc admin user svcacct edit \
-                --secret-key $MIMIR_MINIO_SECRET_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
                 --policy ${policy_json} \
                 $ALIAS \
-                $MIMIR_MINIO_ACCESS_KEY
+                $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
+              ${pkgs.coreutils}/bin/echo "Service account updated successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
             fi
 
             break
@@ -208,8 +208,8 @@ in
               s3:
                 endpoint: ${IP_ADDRESS}:9000
                 region: ${MINIO_REGION}
-                secret_access_key: ''${MIMIR_MINIO_SECRET_KEY}
-                access_key_id: ''${MIMIR_MINIO_ACCESS_KEY}
+                secret_access_key: ''${MINIO_SERVICE_ACCOUNT_SECRET_KEY}
+                access_key_id: ''${MINIO_SERVICE_ACCOUNT_ACCESS_KEY}
                 insecure: true
         '';
       };
@@ -274,7 +274,7 @@ in
   systemd.services = {
     mimir-1password = {
       after = [ "mimir.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 24))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -304,24 +304,22 @@ in
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Mimir \
             --url http://${DOMAIN_NAME_INTERNAL}/mimir \
-            username=$MIMIR_NGINX_USERNAME \
-            password=$MIMIR_NGINX_PASSWORD \
-            MinIO.'Access Key'[text]=$MIMIR_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$MIMIR_MINIO_SECRET_KEY \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
-
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Mimir \
             --vault Server \
             --url http://${DOMAIN_NAME_INTERNAL}/mimir \
-            username=$MIMIR_NGINX_USERNAME \
-            password=$MIMIR_NGINX_PASSWORD \
-            MinIO.'Access Key'[text]=$MIMIR_MINIO_ACCESS_KEY \
-            MinIO.'Secret Key'[password]=$MIMIR_MINIO_SECRET_KEY \
+            username=$NGINX_USERNAME \
+            password=$NGINX_PASSWORD \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
-
-          ${pkgs.coreutils}/bin/echo "Item edited successfully."
+          ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
       wantedBy = [ "mimir.service" ];

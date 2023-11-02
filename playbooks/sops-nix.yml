@@ -45,8 +45,8 @@
 
     - name: set seed variables
       ansible.builtin.set_fact:
-        minio_username_seed: minio_username_random
-        minio_password_seed: minio_password_random
+        minio_application_username_seed: minio_application_username_random
+        minio_application_password_seed: minio_application_password_random
 
         mimir_minio_access_key_seed: mimir_minio_access_key_random
         mimir_minio_secret_key_seed: mimir_minio_secret_key_random
@@ -59,8 +59,8 @@
         loki_minio_access_key_seed: loki_minio_access_key_random
         loki_minio_secret_key_seed: loki_minio_secret_key_random
 
-        grafana_username_seed: grafana_username_random
-        grafana_password_seed: grafana_password_random
+        grafana_application_username_seed: grafana_application_username_random
+        grafana_application_password_seed: grafana_application_password_random
         grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
         grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
         grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
@@ -75,19 +75,25 @@
         redisinsight_nginx_password_seed: redisinsight_nginx_password_random
         grafana_agent_redis_password_seed: grafana_agent_redis_password_random
 
+        mattermost_postgres_password_seed: mattermost_postgres_password_random
+        mattermost_minio_access_key_seed: mattermost_minio_access_key_random
+        mattermost_minio_secret_key_seed: mattermost_minio_secret_key_random
+        mattermost_application_username_seed: mattermost_application_username_random
+        mattermost_application_password_seed: mattermost_application_password_random
+
         gitlab_minio_access_key_seed: gitlab_minio_access_key_random
         gitlab_minio_secret_key_seed: gitlab_minio_secret_key_random
         gitlab_postgres_password_seed: gitlab_postgres_password_random
-        gitlab_password_seed: gitlab_password_random
-        gitlab_token_seed: gitlab_token_random
+        gitlab_application_password_seed: gitlab_application_password_random
+        gitlab_application_token_seed: gitlab_application_token_random
       tags:
         - secrets
         - dashboards
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
-        minio_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_username_seed) }}"
-        minio_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_password_seed) }}"
+        minio_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_application_username_seed) }}"
+        minio_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=minio_application_password_seed) }}"
 
         mimir_minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=mimir_minio_access_key_seed) }}"
         mimir_minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=mimir_minio_secret_key_seed) }}"
@@ -100,8 +106,8 @@
         loki_minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=loki_minio_access_key_seed) }}"
         loki_minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=loki_minio_secret_key_seed) }}"
 
-        grafana_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_username_seed) }}"
-        grafana_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_password_seed) }}"
+        grafana_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_application_username_seed) }}"
+        grafana_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_application_password_seed) }}"
         grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
         grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
         grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
@@ -116,11 +122,17 @@
         redisinsight_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=redisinsight_nginx_password_seed) }}"
         grafana_agent_redis_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,<>/? length=48', seed=grafana_agent_redis_password_seed) }}"
 
+        mattermost_postgres_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=mattermost_postgres_password_seed) }}"
+        mattermost_minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=mattermost_minio_access_key_seed) }}"
+        mattermost_minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=mattermost_minio_secret_key_seed) }}"
+        mattermost_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_lowercase,digits,-_. length=22', seed=mattermost_application_username_seed) }}"
+        mattermost_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mattermost_application_password_seed) }}"
+
         gitlab_minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=gitlab_minio_access_key_seed) }}"
         gitlab_minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=gitlab_minio_secret_key_seed) }}"
         gitlab_postgres_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=gitlab_postgres_password_seed) }}"
-        gitlab_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_password_seed) }}"
-        gitlab_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_token_seed) }}"
+        gitlab_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_application_password_seed) }}"
+        gitlab_application_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=gitlab_application_token_seed) }}"
       tags:
         - secrets
         - dashboards
@@ -211,44 +223,44 @@
           minio:
             application:
               envs: |
-                MINIO_ROOT_USER={{ minio_username }}
-                MINIO_ROOT_PASSWORD={{ minio_password }}
+                MINIO_ROOT_USER={{ minio_application_username }}
+                MINIO_ROOT_PASSWORD={{ minio_application_password }}
           mimir:
             minio:
               envs: |
-                MIMIR_MINIO_ACCESS_KEY={{ mimir_minio_access_key }}
-                MIMIR_MINIO_SECRET_KEY={{ mimir_minio_secret_key }}
+                MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ mimir_minio_access_key }}
+                MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ mimir_minio_secret_key }}
             nginx:
               file:
                 basic_auth: {{ basic_auth_mimir.stdout }}
               envs: |
-                MIMIR_NGINX_USERNAME={{ mimir_nginx_username }}
-                MIMIR_NGINX_PASSWORD={{ mimir_nginx_password }}
+                NGINX_USERNAME={{ mimir_nginx_username }}
+                NGINX_PASSWORD={{ mimir_nginx_password }}
           prometheus:
             nginx:
               file:
                 basic_auth: {{ basic_auth_prometheus.stdout }}
               envs: |
-                PROMETHEUS_NGINX_USERNAME={{ prometheus_nginx_username }}
-                PROMETHEUS_NGINX_PASSWORD={{ prometheus_nginx_password }}
+                NGINX_USERNAME={{ prometheus_nginx_username }}
+                NGINX_PASSWORD={{ prometheus_nginx_password }}
           loki:
             minio:
               envs: |
-                LOKI_MINIO_ACCESS_KEY={{ loki_minio_access_key }}
-                LOKI_MINIO_SECRET_KEY={{ loki_minio_secret_key }}
+                MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ loki_minio_access_key }}
+                MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ loki_minio_secret_key }}
           grafana:
             application:
               envs: |
-                GRAFANA_USERNAME={{ grafana_username }}
-                GRAFANA_PASSWORD={{ grafana_password }}
-                GRAFANA_DATASOURCE_UID_MIMIR={{ grafana_datasource_uid_mimir }}
-                GRAFANA_DATASOURCE_UID_PROMETHEUS={{ grafana_datasource_uid_prometheus }}
-                GRAFANA_DATASOURCE_UID_LOKI={{ grafana_datasource_uid_loki }}
+                USERNAME={{ grafana_application_username }}
+                PASSWORD={{ grafana_application_password }}
+                DATASOURCE_UID_MIMIR={{ grafana_datasource_uid_mimir }}
+                DATASOURCE_UID_PROMETHEUS={{ grafana_datasource_uid_prometheus }}
+                DATASOURCE_UID_LOKI={{ grafana_datasource_uid_loki }}
           pgadmin:
             postgres:
               envs: |
-                PGADMIN_POSTGRES_USERNAME={{ vault_pgadmin_postgres_username }}
-                PGADMIN_POSTGRES_PASSWORD={{ pgadmin_postgres_password }}
+                POSTGRESQL_USERNAME_PGADMIN={{ vault_pgadmin_postgres_username }}
+                POSTGRESQL_PASSWORD_PGADMIN={{ pgadmin_postgres_password }}
             application:
               envs: |
                 PGADMIN_DEFAULT_EMAIL={{ pgadmin_application_username }}@{{ vault_domain_name_internal }}
@@ -256,8 +268,8 @@
           postgres:
             grafana_agent:
               envs: |
-                GRAFANA_AGENT_POSTGRES_USERNAME={{ vault_grafana_agent_postgres_username }}
-                GRAFANA_AGENT_POSTGRES_PASSWORD={{ grafana_agent_postgres_password }}
+                POSTGRESQL_USERNAME_GRAFANA_AGENT={{ vault_grafana_agent_postgres_username }}
+                POSTGRESQL_PASSWORD_GRAFANA_AGENT={{ grafana_agent_postgres_password }}
               file:
                 username: {{ vault_grafana_agent_postgres_username }}
                 password: {{ grafana_agent_postgres_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
@@ -269,9 +281,9 @@
                 REDISCLI_AUTH={{ redis_database_password }}
             grafana_agent:
               envs: |
-                GRAFANA_AGENT_REDIS_USERNAME={{ vault_grafana_agent_redis_username }}
-                GRAFANA_AGENT_REDIS_PASSWORD_CLI={{ grafana_agent_redis_password }}
-                GRAFANA_AGENT_REDIS_PASSWORD_1PASSWORD={{ grafana_agent_redis_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
+                REDIS_USERNAME={{ vault_grafana_agent_redis_username }}
+                REDIS_PASSWORD_CLI={{ grafana_agent_redis_password }}
+                REDIS_PASSWORD_1PASSWORD={{ grafana_agent_redis_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
               file:
                 username: {{ vault_grafana_agent_redis_username }}
                 password: '{{ grafana_agent_redis_password }}'
@@ -280,29 +292,46 @@
               file:
                 basic_auth: {{ basic_auth_redisinsight.stdout }}
               envs: |
-                REDISINSIGHT_NGINX_USERNAME={{ redisinsight_nginx_username }}
-                REDISINSIGHT_NGINX_PASSWORD={{ redisinsight_nginx_password }}
+                NGINX_USERNAME={{ redisinsight_nginx_username }}
+                NGINX_PASSWORD={{ redisinsight_nginx_password }}
+          mattermost:
+            postgres:
+              envs: |
+                POSTGRESQL_USERNAME={{ vault_mattermost_postgres_username }}
+                POSTGRESQL_PASSWORD_DATABASE={{ mattermost_postgres_password }}
+                POSTGRESQL_PASSWORD_APPLICATION={{ mattermost_postgres_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
+                POSTGRESQL_DATABASE={{ vault_mattermost_postgres_database }}
+            minio:
+              envs: |
+                MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ mattermost_minio_access_key }}
+                MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ mattermost_minio_secret_key }}
+            application:
+              envs: |
+                USERNAME={{ mattermost_application_username }}
+                PASSWORD={{ mattermost_application_password }}
           gitlab:
             minio:
               envs: |
-                GITLAB_MINIO_ACCESS_KEY={{ gitlab_minio_access_key }}
-                GITLAB_MINIO_SECRET_KEY={{ gitlab_minio_secret_key }}
+                MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ gitlab_minio_access_key }}
+                MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ gitlab_minio_secret_key }}
               file:
                 access_key: {{ gitlab_minio_access_key }}
                 secret_key: {{ gitlab_minio_secret_key }}
             postgres:
               envs: |
-                GITLAB_POSTGRES_USERNAME={{ vault_gitlab_postgres_username }}
-                GITLAB_POSTGRES_PASSWORD={{ gitlab_postgres_password }}
+                POSTGRESQL_USERNAME={{ vault_gitlab_postgres_username }}
+                POSTGRESQL_PASSWORD={{ gitlab_postgres_password }}
+                POSTGRESQL_DATABASE={{ vault_gitlab_postgres_database }}
               file:
                 username: {{ vault_gitlab_postgres_username }}
                 password: '{{ gitlab_postgres_password }}'
+                database: {{ vault_gitlab_postgres_database }}
             application:
               file:
-                password: {{ gitlab_password }}
-                token: '{{ gitlab_token }}'
+                password: '{{ gitlab_application_password }}'
+                token: '{{ gitlab_application_token }}'
               envs: |
-                GITLAB_PASSWORD={{ gitlab_password }}
+                PASSWORD={{ gitlab_application_password }}
         dest: "{{ temp_file_secrets.path }}"
       changed_when: false
       tags: secrets
