@@ -303,7 +303,7 @@ in
         then
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Mimir \
-            --url http://${DOMAIN_NAME_INTERNAL}/mimir \
+            --url https://${DOMAIN_NAME_INTERNAL}/mimir \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
@@ -313,7 +313,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit Mimir \
             --vault Server \
-            --url http://${DOMAIN_NAME_INTERNAL}/mimir \
+            --url https://${DOMAIN_NAME_INTERNAL}/mimir \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \

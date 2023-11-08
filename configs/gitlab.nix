@@ -1,9 +1,9 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-  REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+  REDIS_INSTANCE = (import ./variables.nix).redis_instance;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
@@ -283,7 +283,7 @@ in
         gitlab = {
           autoStart = true;
           ports = [
-            "127.0.0.1:8181:8181"
+            "${IP_ADDRESS}:8181:8181"
             "127.0.0.1:5000:5000"
             "127.0.0.1:8090:8090"
             "127.0.0.1:5001:5001"
@@ -311,13 +311,48 @@ in
             MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
           in {
             GITLAB_OMNIBUS_CONFIG = ''
-              external_url 'http://gitlab.${DOMAIN_NAME_INTERNAL}'
+              ## GitLab URL
+              ##! URL on which GitLab will be reachable.
+              ##! For more details on configuring external_url see:
+              ##! https://docs.gitlab.com/omnibus/settings/configuration.html#configuring-the-external-url-for-gitlab
+              ##!
+              ##! Note: During installation/upgrades, the value of the environment variable
+              ##! EXTERNAL_URL will be used to populate/replace this value.
+              ##! On AWS EC2 instances, we also attempt to fetch the public hostname/IP
+              ##! address from AWS. For more details, see:
+              ##! https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html
+              external_url 'https://gitlab.${DOMAIN_NAME_INTERNAL}'
 
+              ################################################################################
+              ## gitlab.yml configuration
+              ##! Docs: https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/doc/settings/gitlab.yml.md
+              ################################################################################
+
+              ### GitLab email server settings
+              ###! Docs: https://docs.gitlab.com/omnibus/settings/smtp.html
+              ###! **Use smtp instead of sendmail/postfix.**
               gitlab_rails['smtp_enable'] = false
+
+              ### Email Settings
               gitlab_rails['gitlab_email_enabled'] = false
 
+              ### Monitoring settings
+              ###! IP whitelist controlling access to monitoring endpoints
               gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0']
 
+              ### Consolidated (simplified) object storage configuration
+              ###! This uses a single credential for object storage with multiple buckets.
+              ###! It also enables Workhorse to upload files directly with its own S3 client
+              ###! instead of using pre-signed URLs.
+              ###!
+              ###! This configuration will only take effect if the object_store
+              ###! sections are not defined within the types. For example, enabling
+              ###! gitlab_rails['artifacts_object_store_enabled'] or
+              ###! gitlab_rails['lfs_object_store_enabled'] will prevent the
+              ###! consolidated settings from being used.
+              ###!
+              ###! Be sure to use different buckets for each type of object.
+              ###! Docs: https://docs.gitlab.com/ee/administration/object_storage.html
               gitlab_rails['object_store']['enabled'] = true
               gitlab_rails['object_store']['connection'] = {
                 'provider' => 'AWS',
@@ -338,6 +373,8 @@ in
               gitlab_rails['object_store']['objects']['ci_secure_files']['bucket'] = 'gitlab-ci-secure-files'
               gitlab_rails['object_store']['objects']['pages']['bucket'] = 'gitlab-pages'
 
+              ### Backup Settings
+              ###! Docs: https://docs.gitlab.com/omnibus/settings/backups.html
               gitlab_rails['backup_upload_connection'] = {
                 'provider' => 'AWS',
                 'endpoint' => 'http://${IP_ADDRESS}:9000',
@@ -348,23 +385,46 @@ in
               }
               gitlab_rails['backup_upload_remote_directory'] = 'gitlab-backup'
 
+              #### Change the initial default admin password and shared runner registration tokens.
+              ####! **Only applicable on initial setup, changing these settings after database
+              ####!   is created and seeded won't yield any change.**
               gitlab_rails['initial_root_password'] = File.read('/run/secrets/gitlab_password').gsub("\n", "")
               gitlab_rails['initial_shared_runners_registration_token'] = File.read('/run/secrets/gitlab_token').gsub("\n", "")
+
+              #### Toggle if initial root password should be written to /etc/gitlab/initial_root_password
               gitlab_rails['store_initial_root_password'] = false
 
+              ### GitLab database settings
+              ###! Docs: https://docs.gitlab.com/omnibus/settings/database.html
+              ###! **Only needed if you use an external database.**
               gitlab_rails['db_database'] = File.read('/run/secrets/postgres_database').gsub("\n", "")
               gitlab_rails['db_username'] = File.read('/run/secrets/postgres_username').gsub("\n", "")
               gitlab_rails['db_password'] = File.read('/run/secrets/postgres_password').gsub("\n", "")
               gitlab_rails['db_host'] = '${IP_ADDRESS}'
               gitlab_rails['db_port'] = ${toString config.services.postgresql.port}
 
+              ### GitLab Redis settings
+              ###! Connect to your own Redis instance
+              ###! Docs: https://docs.gitlab.com/omnibus/settings/redis.html
+
+              #### Redis TCP connection
               gitlab_rails['redis_host'] = '${config.services.redis.servers.${REDIS_INSTANCE}.bind}'
               gitlab_rails['redis_port'] = ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
               gitlab_rails['redis_password'] = File.read('/run/secrets/redis_password').gsub("\n", "")
 
-              registry_external_url 'http://registry.${DOMAIN_NAME_INTERNAL}'
+              ################################################################################
+              ## Container Registry settings
+              ##! Docs: https://docs.gitlab.com/ee/administration/packages/container_registry.html
+              ################################################################################
+
+              registry_external_url 'https://registry.${DOMAIN_NAME_INTERNAL}'
+
+              ### Settings used by Registry application
               registry['registry_http_addr'] = '0.0.0.0:5000'
               registry['debug_addr'] = '0.0.0.0:5001'
+
+              ### Registry backend storage
+              ###! Docs: https://docs.gitlab.com/ee/administration/packages/container_registry.html#configure-storage-for-the-container-registry
               registry['storage'] = {
                 's3' => {
                   'provider' => 'AWS',
@@ -377,49 +437,177 @@ in
                 }
               }
 
+              ################################################################################
+              ## GitLab Workhorse
+              ##! Docs: https://gitlab.com/gitlab-org/gitlab/-/blob/master/workhorse/README.md
+              ################################################################################
+
               gitlab_workhorse['listen_network'] = 'tcp'
               gitlab_workhorse['listen_addr'] = '0.0.0.0:8181'
+
               gitlab_workhorse['prometheus_listen_addr'] = '0.0.0.0:9229'
+
+              ##! Resource limitations for the dynamic image scaler.
+              ##! Exceeding these thresholds will cause Workhorse to serve images in their original size.
+              ##!
+              ##! Maximum number of scaler processes that are allowed to execute concurrently.
+              ##! It is recommended for this not to exceed the number of CPUs available.
               gitlab_workhorse['image_scaler_max_procs'] = 1
 
+              ################################################################################
+              ## GitLab Puma
+              ##! Tweak puma settings.
+              ##! Docs: https://docs.gitlab.com/ee/administration/operations/puma.html
+              ################################################################################
+
+              ### Advanced settings
               puma['listen'] = '127.0.0.1'
               puma['port'] = 8080
+
               puma['exporter_enabled'] = true
               puma['exporter_address'] = '0.0.0.0'
               puma['exporter_port'] = 8083
 
+              ################################################################################
+              ## GitLab Sidekiq
+              ################################################################################
+
+              ##! Specifies where Prometheus metrics endpoints should be made available for Sidekiq processes.
               sidekiq['listen_address'] = '0.0.0.0'
               sidekiq['listen_port'] = 8082
+
+              ##! Specifies where health-check endpoints should be made available for Sidekiq processes.
+              ##! Defaults to the same settings as for Prometheus metrics (see above).
               sidekiq['health_checks_listen_address'] = '127.0.0.1'
               sidekiq['health_checks_listen_port'] = 8092
 
+              ################################################################
+              ## GitLab PostgreSQL
+              ################################################################
+
+              ###! Changing any of these settings requires a restart of postgresql.
+              ###! By default, reconfigure reloads postgresql if it is running. If you
+              ###! change any of these settings, be sure to run `gitlab-ctl restart postgresql`
+              ###! after reconfigure in order for the changes to take effect.
               postgresql['enable'] = false
+
+              ################################################################################
+              ## GitLab Redis
+              ##! **Can be disabled if you are using your own Redis instance.**
+              ##! Docs: https://docs.gitlab.com/omnibus/settings/redis.html
+              ################################################################################
+
               redis['enable'] = false
+
+              ################################################################################
+              ## GitLab NGINX
+              ##! Docs: https://docs.gitlab.com/omnibus/settings/nginx.html
+              ################################################################################
+
               nginx['enable'] = false
 
-              pages_external_url 'http://pages.${DOMAIN_NAME_INTERNAL}'
+              ################################################################################
+              ## GitLab Pages
+              ##! Docs: https://docs.gitlab.com/ee/administration/pages/
+              ################################################################################
+
+              ##! Define to enable GitLab Pages
+              pages_external_url 'https://pages.${DOMAIN_NAME_INTERNAL}'
               gitlab_pages['enable'] = true
+
+              ##! Configure to enable health check endpoint on GitLab Pages
               gitlab_pages['status_uri'] = '/@status'
+
+              ##! Listen for requests forwarded by reverse proxy
               gitlab_pages['listen_proxy'] = '0.0.0.0:8090'
+
+              ##! Prometheus metrics for Pages docs: https://gitlab.com/gitlab-org/gitlab-pages/#enable-prometheus-metrics
               gitlab_pages['metrics_address'] = '0.0.0.0:9235'
 
+              ################################################################################
+              ## GitLab Pages NGINX
+              ################################################################################
+
+              # All the settings defined in the "GitLab Nginx" section are also available in
+              # this "GitLab Pages NGINX" section, using the key `pages_nginx`.  However,
+              # those settings should be explicitly set. That is, settings given as
+              # `nginx['some_setting']` WILL NOT be automatically replicated as
+              # `pages_nginx['some_setting']` and should be set separately.
+
+              # Below you can find settings that are exclusive to "GitLab Pages NGINX"
               pages_nginx['enable'] = false
+
+              ################################################################################
+              ## GitLab Kubernetes Agent Server
+              ##! Docs: https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/blob/master/README.md
+              ################################################################################
+
+              ##! Settings used by the GitLab application
               gitlab_rails['gitlab_kas_enabled'] = false
+
+              ##! Define to enable GitLab KAS
               gitlab_kas['enable'] = false
+
+              ################################################################################
+              ## Prometheus
+              ##! Docs: https://docs.gitlab.com/ee/administration/monitoring/prometheus/
+              ################################################################################
+
               prometheus['enable'] = false
 
+              ################################################################################
+              ###! **Only needed if Prometheus and Rails are not on the same server.**
+              ### For example, in a multi-node architecture, Prometheus will be installed on the monitoring node, while Rails will be on the Rails node.
+              ### https://docs.gitlab.com/ee/administration/monitoring/prometheus/index.html#using-an-external-prometheus-server
+              ### This value should be the address at which Prometheus is available to a GitLab Rails(Puma, Sidekiq) node.
+              ################################################################################
               gitlab_rails['prometheus_address'] = '${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}'
 
+              ################################################################################
+              ## Prometheus Alertmanager
+              ################################################################################
+
               alertmanager['enable'] = false
+
+              ################################################################################
+              ## Prometheus Node Exporter
+              ##! Docs: https://docs.gitlab.com/ee/administration/monitoring/prometheus/node_exporter.html
+              ################################################################################
+
               node_exporter['enable'] = false
+
+              ################################################################################
+              ## Prometheus Redis exporter
+              ##! Docs: https://docs.gitlab.com/ee/administration/monitoring/prometheus/redis_exporter.html
+              ################################################################################
+
               redis_exporter['enable'] = false
+
+              ################################################################################
+              ## Prometheus Postgres exporter
+              ##! Docs: https://docs.gitlab.com/ee/administration/monitoring/prometheus/postgres_exporter.html
+              ################################################################################
+
               postgres_exporter['enable'] = false
 
+              ################################################################################
+              ## Prometheus Gitlab exporter
+              ##! Docs: https://docs.gitlab.com/ee/administration/monitoring/prometheus/gitlab_exporter.html
+              ################################################################################
+
               gitlab_exporter['enable'] = true
+
+              ##! Advanced settings. Should be changed only if absolutely needed.
               gitlab_exporter['listen_address'] = '0.0.0.0'
               gitlab_exporter['listen_port'] = '9168'
 
+              # To completely disable prometheus, and all of it's exporters, set to false
               prometheus_monitoring['enable'] = false
+
+              ################################################################################
+              ## Gitaly
+              ##! Docs: https://docs.gitlab.com/ee/administration/gitaly/configure_gitaly.html
+              ################################################################################
 
               gitaly['configuration'] = {
                 prometheus_listen_addr: '0.0.0.0:9236',
@@ -432,9 +620,62 @@ in
             "--memory-reservation=3891m"
             "--memory=4096m"
           ];
-          image = (import /etc/nixos/variables.nix).gitlab_image;
+          image = (import ./variables.nix).gitlab_image;
         };
       };
+    };
+  };
+
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 8181 ];
+    };
+  };
+
+  systemd.services = {
+    gitlab-application-settings = {
+      after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."gitlab/application/envs".path;
+      };
+      script = ''
+        export GITLAB_ADDRESS=${IP_ADDRESS}:8181
+
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        json_gitlab_oauth_token()
+        {
+        ${pkgs.coreutils}/bin/cat <<EOF
+          {
+            "grant_type": "password",
+            "username": "root",
+            "password": "$GITLAB_PASSWORD"
+          }
+        EOF
+        }
+
+        export GITLAB_OAUTH_TOKEN=$(
+          ${pkgs.curl}/bin/curl --silent --request POST \
+            --url http://$GITLAB_ADDRESS/oauth/token \
+            --header "content-type: application/json" \
+            --data "$(json_gitlab_oauth_token)" |
+          ${pkgs.jq}/bin/jq --raw-output .access_token
+        )
+
+        ${pkgs.curl}/bin/curl --silent --request PUT \
+          --url http://$GITLAB_ADDRESS/api/v4/application/settings \
+          --header "Authorization: Bearer $GITLAB_OAUTH_TOKEN" \
+          --data "signup_enabled=false"
+
+        ${pkgs.curl}/bin/curl --silent --request POST \
+          --url http://$GITLAB_ADDRESS/oauth/revoke \
+          --form "token=$GITLAB_OAUTH_TOKEN"
+      '';
+      wantedBy = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
     };
   };
 
@@ -466,7 +707,9 @@ in
       '';
     in {
       upstreams."gitlab-workhorse" = {
-        servers = { "127.0.0.1:8181 fail_timeout=0" = {}; };
+        servers = let
+          GITLAB_WORKHORSE_ADDRESS = "${IP_ADDRESS}:8181";
+        in { "${GITLAB_WORKHORSE_ADDRESS} fail_timeout=0" = {}; };
       };
 
       commonHttpConfig = ''
@@ -670,10 +913,9 @@ in
         then
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title GitLab \
-            --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
-            'Admin Area'[url]=http://gitlab.${DOMAIN_NAME_INTERNAL}/admin \
+            --url https://gitlab.${DOMAIN_NAME_INTERNAL} \
             username=root \
-            password=$PASSWORD \
+            password=$GITLAB_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
@@ -682,10 +924,9 @@ in
         else
           ${pkgs._1password}/bin/op item edit GitLab \
             --vault Server \
-            --url http://gitlab.${DOMAIN_NAME_INTERNAL} \
-            'Admin Area'[url]=http://gitlab.${DOMAIN_NAME_INTERNAL}/admin \
+            --url https://gitlab.${DOMAIN_NAME_INTERNAL} \
             username=root \
-            password=$PASSWORD \
+            password=$GITLAB_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
@@ -712,7 +953,7 @@ in
           job_name = "gitlab-rails";
           scheme = "http";
           static_configs = [{
-            targets = [ "127.0.0.1:8181" ];
+            targets = [ "${IP_ADDRESS}:8181" ];
           }];
           metrics_path = "/-/metrics";
         }
@@ -776,6 +1017,344 @@ in
     };
   };
 
+  systemd.services = {
+    gitlab-integrations-mattermost-notifications = {
+      after = [
+        "mattermost-configure.service"
+        "${CONTAINERS_BACKEND}-gitlab.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."mattermost/application/envs".path
+          config.sops.secrets."gitlab/application/envs".path
+        ];
+      };
+      script = ''
+        export MATTERMOST_ADDRESS=${IP_ADDRESS}:8065
+
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        export MATTERMOST_TEAM=${lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL}
+        export MATTERMOST_CHANNEL_NAME="GitLab"
+        export MATTERMOST_CHANNEL=$(
+          ${pkgs.coreutils}/bin/echo $MATTERMOST_CHANNEL_NAME |
+          ${pkgs.gawk}/bin/awk '{print tolower($0)}' |
+          ${pkgs.gnused}/bin/sed 's/ /-/g'
+        )
+
+        case `
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel list \
+            $MATTERMOST_TEAM \
+            --local |
+          ${pkgs.gnugrep}/bin/grep $MATTERMOST_CHANNEL > /dev/null
+          ${pkgs.coreutils}/bin/echo $?
+        ` in
+          "1" )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel create \
+              --team $MATTERMOST_TEAM \
+              --name $MATTERMOST_CHANNEL \
+              --display-name "$MATTERMOST_CHANNEL_NAME" \
+              --private \
+              --local
+          ;;
+          "0" )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel rename \
+              $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
+              --display-name "$MATTERMOST_CHANNEL_NAME" \
+              --local
+
+            case `
+              ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel search \
+                --team $MATTERMOST_TEAM \
+                $MATTERMOST_CHANNEL \
+                --json \
+                --local |
+              ${pkgs.jq}/bin/jq --raw-output .type
+            ` in
+              "O" )
+                ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel modify \
+                  $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
+                  --private \
+                  --local
+                ${pkgs.coreutils}/bin/echo "'$MATTERMOST_CHANNEL' channel converted to private"
+              ;;
+              "P" )
+                ${pkgs.coreutils}/bin/echo "'$MATTERMOST_CHANNEL' channel is already private"
+              ;;
+            esac
+
+          ;;
+        esac
+
+        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel users add \
+          $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
+          $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+          --local
+
+        export MATTERMOST_WEBHOOK_NAME=$MATTERMOST_CHANNEL_NAME
+
+        case `
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
+            $MATTERMOST_TEAM \
+            --local |
+          ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME > /dev/null
+          ${pkgs.coreutils}/bin/echo $?
+        ` in
+          "1" )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook create-incoming \
+              --user $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+              --display-name $MATTERMOST_WEBHOOK_NAME \
+              --channel $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
+              --lock-to-channel \
+              --local
+          ;;
+          "0" )
+            export MATTERMOST_WEBHOOK_ID=$(
+              ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
+                $MATTERMOST_TEAM \
+                --local |
+              ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME |
+              ${pkgs.gawk}/bin/awk '{ print $3 }' |
+              ${pkgs.gnused}/bin/sed 's/(//g'
+            )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook modify-incoming \
+              $MATTERMOST_WEBHOOK_ID \
+              --display-name $MATTERMOST_WEBHOOK_NAME \
+              --channel $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
+              --lock-to-channel \
+              --local
+          ;;
+        esac
+
+        export MATTERMOST_WEBHOOK_ID=$(
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
+            $MATTERMOST_TEAM \
+            --local |
+          ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME |
+          ${pkgs.gawk}/bin/awk '{ print $3 }' |
+          ${pkgs.gnused}/bin/sed 's/(//g'
+        )
+
+        export GITLAB_ADDRESS=${IP_ADDRESS}:8181
+
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        json_gitlab_oauth_token()
+        {
+        ${pkgs.coreutils}/bin/cat <<EOF
+          {
+            "grant_type": "password",
+            "username": "root",
+            "password": "$GITLAB_PASSWORD"
+          }
+        EOF
+        }
+
+        export GITLAB_OAUTH_TOKEN=$(
+          ${pkgs.curl}/bin/curl --silent --request POST \
+            --url http://$GITLAB_ADDRESS/oauth/token \
+            --header "content-type: application/json" \
+            --data "$(json_gitlab_oauth_token)" |
+          ${pkgs.jq}/bin/jq --raw-output .access_token
+        )
+
+        ${pkgs.curl}/bin/curl --silent --request PUT \
+          --url http://$GITLAB_ADDRESS/api/v4/application/settings \
+          --header "Authorization: Bearer $GITLAB_OAUTH_TOKEN" \
+          --data "allow_local_requests_from_web_hooks_and_services=true"
+
+        json_mattermost_notifications()
+        {
+        ${pkgs.coreutils}/bin/cat <<EOF
+          {
+            "push_events": true,
+            "push_channel": "$MATTERMOST_CHANNEL",
+            "issues_events": true,
+            "issue_channel": "$MATTERMOST_CHANNEL",
+            "confidential_issues_events": true,
+            "confidential_issue_channel": "$MATTERMOST_CHANNEL",
+            "merge_requests_events": true,
+            "merge_request_channel": "$MATTERMOST_CHANNEL",
+            "note_events": true,
+            "note_channel": "$MATTERMOST_CHANNEL",
+            "confidential_note_events": true,
+            "confidential_note_channel": "$MATTERMOST_CHANNEL",
+            "tag_push_events": true,
+            "tag_push_channel": "$MATTERMOST_CHANNEL",
+            "pipeline_events": true,
+            "pipeline_channel": "$MATTERMOST_CHANNEL",
+            "wiki_page_events": true,
+            "wiki_page_channel": "$MATTERMOST_CHANNEL",
+            "deployment_events": true,
+            "deployment_channel": "$MATTERMOST_CHANNEL",
+            "incident_events": true,
+            "incident_channel": "$MATTERMOST_CHANNEL",
+            "notify_only_broken_pipelines": false,
+            "branches_to_be_notified": "default",
+            "labels_to_be_notified": "",
+            "labels_to_be_notified_behavior": "",
+            "webhook": "http://$MATTERMOST_ADDRESS/mattermost/hooks/$MATTERMOST_WEBHOOK_ID",
+            "username": ""
+          }
+        EOF
+        }
+
+        ${pkgs.curl}/bin/curl --silent --request PUT \
+          --url http://$GITLAB_ADDRESS/api/v4/projects/64/integrations/mattermost \
+          --header "Authorization: Bearer $GITLAB_OAUTH_TOKEN" \
+          --header "content-type: application/json" \
+          --data "$(json_mattermost_notifications)"
+
+        ${pkgs.curl}/bin/curl --silent --request POST \
+          --url http://$GITLAB_ADDRESS/oauth/revoke \
+          --form "token=$GITLAB_OAUTH_TOKEN"
+      '';
+      wantedBy = [
+        "mattermost-configure.service"
+        "${CONTAINERS_BACKEND}-gitlab.service"
+      ];
+    };
+  };
+
+  systemd.services = {
+    gitlab-integrations-mattermost-slash-commands = {
+      after = [
+        "mattermost-configure.service"
+        "${CONTAINERS_BACKEND}-gitlab.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."mattermost/application/envs".path
+          config.sops.secrets."gitlab/application/envs".path
+        ];
+      };
+      script = ''
+        export MATTERMOST_ADDRESS=${IP_ADDRESS}:8065
+
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        export MATTERMOST_TEAM=${lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL}
+        export MATTERMOST_COMMAND_TITLE="GitLab / Documentation / wiki"
+
+        export GITLAB_ADDRESS=${IP_ADDRESS}:8181
+
+        case `
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command list \
+            $MATTERMOST_TEAM \
+            --local |
+          ${pkgs.gnugrep}/bin/grep "$MATTERMOST_COMMAND_TITLE" > /dev/null
+          ${pkgs.coreutils}/bin/echo $?
+        ` in
+          "1" )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command create \
+              $MATTERMOST_TEAM \
+              --creator $MATTERMOST_USERNAME \
+              --title "$MATTERMOST_COMMAND_TITLE" \
+              --description "Perform common operations on GitLab project: Documentation / wiki" \
+              --trigger-word documentation/wiki \
+              --url http://$GITLAB_ADDRESS/api/v4/projects/64/integrations/mattermost_slash_commands/trigger \
+              --post \
+              --response-username GitLab \
+              --icon http://$GITLAB_ADDRESS/assets/gitlab_logo-2957169c8ef64c58616a1ac3f4fc626e8a35ce4eb3ed31bb0d873712f2a041a0.png \
+              --autocomplete \
+              --autocompleteHint [help] \
+              --autocompleteDesc "Perform common operations on GitLab project: Documentation / wiki" \
+              --local
+          ;;
+          "0" )
+            export MATTERMOST_COMMAND_ID=$(
+              ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command list \
+                $MATTERMOST_TEAM \
+                --local |
+              ${pkgs.gnugrep}/bin/grep "$MATTERMOST_COMMAND_TITLE" |
+              ${pkgs.gawk}/bin/awk '{ print $1 }' |
+              ${pkgs.gnused}/bin/sed 's/://g'
+            )
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command modify \
+              $MATTERMOST_COMMAND_ID \
+              --creator $MATTERMOST_USERNAME \
+              --title "$MATTERMOST_COMMAND_TITLE" \
+              --description "Perform common operations on GitLab project: Documentation / wiki" \
+              --trigger-word documentation/wiki \
+              --url http://$GITLAB_ADDRESS/api/v4/projects/64/integrations/mattermost_slash_commands/trigger \
+              --post \
+              --response-username GitLab \
+              --icon http://$GITLAB_ADDRESS/assets/gitlab_logo-2957169c8ef64c58616a1ac3f4fc626e8a35ce4eb3ed31bb0d873712f2a041a0.png \
+              --autocomplete \
+              --autocompleteHint [help] \
+              --autocompleteDesc "Perform common operations on GitLab project: Documentation / wiki" \
+              --local
+          ;;
+        esac
+
+        export MATTERMOST_COMMAND_ID=$(
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command list \
+            $MATTERMOST_TEAM \
+            --local |
+          ${pkgs.gnugrep}/bin/grep "$MATTERMOST_COMMAND_TITLE" |
+          ${pkgs.gawk}/bin/awk '{ print $1 }' |
+          ${pkgs.gnused}/bin/sed 's/://g'
+        )
+
+        export MATTERMOST_COMMAND_TOKEN=$(
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl command show \
+            $MATTERMOST_COMMAND_ID \
+            --json \
+            --local |
+          ${pkgs.jq}/bin/jq --raw-output .token
+        )
+
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        json_gitlab_oauth_token()
+        {
+        ${pkgs.coreutils}/bin/cat <<EOF
+          {
+            "grant_type": "password",
+            "username": "root",
+            "password": "$GITLAB_PASSWORD"
+          }
+        EOF
+        }
+
+        export GITLAB_OAUTH_TOKEN=$(
+          ${pkgs.curl}/bin/curl --silent --request POST \
+            --url http://$GITLAB_ADDRESS/oauth/token \
+            --header "content-type: application/json" \
+            --data "$(json_gitlab_oauth_token)" |
+          ${pkgs.jq}/bin/jq --raw-output .access_token
+        )
+
+        ${pkgs.curl}/bin/curl --silent --request PUT \
+          --url http://$GITLAB_ADDRESS/api/v4/projects/64/integrations/mattermost-slash-commands \
+          --header "Authorization: Bearer $GITLAB_OAUTH_TOKEN" \
+          --form "token=$MATTERMOST_COMMAND_TOKEN"
+
+        ${pkgs.curl}/bin/curl --silent --request POST \
+          --url http://$GITLAB_ADDRESS/oauth/revoke \
+          --form "token=$GITLAB_OAUTH_TOKEN"
+      '';
+      wantedBy = [
+        "mattermost-configure.service"
+        "${CONTAINERS_BACKEND}-gitlab.service"
+      ];
+    };
+  };
+
   services = {
     grafana-agent = {
       settings = {
@@ -801,7 +1380,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(gitlab-prepare|gitlab-minio|gitlab-postgres|${CONTAINERS_BACKEND}-gitlab|gitlab-1password).service";
+                  regex = "(gitlab-prepare|gitlab-minio|gitlab-postgres|${CONTAINERS_BACKEND}-gitlab|gitlab-application-settings|gitlab-1password|gitlab-integrations-mattermost-notifications|gitlab-integrations-mattermost-slash-commands).service";
                   action = "keep";
                 }
                 {

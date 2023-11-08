@@ -307,8 +307,8 @@
                 MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ mattermost_minio_secret_key }}
             application:
               envs: |
-                USERNAME={{ mattermost_application_username }}
-                PASSWORD={{ mattermost_application_password }}
+                MATTERMOST_USERNAME={{ mattermost_application_username }}
+                MATTERMOST_PASSWORD={{ mattermost_application_password }}
           gitlab:
             minio:
               envs: |
@@ -331,7 +331,7 @@
                 password: '{{ gitlab_application_password }}'
                 token: '{{ gitlab_application_token }}'
               envs: |
-                PASSWORD={{ gitlab_application_password }}
+                GITLAB_PASSWORD={{ gitlab_application_password }}
         dest: "{{ temp_file_secrets.path }}"
       changed_when: false
       tags: secrets

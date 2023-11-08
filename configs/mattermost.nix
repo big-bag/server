@@ -196,7 +196,7 @@ in
       containers = {
         mattermost = {
           autoStart = true;
-          ports = [ "127.0.0.1:8065:8065" ];
+          ports = [ "${IP_ADDRESS}:8065:8065" ];
           volumes = let
             entrypoint = pkgs.writeTextFile {
               name = "entrypoint.sh";
@@ -232,6 +232,7 @@ in
 
             MM_SERVICESETTINGS_SITEURL = "https://${DOMAIN_NAME_INTERNAL}/mattermost";
             MM_SERVICESETTINGS_LISTENADDRESS = ":8065";
+            MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS = "${IP_ADDRESS}";
             MM_SERVICESETTINGS_ALLOWCORSFROM = "*";
             MM_SERVICESETTINGS_ENABLELOCALMODE = "true";
 
@@ -260,9 +261,15 @@ in
             "--memory-reservation=243m"
             "--memory=256m"
           ];
-          image = (import /etc/nixos/variables.nix).mattermost_image;
+          image = (import ./variables.nix).mattermost_image;
         };
       };
+    };
+  };
+
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 8065 ];
     };
   };
 
@@ -282,50 +289,72 @@ in
         EnvironmentFile = config.sops.secrets."mattermost/application/envs".path;
       };
       script = ''
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://127.0.0.1:8065/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://${IP_ADDRESS}:8065/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
           ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
         case `
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user list --local |
-          ${pkgs.gnugrep}/bin/grep $USERNAME > /dev/null
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user list \
+            --local |
+          ${pkgs.gnugrep}/bin/grep $MATTERMOST_USERNAME > /dev/null
           ${pkgs.coreutils}/bin/echo $?
         ` in
           "1" )
             ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user create \
-              --email $USERNAME@${DOMAIN_NAME_INTERNAL} \
-              --username $USERNAME \
-              --password "$PASSWORD" \
+              --email $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+              --username $MATTERMOST_USERNAME \
+              --password "$MATTERMOST_PASSWORD" \
               --local
           ;;
           "0" )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user email $USERNAME $USERNAME@${DOMAIN_NAME_INTERNAL} --local
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user username $USERNAME $USERNAME --local
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user change-password $USERNAME --password "$PASSWORD" --local
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user email \
+              $MATTERMOST_USERNAME \
+              $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+              --local
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl user change-password \
+              $MATTERMOST_USERNAME \
+              --password "$MATTERMOST_PASSWORD" \
+              --local
           ;;
         esac
 
-        export ORGANIZATION_NAME_LOWERCASE=${lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL}
-        export ORGANIZATION_NAME_TITLE=$(${pkgs.coreutils}/bin/echo ${DOMAIN_NAME_INTERNAL} | ${pkgs.gnused}/bin/sed 's/\./ /g' | ${pkgs.gawk}/bin/awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
+        export TEAM=${lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL}
+        export TEAM_NAME=$(
+          ${pkgs.coreutils}/bin/echo ${DOMAIN_NAME_INTERNAL} |
+          ${pkgs.gnused}/bin/sed 's/\./ /g' |
+          ${pkgs.gawk}/bin/awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1'
+        )
 
         case `
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team list --local |
-          ${pkgs.gnugrep}/bin/grep $ORGANIZATION_NAME_LOWERCASE > /dev/null
+          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team list \
+            --local |
+          ${pkgs.gnugrep}/bin/grep $TEAM > /dev/null
           ${pkgs.coreutils}/bin/echo $?
         ` in
           "1" )
             ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team create \
-              --name $ORGANIZATION_NAME_LOWERCASE \
-              --display-name "$ORGANIZATION_NAME_TITLE" \
+              --name $TEAM \
+              --display-name "$TEAM_NAME" \
+              --private \
               --local
           ;;
           "0" )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team rename $ORGANIZATION_NAME_LOWERCASE --display-name "$ORGANIZATION_NAME_TITLE" --local
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team rename \
+              $TEAM \
+              --display-name "$TEAM_NAME" \
+              --local
+            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team modify \
+              $TEAM \
+              --private \
+              --local
           ;;
         esac
 
-        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team users add $ORGANIZATION_NAME_LOWERCASE $USERNAME@${DOMAIN_NAME_INTERNAL} --local
+        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl team users add \
+          $TEAM \
+          $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+          --local
       '';
       wantedBy = [ "${CONTAINERS_BACKEND}-mattermost.service" ];
     };
@@ -346,7 +375,9 @@ in
       };
 
       upstreams."mattermost" = {
-        servers = { "127.0.0.1:8065" = {}; };
+        servers = let
+          MATTERMOST_ADDRESS = "${IP_ADDRESS}:8065";
+        in { "${MATTERMOST_ADDRESS}" = {}; };
         extraConfig = "keepalive 64;";
       };
 
@@ -469,9 +500,9 @@ in
         then
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Mattermost \
-            --url http://${DOMAIN_NAME_INTERNAL}/mattermost \
-            username=$USERNAME@${DOMAIN_NAME_INTERNAL} \
-            password=$PASSWORD \
+            --url https://${DOMAIN_NAME_INTERNAL}/mattermost \
+            username=$MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+            password=$MATTERMOST_PASSWORD \
             PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
@@ -480,9 +511,9 @@ in
         else
           ${pkgs._1password}/bin/op item edit Mattermost \
             --vault Server \
-            --url http://${DOMAIN_NAME_INTERNAL}/mattermost \
-            username=$USERNAME@${DOMAIN_NAME_INTERNAL} \
-            password=$PASSWORD \
+            --url https://${DOMAIN_NAME_INTERNAL}/mattermost \
+            username=$MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
+            password=$MATTERMOST_PASSWORD \
             PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \

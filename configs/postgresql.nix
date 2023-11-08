@@ -44,10 +44,10 @@ in
         host    all             all             172.17.0.0/16           md5
       '';
       settings = {
-        max_connections = 60;               # (change requires restart)
+        max_connections = 70;               # (change requires restart)
         shared_buffers = "512MB";           # min 128kB (change requires restart)
         huge_pages = "off";                 # on, off, or try (change requires restart)
-        work_mem = "2184kB";                # min 64kB
+        work_mem = "1872kB";                # min 64kB
         maintenance_work_mem = "128MB";     # min 1MB
         effective_io_concurrency = 200;     # 1-1000; 0 disables prefetching
         wal_buffers = "16MB";               # min 32kB, -1 sets based on shared_buffers (change requires restart)
@@ -165,7 +165,7 @@ in
             "--memory-reservation=243m"
             "--memory=256m"
           ];
-          image = (import /etc/nixos/variables.nix).pgadmin_image;
+          image = (import ./variables.nix).pgadmin_image;
           cmd = let
             SERVERS = ''
               {
@@ -317,7 +317,7 @@ in
         then
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title PostgreSQL \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
             username=$PGADMIN_DEFAULT_EMAIL \
             password=$PGADMIN_DEFAULT_PASSWORD \
             'DB connection command'.pgAdmin[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_PGADMIN' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_PGADMIN postgres" \
@@ -327,7 +327,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit PostgreSQL \
             --vault Server \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/pgadmin4 \
             username=$PGADMIN_DEFAULT_EMAIL \
             password=$PGADMIN_DEFAULT_PASSWORD \
             'DB connection command'.pgAdmin[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_PGADMIN' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME_PGADMIN postgres" \

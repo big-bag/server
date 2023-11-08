@@ -195,7 +195,7 @@ in
         then
           ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Grafana \
-            --url http://${DOMAIN_NAME_INTERNAL}/grafana \
+            --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
             --session $SESSION_TOKEN > /dev/null
@@ -203,7 +203,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit Grafana \
             --vault Server \
-            --url http://${DOMAIN_NAME_INTERNAL}/grafana \
+            --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
             --session $SESSION_TOKEN > /dev/null

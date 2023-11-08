@@ -44,7 +44,7 @@ in
           environment = {
             MINIO_REGION = "eu-west-3";
             MINIO_BROWSER = "on";
-            MINIO_BROWSER_REDIRECT_URL = "http://${DOMAIN_NAME_INTERNAL}/minio";
+            MINIO_BROWSER_REDIRECT_URL = "https://${DOMAIN_NAME_INTERNAL}/minio";
             MINIO_PROMETHEUS_URL = "http://${IP_ADDRESS}:9090/prometheus";
             MINIO_PROMETHEUS_JOB_ID = "minio-job";
           };
@@ -54,7 +54,7 @@ in
             "--memory-reservation=973m"
             "--memory=1024m"
           ];
-          image = (import /etc/nixos/variables.nix).minio_image;
+          image = (import ./variables.nix).minio_image;
           cmd = [
             "server"
             "/data"
@@ -163,7 +163,7 @@ in
         then
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title MinIO \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/minio \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/minio \
             username=$MINIO_ROOT_USER \
             password=$MINIO_ROOT_PASSWORD \
             notesPlain='username -> Access Key, password -> Secret Key' \
@@ -172,7 +172,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit MinIO \
             --vault Server \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/minio \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/minio \
             username=$MINIO_ROOT_USER \
             password=$MINIO_ROOT_PASSWORD \
             notesPlain='username -> Access Key, password -> Secret Key' \

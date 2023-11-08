@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  REDIS_INSTANCE = (import /etc/nixos/variables.nix).redis_instance;
+  REDIS_INSTANCE = (import ./variables.nix).redis_instance;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
 in
@@ -91,7 +91,7 @@ in
             "--memory-reservation=122m"
             "--memory=128m"
           ];
-          image = (import /etc/nixos/variables.nix).redisinsight_image;
+          image = (import ./variables.nix).redisinsight_image;
         };
       };
     };
@@ -116,7 +116,12 @@ in
         EnvironmentFile = config.sops.secrets."redis/database/envs".path;
       };
       script = ''
-        post_data()
+        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | ${pkgs.gnugrep}/bin/grep "OK"; do
+          ${pkgs.coreutils}/bin/echo "Waiting for RedisInsight availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        json_database()
         {
         ${pkgs.coreutils}/bin/cat <<EOF
           {
@@ -129,14 +134,9 @@ in
         EOF
         }
 
-        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | ${pkgs.gnugrep}/bin/grep "OK"; do
-          ${pkgs.coreutils}/bin/echo "Waiting for RedisInsight availability."
-          ${pkgs.coreutils}/bin/sleep 1
-        done
-
         ${pkgs.wget}/bin/wget -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/api/instance/ \
           --header 'Content-Type: application/json' \
-          --post-data "$(post_data)" > /dev/null
+          --post-data "$(json_database)" > /dev/null
         ${pkgs.coreutils}/bin/echo "${REDIS_INSTANCE} database added successfully."
       '';
       wantedBy = [
@@ -253,7 +253,7 @@ in
         then
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Redis \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/redisinsight \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             'DB connection command'.'${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
@@ -263,7 +263,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit Redis \
             --vault Server \
-            website[url]=http://${DOMAIN_NAME_INTERNAL}/redisinsight \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/redisinsight \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             'DB connection command'.'${REDIS_INSTANCE} DB'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
