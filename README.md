@@ -194,15 +194,19 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
    vault_domain_name_internal: example.com
 
-   vault_pgadmin_postgres_username: [VALUE]
    vault_grafana_agent_postgres_username: [VALUE]
-   vault_grafana_agent_redis_username: [VALUE]
 
    vault_mattermost_postgres_username: [VALUE]
    vault_mattermost_postgres_database: [VALUE]
 
+   vault_grafana_agent_redis_username: [VALUE]
+
    vault_gitlab_postgres_username: [VALUE]
    vault_gitlab_postgres_database: [VALUE]
+
+   vault_pgadmin_postgres_username: [VALUE]
+
+   vault_grafana_postgres_username: [VALUE]
    ```
 
 5. run a playbook to do an initial configuration on a server and configure a local environment
@@ -221,15 +225,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
        ansible-playbook site.yml --tags secrets
    ```
 
-7. run a playbook to upload grafana dashboards
-   ```bash
-   docker run --rm -t \
-     --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
-       ansible-playbook site.yml --tags dashboards
-   ```
-
-8. grafana dashboard sources
+7. grafana dashboard sources
 
    | Dashboard name/group | Dashboard source (based on) |
    | :--- | :--- |
@@ -246,7 +242,6 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    || https://grafana.com/grafana/dashboards/16026-mimir-writes/ |
    | Prometheus | Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats |
    || Configuration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
-   | Grafana metrics | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
    | Node Exporter Dashboard | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/ |
    || https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
    | PostgreSQL Exporter Dashboard | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
@@ -258,6 +253,15 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json |
    || https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |
+   | Grafana metrics | Configuration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+
+8. run a playbook to upload grafana dashboards
+   ```bash
+   docker run --rm -t \
+     --volume=$(pwd):/etc/ansible \
+     ansible:2.15.1 \
+       ansible-playbook site.yml --tags dashboards
+   ```
 
 9. run a playbook to upgrade NixOS and services to the latest version
    ```bash

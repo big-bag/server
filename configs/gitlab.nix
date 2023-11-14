@@ -164,13 +164,13 @@ in
       };
       script = ''
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
-          ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability."
+          ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
         ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
           DO
-          \$do$
+          \$$
           BEGIN
               IF NOT EXISTS (
                   SELECT FROM pg_catalog.pg_roles
@@ -192,7 +192,7 @@ in
                   RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" updated successfully.';
               END IF;
           END
-          \$do$;
+          \$$;
 
           SELECT 'CREATE DATABASE $POSTGRESQL_DATABASE OWNER $POSTGRESQL_USERNAME'
               WHERE NOT EXISTS (
@@ -201,9 +201,52 @@ in
               );
           \gexec
 
-          \c $POSTGRESQL_DATABASE
+          REVOKE CONNECT
+              ON DATABASE $POSTGRESQL_DATABASE
+              FROM PUBLIC;
+
+          \connect $POSTGRESQL_DATABASE
+
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
           CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+          SELECT format('
+              REVOKE ALL PRIVILEGES
+                  ON SCHEMA %I
+                  FROM PUBLIC
+              ', schema_name)
+              FROM information_schema.schemata
+              WHERE schema_name <> 'pg_toast'
+                  AND schema_name <> 'pg_catalog'
+                  AND schema_name <> 'information_schema';
+          SELECT format('
+              REVOKE ALL PRIVILEGES
+                  ON ALL TABLES IN SCHEMA %I
+                  FROM PUBLIC
+              ', schema_name)
+              FROM information_schema.schemata
+              WHERE schema_name <> 'pg_toast'
+                  AND schema_name <> 'pg_catalog'
+                  AND schema_name <> 'information_schema';
+
+          SELECT format('
+              GRANT CREATE, USAGE
+                  ON SCHEMA %I
+                  TO $POSTGRESQL_USERNAME
+              ', schema_name)
+              FROM information_schema.schemata
+              WHERE schema_name <> 'pg_toast'
+                  AND schema_name <> 'pg_catalog'
+                  AND schema_name <> 'information_schema';
+          SELECT format('
+              GRANT SELECT, INSERT, UPDATE, DELETE
+                  ON ALL TABLES IN SCHEMA %I
+                  TO $POSTGRESQL_USERNAME
+              ', schema_name)
+              FROM information_schema.schemata
+              WHERE schema_name <> 'pg_toast'
+                  AND schema_name <> 'pg_catalog'
+                  AND schema_name <> 'information_schema';
         EOSQL
       '';
       wantedBy = [
@@ -883,7 +926,7 @@ in
   systemd.services = {
     gitlab-1password = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -918,7 +961,7 @@ in
             password=$GITLAB_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
+            Postgres.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
@@ -929,7 +972,7 @@ in
             password=$GITLAB_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
+            Postgres.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi

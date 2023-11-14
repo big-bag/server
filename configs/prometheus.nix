@@ -184,7 +184,7 @@ in
   systemd.services = {
     prometheus-1password = {
       after = [ "prometheus.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

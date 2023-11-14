@@ -1,6 +1,7 @@
 { config, pkgs, ... }:
 
 let
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
@@ -13,6 +14,137 @@ in
       };
       script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/monitoring";
       wantedBy = [ "grafana.service" ];
+    };
+  };
+
+  sops.secrets = {
+    "grafana/postgres/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    grafana-postgres = {
+      after = [ "postgresql.service" ];
+      before = [ "grafana.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."grafana/postgres/envs".path;
+      };
+      script = ''
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+          ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
+          DO
+          \$$
+          BEGIN
+              IF NOT EXISTS (
+                  SELECT FROM pg_catalog.pg_roles
+                  WHERE rolname = '$POSTGRESQL_USERNAME'
+              )
+              THEN
+                  CREATE ROLE $POSTGRESQL_USERNAME WITH
+                      LOGIN
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" created successfully.';
+              ELSE
+                  ALTER ROLE $POSTGRESQL_USERNAME WITH
+                      LOGIN
+                      NOINHERIT
+                      CONNECTION LIMIT -1
+                      ENCRYPTED PASSWORD '$POSTGRESQL_PASSWORD';
+                  RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" updated successfully.';
+              END IF;
+          END
+          \$$;
+
+          SELECT format('
+              GRANT CONNECT
+                  ON DATABASE %I
+                  TO $POSTGRESQL_USERNAME
+              ', datname)
+              FROM pg_database
+              WHERE NOT datistemplate
+                  AND datallowconn
+                  AND datname <> 'postgres';
+          \gexec
+
+          CREATE EXTENSION IF NOT EXISTS dblink;
+
+          DO
+          \$$
+          DECLARE
+            database_name text;
+            connection_string text;
+            database_current text;
+            database_schema text;
+
+          BEGIN
+              FOR database_name IN
+                  SELECT datname
+                      FROM pg_database
+                      WHERE NOT datistemplate
+                          AND datallowconn
+                          AND datname <> 'postgres'
+              LOOP
+                  connection_string = 'dbname=' || database_name;
+
+                  database_current = (
+                      SELECT *
+                          FROM dblink(connection_string, '
+                              SELECT current_database()
+                          ')
+                          AS (output_data TEXT)
+                  );
+                  RAISE NOTICE 'Performing operations in the "%" database.', database_current;
+
+                  FOR database_schema IN
+                      SELECT *
+                          FROM dblink(connection_string, '
+                              SELECT schema_name
+                              FROM information_schema.schemata
+                              WHERE schema_name <> '''pg_toast'''
+                                  AND schema_name <> '''pg_catalog'''
+                                  AND schema_name <> '''information_schema'''
+                          ')
+                          AS (output_data TEXT)
+                  LOOP
+                      RAISE NOTICE 'Performing operations in the "%" schema.', database_schema;
+
+                      PERFORM dblink_exec(connection_string, '
+                          GRANT USAGE
+                              ON SCHEMA '|| database_schema ||'
+                              TO $POSTGRESQL_USERNAME
+                      ');
+                      PERFORM dblink_exec(connection_string, '
+                          GRANT SELECT
+                              ON ALL TABLES IN SCHEMA '|| database_schema ||'
+                              TO $POSTGRESQL_USERNAME
+                      ');
+                      PERFORM dblink_exec(connection_string, '
+                          ALTER DEFAULT PRIVILEGES
+                              IN SCHEMA '|| database_schema ||'
+                              GRANT SELECT
+                                  ON TABLES
+                                  TO $POSTGRESQL_USERNAME
+                      ');
+                  END LOOP;
+              END LOOP;
+          END
+          \$$;
+        EOSQL
+      '';
+      wantedBy = [
+        "postgresql.service"
+        "grafana.service"
+      ];
     };
   };
 
@@ -55,8 +187,8 @@ in
                 access: proxy
                 orgId: 1
                 uid: $DATASOURCE_UID_MIMIR
-                url: http://127.0.0.1:9009/mimir/prometheus
                 isDefault: false
+                url: http://127.0.0.1:9009/mimir/prometheus
                 jsonData:
                   manageAlerts: true
                   timeInterval: 1m # 'Scrape interval' in Grafana UI, defaults to 15s
@@ -69,8 +201,8 @@ in
                 access: proxy
                 orgId: 1
                 uid: $DATASOURCE_UID_PROMETHEUS
-                url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
                 isDefault: false
+                url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
                 jsonData:
                   manageAlerts: true
                   timeInterval: ${config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
@@ -83,11 +215,53 @@ in
                 access: proxy
                 orgId: 1
                 uid: $DATASOURCE_UID_LOKI
-                url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
                 isDefault: true
+                url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
                 jsonData:
                   manageAlerts: true
                   maxLines: 1000
+                editable: true
+
+              - name: Mattermost
+                type: postgres
+                access: proxy
+                orgId: 1
+                uid: $DATASOURCE_UID_POSTGRESQL_MATTERMOST
+                isDefault: false
+                url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
+                user: $POSTGRESQL_USERNAME
+                jsonData:
+                  database: $POSTGRESQL_DATABASE_MATTERMOST
+                  sslmode: disable # disable/require/verify-ca/verify-full
+                  maxOpenConns: 100
+                  maxIdleConns: 100
+                  maxIdleConnsAuto: true
+                  connMaxLifetime: 14400
+                  postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+                  timescaledb: false
+                secureJsonData:
+                  password: $POSTGRESQL_PASSWORD
+                editable: true
+
+              - name: GitLab
+                type: postgres
+                access: proxy
+                orgId: 1
+                uid: $DATASOURCE_UID_POSTGRESQL_GITLAB
+                isDefault: false
+                url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
+                user: $POSTGRESQL_USERNAME
+                jsonData:
+                  database: $POSTGRESQL_DATABASE_GITLAB
+                  sslmode: disable # disable/require/verify-ca/verify-full
+                  maxOpenConns: 100
+                  maxIdleConns: 100
+                  maxIdleConnsAuto: true
+                  connMaxLifetime: 14400
+                  postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+                  timescaledb: false
+                secureJsonData:
+                  password: $POSTGRESQL_PASSWORD
                 editable: true
           '';
         };
@@ -115,7 +289,10 @@ in
   systemd.services = {
     grafana = {
       serviceConfig = {
-        EnvironmentFile = config.sops.secrets."grafana/application/envs".path;
+        EnvironmentFile = [
+          config.sops.secrets."grafana/application/envs".path
+          config.sops.secrets."grafana/postgres/envs".path
+        ];
         CPUQuota = "6%";
         MemoryHigh = "1946M";
         MemoryMax = "2048M";
@@ -167,12 +344,13 @@ in
   systemd.services = {
     grafana-1password = {
       after = [ "grafana.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
           config.sops.secrets."grafana/application/envs".path
+          config.sops.secrets."grafana/postgres/envs".path
         ];
       };
       environment = {
@@ -198,6 +376,8 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
+            Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
+            Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
@@ -206,6 +386,8 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
+            Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
+            Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
@@ -258,7 +440,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(grafana-prepare|grafana|grafana-1password).service";
+                  regex = "(grafana-prepare|grafana-postgres|grafana|grafana-1password).service";
                   action = "keep";
                 }
                 {

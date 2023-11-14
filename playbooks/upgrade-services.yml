@@ -5,10 +5,10 @@
   gather_facts: false
   vars:
     minio_repository: minio/minio
-    pgadmin_repository: dpage/pgadmin4
-    redisinsight_repository: redislabs/redisinsight
     mattermost_repository: mattermost/mattermost-team-edition
+    redisinsight_repository: redislabs/redisinsight
     gitlab_repository: gitlab/gitlab-ce
+    pgadmin_repository: dpage/pgadmin4
   tasks:
 
     # ------------------- sops-nix ------------------- #
@@ -49,10 +49,10 @@
     - name: split a docker repository name
       ansible.builtin.set_fact:
         minio_repo_split: "{{ minio_repository.split('/') }}"
-        pgadmin_repo_split: "{{ pgadmin_repository.split('/') }}"
-        redisinsight_repo_split: "{{ redisinsight_repository.split('/') }}"
         mattermost_repo_split: "{{ mattermost_repository.split('/') }}"
+        redisinsight_repo_split: "{{ redisinsight_repository.split('/') }}"
         gitlab_repo_split: "{{ gitlab_repository.split('/') }}"
+        pgadmin_repo_split: "{{ pgadmin_repository.split('/') }}"
 
     - name: find digest of the latest docker image
       ansible.builtin.shell: |
@@ -68,16 +68,16 @@
             repository: '{{ minio_repo_split.1 }}'
           }
         - {
-            namespace: '{{ pgadmin_repo_split.0 }}',
-            repository: '{{ pgadmin_repo_split.1 }}'
-          }
-        - {
             namespace: '{{ redisinsight_repo_split.0 }}',
             repository: '{{ redisinsight_repo_split.1 }}'
           }
         - {
             namespace: '{{ gitlab_repo_split.0 }}',
             repository: '{{ gitlab_repo_split.1 }}'
+          }
+        - {
+            namespace: '{{ pgadmin_repo_split.0 }}',
+            repository: '{{ pgadmin_repo_split.1 }}'
           }
       register: docker_image_digest
       changed_when: false
@@ -100,17 +100,9 @@
             filter: '[A-Z]\\.[0-9]+-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Z]\\.?[a-z]?\\.?[0-9a-z]?'
           }
         - {
-            namespace: '{{ pgadmin_repo_split.0 }}',
-            repository: '{{ pgadmin_repo_split.1 }}',
-            digest: "{{ docker_image_digest.results.1.stdout | replace('\"','') }}",
-            # find tags which looks like:
-            # 7.5
-            filter: '[0-9]\\.[0-9]'
-          }
-        - {
             namespace: '{{ redisinsight_repo_split.0 }}',
             repository: '{{ redisinsight_repo_split.1 }}',
-            digest: "{{ docker_image_digest.results.2.stdout | replace('\"','') }}",
+            digest: "{{ docker_image_digest.results.1.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 1.14.0
             filter: '[0-9]\\.[0-9]+\\.[0-9]'
@@ -118,10 +110,18 @@
         - {
             namespace: '{{ gitlab_repo_split.0 }}',
             repository: '{{ gitlab_repo_split.1 }}',
-            digest: "{{ docker_image_digest.results.3.stdout | replace('\"','') }}",
+            digest: "{{ docker_image_digest.results.2.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 16.2.4-ce.0
             filter: '[0-9]\\.[0-9]\\.[0-9]-[a-z]+\\.[0-9]'
+          }
+        - {
+            namespace: '{{ pgadmin_repo_split.0 }}',
+            repository: '{{ pgadmin_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.3.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # 7.5
+            filter: '[0-9]\\.[0-9]'
           }
       register: docker_image_tag_by_digest
       changed_when: false
@@ -150,20 +150,21 @@
     - name: set a docker image
       ansible.builtin.set_fact:
         minio_image: "{{ minio_repository }}:{{ docker_image_tag_by_digest.results.0.stdout | replace('\"','') }}"
-        pgadmin_image: "{{ pgadmin_repository }}:{{ docker_image_tag_by_digest.results.1.stdout | replace('\"','') }}"
-        redisinsight_image: "{{ redisinsight_repository }}:{{ docker_image_tag_by_digest.results.2.stdout | replace('\"','') }}"
         mattermost_image: "{{ mattermost_repository }}:{{ docker_image_tag_by_filter.results.0.stdout | replace('\"','') }}"
-        gitlab_image: "{{ gitlab_repository }}:{{ docker_image_tag_by_digest.results.3.stdout | replace('\"','') }}"
+        redisinsight_image: "{{ redisinsight_repository }}:{{ docker_image_tag_by_digest.results.1.stdout | replace('\"','') }}"
+        gitlab_image: "{{ gitlab_repository }}:{{ docker_image_tag_by_digest.results.2.stdout | replace('\"','') }}"
+        pgadmin_image: "{{ pgadmin_repository }}:{{ docker_image_tag_by_digest.results.3.stdout | replace('\"','') }}"
 
+    # NOTE: File can be saved directly on server
     - name: update variables
       ansible.builtin.copy:
         content: |
           {
             minio_image = "{{ minio_image }}";
-            pgadmin_image = "{{ pgadmin_image }}";
+            mattermost_image = "{{ mattermost_image }}";
             redis_instance = "gitlab";
             redisinsight_image = "{{ redisinsight_image }}";
-            mattermost_image = "{{ mattermost_image }}";
             gitlab_image = "{{ gitlab_image }}";
+            pgadmin_image = "{{ pgadmin_image }}";
           }
         dest: ../configs/variables.nix

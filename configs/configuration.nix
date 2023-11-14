@@ -8,8 +8,8 @@
   imports =
     # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "84d6b27dc71ac02422e192c35806d06915d2bf67";
-      SOPS_NIX_SHA256 = "TmROaV9W6HArdTUgxLN334Kw+CradxWHw1HYM/3H6xI=";
+      SOPS_NIX_COMMIT = "0e3a94167dcd10a47b89141f35b2ff9e04b34c46";
+      SOPS_NIX_SHA256 = "1GeczM7XfgHcYGYiYNcdwSFu3E62vmh4d7mffWZvyzE=";
     in
     # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
@@ -27,11 +27,13 @@
       ./loki.nix
       ./grafana-agent.nix
       ./node-exporter.nix
-      ./grafana.nix
-      ./postgresql.nix
-      ./redis.nix
+      ./postgres.nix
       ./mattermost.nix
+      ./redis.nix
+      ./redisinsight.nix
       ./gitlab.nix
+      ./pgadmin.nix
+      ./grafana.nix
     ];
 
   # Use the systemd-boot EFI boot loader.

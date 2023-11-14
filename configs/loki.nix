@@ -210,7 +210,7 @@ in
   systemd.services = {
     loki-1password = {
       after = [ "loki.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

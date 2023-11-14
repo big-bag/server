@@ -40,13 +40,13 @@ in
       };
       script = ''
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
-          ${pkgs.coreutils}/bin/echo "Waiting for PostgreSQL availability."
+          ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
         ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.postgresql_14}/bin/psql --variable=ON_ERROR_STOP=1 <<-EOSQL 2> /dev/null
           DO
-          \$do$
+          \$$
           BEGIN
               IF NOT EXISTS (
                   SELECT FROM pg_catalog.pg_roles
@@ -68,7 +68,7 @@ in
                   RAISE NOTICE 'Role "$POSTGRESQL_USERNAME" updated successfully.';
               END IF;
           END
-          \$do$;
+          \$$;
 
           SELECT 'CREATE DATABASE $POSTGRESQL_DATABASE OWNER $POSTGRESQL_USERNAME'
               WHERE NOT EXISTS (
@@ -76,6 +76,26 @@ in
                   WHERE datname = '$POSTGRESQL_DATABASE'
               );
           \gexec
+
+          REVOKE CONNECT
+              ON DATABASE $POSTGRESQL_DATABASE
+              FROM PUBLIC;
+
+          \connect $POSTGRESQL_DATABASE
+
+          REVOKE ALL PRIVILEGES
+              ON SCHEMA public
+              FROM PUBLIC;
+          REVOKE ALL PRIVILEGES
+              ON ALL TABLES IN SCHEMA public
+              FROM PUBLIC;
+
+          GRANT CREATE, USAGE
+              ON SCHEMA public
+              TO $POSTGRESQL_USERNAME;
+          GRANT SELECT, INSERT, UPDATE, DELETE
+              ON ALL TABLES IN SCHEMA public
+              TO $POSTGRESQL_USERNAME;
         EOSQL
       '';
       wantedBy = [
@@ -470,7 +490,7 @@ in
         "${CONTAINERS_BACKEND}-mattermost.service"
         "mattermost-configure.service"
       ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 27))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -503,7 +523,7 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/mattermost \
             username=$MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
             password=$MATTERMOST_PASSWORD \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
+            Postgres.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null
@@ -514,7 +534,7 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/mattermost \
             username=$MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
             password=$MATTERMOST_PASSWORD \
-            PostgreSQL.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
+            Postgres.'Connection command'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD_DATABASE' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE" \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
             MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             --session $SESSION_TOKEN > /dev/null

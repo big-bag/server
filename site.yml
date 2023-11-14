@@ -9,7 +9,7 @@
   gather_facts: false
   tasks:
     - name: upload nixos configuration files
-      ansible.builtin.template:
+      ansible.builtin.copy:
         src: "{{ item }}"
         dest: /etc/nixos/
       with_fileglob: configs/*
