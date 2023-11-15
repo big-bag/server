@@ -86,7 +86,8 @@ in
           esac
         }
 
-        while true; do
+        while true
+        do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD

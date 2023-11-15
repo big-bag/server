@@ -3,7 +3,6 @@
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-  REDIS_INSTANCE = (import ./variables.nix).redis_instance;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
@@ -98,7 +97,8 @@ in
           esac
         }
 
-        while true; do
+        while true
+        do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
@@ -163,7 +163,8 @@ in
         EnvironmentFile = config.sops.secrets."gitlab/postgres/envs".path;
       };
       script = ''
-        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -313,10 +314,10 @@ in
   };
 
   sops.secrets = {
-    "redis/database/file/password" = {
+    "redis/application/file/password" = {
       mode = "0400";
-      owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
-      group = config.services.redis.servers.${REDIS_INSTANCE}.user;
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
     };
   };
 
@@ -348,7 +349,7 @@ in
             "${config.sops.secrets."gitlab/postgres/file/database".path}:/run/secrets/postgres_database:ro"
             "${config.sops.secrets."gitlab/postgres/file/username".path}:/run/secrets/postgres_username:ro"
             "${config.sops.secrets."gitlab/postgres/file/password".path}:/run/secrets/postgres_password:ro"
-            "${config.sops.secrets."redis/database/file/password".path}:/run/secrets/redis_password:ro"
+            "${config.sops.secrets."redis/application/file/password".path}:/run/secrets/redis_password:ro"
           ];
           environment = let
             MINIO_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
@@ -451,8 +452,8 @@ in
               ###! Docs: https://docs.gitlab.com/omnibus/settings/redis.html
 
               #### Redis TCP connection
-              gitlab_rails['redis_host'] = '${config.services.redis.servers.${REDIS_INSTANCE}.bind}'
-              gitlab_rails['redis_port'] = ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
+              gitlab_rails['redis_host'] = '${IP_ADDRESS}'
+              gitlab_rails['redis_port'] = 6379
               gitlab_rails['redis_password'] = File.read('/run/secrets/redis_password').gsub("\n", "")
 
               ################################################################################
@@ -685,7 +686,9 @@ in
       script = ''
         export GITLAB_ADDRESS=${IP_ADDRESS}:8181
 
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health |
+          ${pkgs.gnugrep}/bin/grep "GitLab OK"
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -1076,7 +1079,9 @@ in
       script = ''
         export MATTERMOST_ADDRESS=${IP_ADDRESS}:8065
 
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping |
+          ${pkgs.gnugrep}/bin/grep OK
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -1184,7 +1189,9 @@ in
 
         export GITLAB_ADDRESS=${IP_ADDRESS}:8181
 
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health |
+          ${pkgs.gnugrep}/bin/grep "GitLab OK"
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -1282,7 +1289,9 @@ in
       script = ''
         export MATTERMOST_ADDRESS=${IP_ADDRESS}:8065
 
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping |
+          ${pkgs.gnugrep}/bin/grep OK
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -1358,7 +1367,9 @@ in
           ${pkgs.jq}/bin/jq --raw-output .token
         )
 
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health | ${pkgs.gnugrep}/bin/grep "GitLab OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health |
+          ${pkgs.gnugrep}/bin/grep "GitLab OK"
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for GitLab availability."
           ${pkgs.coreutils}/bin/sleep 1
         done

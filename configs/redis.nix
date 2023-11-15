@@ -1,67 +1,65 @@
 { config, pkgs, ... }:
 
 let
-  REDIS_INSTANCE = (import ./variables.nix).redis_instance;
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
 in
 
 {
-  systemd.services = {
-    redis-prepare = {
-      before = [ "var-lib-redis\\x2d${REDIS_INSTANCE}.mount" ];
-      serviceConfig = {
-        Type = "oneshot";
+  # https://redis.io/docs/get-started/faq/ -> Background saving fails with a fork() error on Linux?
+  boot = {
+    kernel = {
+      sysctl = {
+        "vm.nr_hugepages" = 0;
+        "vm.overcommit_memory" = 1;
       };
-      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/data-stores";
-      wantedBy = [ "var-lib-redis\\x2d${REDIS_INSTANCE}.mount" ];
     };
-  };
-
-  fileSystems."/var/lib/redis-${REDIS_INSTANCE}" = {
-    device = "/mnt/ssd/data-stores/redis-${REDIS_INSTANCE}";
-    options = [
-      "bind"
-      "x-systemd.before=redis-${REDIS_INSTANCE}.service"
-      "x-systemd.wanted-by=redis-${REDIS_INSTANCE}.service"
-    ];
   };
 
   sops.secrets = {
-    "redis/database/file/password" = {
+    "redis/application/envs" = {
       mode = "0400";
-      owner = config.services.redis.servers.${REDIS_INSTANCE}.user;
-      group = config.services.redis.servers.${REDIS_INSTANCE}.user;
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
     };
   };
 
-  services = {
-    redis = {
-      vmOverCommit = true;
-      servers = {
-        ${REDIS_INSTANCE} = let
-          IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-        in {
-          enable = true;
-          user = "redis-${REDIS_INSTANCE}";
-          bind = "${IP_ADDRESS}";
-          port = 6379;
-          requirePassFile = config.sops.secrets."redis/database/file/password".path;
-          appendOnly = true;
-          maxclients = 200;
-          settings = {
-            maxmemory = "973mb";
+  virtualisation = {
+    oci-containers = {
+      containers = {
+        redis = {
+          autoStart = true;
+          ports = [ "${IP_ADDRESS}:6379:6379" ];
+          volumes = [ "/mnt/ssd/data-stores/redis:/data:rw" ];
+          environmentFiles = [ config.sops.secrets."redis/application/envs".path ];
+          environment = {
+            REDIS_ARGS = ''
+              --bind 0.0.0.0
+              --port 6379
+              --save 900 1 300 10 60 10000
+              --dbfilename dump.rdb
+              --maxclients 200
+              --maxmemory 973mb
+              --appendonly yes
+              --appendfilename appendonly.aof
+              --appenddirname appendonlydir
+            '';
           };
+          entrypoint = "/bin/bash";
+          extraOptions = [
+            "--cpus=0.25"
+            "--memory-reservation=973m"
+            "--memory=1024m"
+          ];
+          image = (import ./variables.nix).redis_image;
+          cmd = [
+            "-c" "
+              export REDIS_ARGS=\"--requirepass $DEFAULT_USER_PASSWORD $REDIS_ARGS\"
+              /entrypoint.sh
+            "
+          ];
         };
       };
-    };
-  };
-
-  systemd.services."redis-${REDIS_INSTANCE}" = {
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    serviceConfig = {
-      CPUQuota = "3%";
-      MemoryHigh = "973M";
-      MemoryMax = "1024M";
     };
   };
 
@@ -81,66 +79,76 @@ in
 
   systemd.services = {
     grafana-agent-redis = {
-      after = [ "redis-${REDIS_INSTANCE}.service" ];
+      after = [ "${CONTAINERS_BACKEND}-redis.service" ];
       before = [ "grafana-agent.service" ];
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
-          config.sops.secrets."redis/database/envs".path
+          config.sops.secrets."redis/application/envs".path
           config.sops.secrets."redis/grafana_agent/envs".path
         ];
       };
       script = ''
-        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${config.services.redis.servers.${REDIS_INSTANCE}.bind} ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}; do
+        while ! ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
+          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
+          redis \
+            redis-cli PING |
+          ${pkgs.gnugrep}/bin/grep PONG
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Redis availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        COMMAND=$(
-          ${pkgs.coreutils}/bin/echo "ACL SETUSER $REDIS_USERNAME \
-            reset \
-            +client \
-            +ping \
-            +info \
-            +config|get \
-            +cluster|info \
-            +slowlog \
-            +latency \
-            +memory \
-            +select \
-            +get \
-            +scan \
-            +xinfo \
-            +type \
-            +pfcount \
-            +strlen \
-            +llen \
-            +scard \
-            +zcard \
-            +hlen \
-            +xlen \
-            +eval \
-            allkeys \
-            on \
-            >$REDIS_PASSWORD_CLI" |
-          ${pkgs.redis}/bin/redis-cli \
-            -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} \
-            -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port}
-        )
+        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
+          --env USERNAME=$REDIS_USERNAME \
+          --env PASSWORD=$REDIS_PASSWORD_CLI \
+          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
+          redis \
+            /bin/bash -c '
+              COMMAND=$(
+                echo "ACL SETUSER $USERNAME \
+                  reset \
+                  +client \
+                  +ping \
+                  +info \
+                  +config|get \
+                  +cluster|info \
+                  +slowlog \
+                  +latency \
+                  +memory \
+                  +select \
+                  +get \
+                  +scan \
+                  +xinfo \
+                  +type \
+                  +pfcount \
+                  +strlen \
+                  +llen \
+                  +scard \
+                  +zcard \
+                  +hlen \
+                  +xlen \
+                  +eval \
+                  allkeys \
+                  on \
+                  >$PASSWORD" |
+                redis-cli
+              )
 
-        case "$COMMAND" in
-          "OK" )
-            ${pkgs.coreutils}/bin/echo $COMMAND
-            exit 0
-          ;;
-          "ERR"* )
-            ${pkgs.coreutils}/bin/echo $COMMAND
-            exit 1
-          ;;
-        esac
+              case "$COMMAND" in
+                "OK" )
+                  echo $COMMAND
+                  exit 0
+                ;;
+                "ERR"* )
+                  echo $COMMAND
+                  exit 1
+                ;;
+              esac
+            '
       '';
       wantedBy = [
-        "redis-${REDIS_INSTANCE}.service"
+        "${CONTAINERS_BACKEND}-redis.service"
         "grafana-agent.service"
       ];
     };
@@ -156,13 +164,13 @@ in
 
   systemd.services = {
     redis-1password = {
-      after = [ "redis-${REDIS_INSTANCE}.service" ];
+      after = [ "${CONTAINERS_BACKEND}-redis.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
-          config.sops.secrets."redis/database/envs".path
+          config.sops.secrets."redis/application/envs".path
           config.sops.secrets."redis/grafana_agent/envs".path
         ];
       };
@@ -186,20 +194,20 @@ in
         then
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Redis \
-            '${REDIS_INSTANCE} instance'.'Connection command'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
-            'Grafana Agent'.'Connection command'[password]="redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
+            'Default user'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -a '$DEFAULT_USER_PASSWORD'" \
+            'Grafana Agent'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Redis \
             --vault Server \
-            '${REDIS_INSTANCE} instance'.'Connection command'[password]="redis-cli -h ${config.services.redis.servers.${REDIS_INSTANCE}.bind} -p ${toString config.services.redis.servers.${REDIS_INSTANCE}.port} -a '$REDISCLI_AUTH'" \
-            'Grafana Agent'.'Connection command'[password]="redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}'" \
+            'Default user'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -a '$DEFAULT_USER_PASSWORD'" \
+            'Grafana Agent'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
-      wantedBy = [ "redis-${REDIS_INSTANCE}.service" ];
+      wantedBy = [ "${CONTAINERS_BACKEND}-redis.service" ];
     };
   };
 
@@ -248,7 +256,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(redis-prepare|var-lib-redis\\x2d${REDIS_INSTANCE}|redis-${REDIS_INSTANCE}|grafana-agent-redis|redis-1password).(service|mount)";
+                  regex = "(${CONTAINERS_BACKEND}-redis|grafana-agent-redis|redis-1password).service";
                   action = "keep";
                 }
                 {
@@ -266,7 +274,7 @@ in
             enabled = true;
             scrape_interval = "1m";
             scrape_timeout = "10s";
-            redis_addr = "${config.services.redis.servers.${REDIS_INSTANCE}.bind}:${toString config.services.redis.servers.${REDIS_INSTANCE}.port}";
+            redis_addr = "${IP_ADDRESS}:6379";
             redis_user = "\${REDIS_USERNAME}";
             redis_password_file = config.sops.secrets."redis/grafana_agent/file/password".path;
           };

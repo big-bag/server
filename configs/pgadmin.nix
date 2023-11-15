@@ -24,7 +24,8 @@ in
         EnvironmentFile = config.sops.secrets."pgadmin/postgres/envs".path;
       };
       script = ''
-        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
           ${pkgs.coreutils}/bin/sleep 1
         done

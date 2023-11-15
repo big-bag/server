@@ -2,8 +2,8 @@
 
 let
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
-  REDIS_INSTANCE = (import ./variables.nix).redis_instance;
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
 in
 
 {
@@ -32,7 +32,7 @@ in
   };
 
   sops.secrets = {
-    "redis/database/envs" = {
+    "redis/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -42,15 +42,17 @@ in
   systemd.services = {
     redisinsight-configure = {
       after = [
-        "redis-${REDIS_INSTANCE}.service"
+        "${CONTAINERS_BACKEND}-redis.service"
         "${CONTAINERS_BACKEND}-redisinsight.service"
       ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."redis/database/envs".path;
+        EnvironmentFile = config.sops.secrets."redis/application/envs".path;
       };
       script = ''
-        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ | ${pkgs.gnugrep}/bin/grep "OK"; do
+        while ! ${pkgs.wget}/bin/wget -q -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/ |
+          ${pkgs.gnugrep}/bin/grep OK
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for RedisInsight availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -59,11 +61,11 @@ in
         {
         ${pkgs.coreutils}/bin/cat <<EOF
           {
-            "name": "${REDIS_INSTANCE}",
+            "name": "gitlab",
             "connectionType": "STANDALONE",
-            "host": "${config.services.redis.servers.${REDIS_INSTANCE}.bind}",
-            "port": ${toString config.services.redis.servers.${REDIS_INSTANCE}.port},
-            "password": "$REDISCLI_AUTH"
+            "host": "${IP_ADDRESS}",
+            "port": 6379,
+            "password": "$DEFAULT_USER_PASSWORD"
           }
         EOF
         }
@@ -71,10 +73,10 @@ in
         ${pkgs.wget}/bin/wget -O - http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/api/instance/ \
           --header 'Content-Type: application/json' \
           --post-data "$(json_database)" > /dev/null
-        ${pkgs.coreutils}/bin/echo "${REDIS_INSTANCE} database added successfully."
+        ${pkgs.coreutils}/bin/echo "Database added successfully."
       '';
       wantedBy = [
-        "redis-${REDIS_INSTANCE}.service"
+        "${CONTAINERS_BACKEND}-redis.service"
         "${CONTAINERS_BACKEND}-redisinsight.service"
       ];
     };

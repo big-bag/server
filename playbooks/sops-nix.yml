@@ -67,7 +67,7 @@
         mattermost_application_username_seed: mattermost_application_username_random
         mattermost_application_password_seed: mattermost_application_password_random
 
-        redis_database_password_seed: redis_database_password_random
+        redis_default_user_password_seed: redis_default_user_password_random
         grafana_agent_redis_password_seed: grafana_agent_redis_password_random
 
         redisinsight_nginx_username_seed: redisinsight_nginx_username_random
@@ -120,7 +120,7 @@
         mattermost_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_lowercase,digits,-_. length=22', seed=mattermost_application_username_seed) }}"
         mattermost_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mattermost_application_password_seed) }}"
 
-        redis_database_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_database_password_seed) }}"
+        redis_default_user_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_default_user_password_seed) }}"
         grafana_agent_redis_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,<>/? length=48', seed=grafana_agent_redis_password_seed) }}"
 
         redisinsight_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=redisinsight_nginx_username_seed) }}"
@@ -284,11 +284,11 @@
                 MATTERMOST_USERNAME={{ mattermost_application_username }}
                 MATTERMOST_PASSWORD={{ mattermost_application_password }}
           redis:
-            database:
-              file:
-                password: {{ redis_database_password }}
+            application:
               envs: |
-                REDISCLI_AUTH={{ redis_database_password }}
+                DEFAULT_USER_PASSWORD={{ redis_default_user_password }}
+              file:
+                password: {{ redis_default_user_password }}
             grafana_agent:
               envs: |
                 REDIS_USERNAME={{ vault_grafana_agent_redis_username }}

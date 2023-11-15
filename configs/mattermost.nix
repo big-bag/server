@@ -39,7 +39,8 @@ in
         EnvironmentFile = config.sops.secrets."mattermost/postgres/envs".path;
       };
       script = ''
-        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}; do
+        while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Postgres availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
@@ -174,7 +175,8 @@ in
           esac
         }
 
-        while true; do
+        while true
+        do
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
@@ -309,7 +311,9 @@ in
         EnvironmentFile = config.sops.secrets."mattermost/application/envs".path;
       };
       script = ''
-        while ! ${pkgs.curl}/bin/curl --silent --request GET http://${IP_ADDRESS}:8065/mattermost/api/v4/system/ping | ${pkgs.gnugrep}/bin/grep "OK"; do
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://${IP_ADDRESS}:8065/mattermost/api/v4/system/ping |
+          ${pkgs.gnugrep}/bin/grep OK
+        do
           ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
