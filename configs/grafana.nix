@@ -2,6 +2,7 @@
 
 let
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
@@ -150,6 +151,116 @@ in
   };
 
   sops.secrets = {
+    "redis/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "grafana/redis/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    grafana-redis = {
+      after = [ "${CONTAINERS_BACKEND}-redis.service" ];
+      before = [ "grafana.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."redis/application/envs".path
+          config.sops.secrets."grafana/redis/envs".path
+        ];
+      };
+      script = ''
+        while ! ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
+          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
+          redis \
+            redis-cli PING |
+          ${pkgs.gnugrep}/bin/grep PONG
+        do
+          ${pkgs.coreutils}/bin/echo "Waiting for Redis availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
+          --env USERNAME=$REDIS_USERNAME \
+          --env PASSWORD=$REDIS_PASSWORD_CLI \
+          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
+          redis \
+            /bin/bash -c '
+              COMMAND=$(
+                echo "ACL SETUSER $USERNAME \
+                  reset \
+                  +ping \
+                  +client|list \
+                  +cluster|info \
+                  +cluster|nodes \
+                  +get \
+                  +hget \
+                  +hgetall \
+                  +hkeys \
+                  +hlen \
+                  +hmget \
+                  +info \
+                  +llen \
+                  +scard \
+                  +slowlog \
+                  +smembers \
+                  +ttl \
+                  +type \
+                  +xinfo \
+                  +xlen \
+                  +xrange \
+                  +xrevrange \
+                  +zrange \
+                  +scan \
+                  +memory|usage \
+                  +json.arrlen \
+                  +json.get \
+                  +json.objkeys \
+                  +json.objlen \
+                  +json.type \
+                  +ft.info \
+                  +ft.search \
+                  +ts.get \
+                  +ts.info \
+                  +ts.mget \
+                  +ts.mrange \
+                  +ts.queryindex \
+                  +ts.range \
+                  +dbsize \
+                  allkeys \
+                  on \
+                  >$PASSWORD" |
+                redis-cli
+              )
+
+              case "$COMMAND" in
+                "OK" )
+                  echo $COMMAND
+                  exit 0
+                ;;
+                "ERR"* )
+                  echo $COMMAND
+                  exit 1
+                ;;
+              esac
+            '
+      '';
+      wantedBy = [
+        "${CONTAINERS_BACKEND}-redis.service"
+        "grafana.service"
+      ];
+    };
+  };
+
+  sops.secrets = {
     "grafana/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
@@ -175,6 +286,7 @@ in
           admin_password = "$__env{PASSWORD}";
         };
       };
+      declarativePlugins = with pkgs.grafanaPlugins; [ redis-datasource ];
       provision = {
         enable = true;
         datasources.path = pkgs.writeTextFile {
@@ -186,6 +298,7 @@ in
               - name: Mimir
                 type: prometheus
                 access: proxy
+                version: 1
                 orgId: 1
                 uid: $DATASOURCE_UID_MIMIR
                 isDefault: false
@@ -200,6 +313,7 @@ in
               - name: Prometheus
                 type: prometheus
                 access: proxy
+                version: 1
                 orgId: 1
                 uid: $DATASOURCE_UID_PROMETHEUS
                 isDefault: false
@@ -214,6 +328,7 @@ in
               - name: Loki
                 type: loki
                 access: proxy
+                version: 1
                 orgId: 1
                 uid: $DATASOURCE_UID_LOKI
                 isDefault: true
@@ -226,6 +341,7 @@ in
               - name: Mattermost
                 type: postgres
                 access: proxy
+                version: 1
                 orgId: 1
                 uid: $DATASOURCE_UID_POSTGRESQL_MATTERMOST
                 isDefault: false
@@ -244,9 +360,31 @@ in
                   password: $POSTGRESQL_PASSWORD
                 editable: true
 
-              - name: GitLab
+              - name: GitLab-Redis
+                type: redis-datasource
+                access: proxy
+                version: 1
+                orgId: 1
+                uid: $DATASOURCE_UID_REDIS_GITLAB
+                isDefault: false
+                url: redis://${IP_ADDRESS}:6379
+                jsonData:
+                  client: standalone
+                  acl: true
+                  user: $REDIS_USERNAME
+                  poolSize: 5
+                  timeout: 10
+                  pingInterval: 0
+                  pipelineWindow: 0
+                  tlsAuth: false
+                secureJsonData:
+                  password: $REDIS_PASSWORD_CLI
+                editable: true
+
+              - name: GitLab-Postgres
                 type: postgres
                 access: proxy
+                version: 1
                 orgId: 1
                 uid: $DATASOURCE_UID_POSTGRESQL_GITLAB
                 isDefault: false
@@ -289,10 +427,14 @@ in
 
   systemd.services = {
     grafana = {
+      environment = {
+        GF_LOG_LEVEL = "info"; # Options are “debug”, “info”, “warn”, “error”, and “critical”. Default is info.
+      };
       serviceConfig = {
         EnvironmentFile = [
           config.sops.secrets."grafana/application/envs".path
           config.sops.secrets."grafana/postgres/envs".path
+          config.sops.secrets."grafana/redis/envs".path
         ];
         CPUQuota = "6%";
         MemoryHigh = "1946M";
@@ -352,6 +494,7 @@ in
           config.sops.secrets."1password/application/envs".path
           config.sops.secrets."grafana/application/envs".path
           config.sops.secrets."grafana/postgres/envs".path
+          config.sops.secrets."grafana/redis/envs".path
         ];
       };
       environment = {
@@ -379,6 +522,7 @@ in
             password=$PASSWORD \
             Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
             Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
+            Redis.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
@@ -389,6 +533,7 @@ in
             password=$PASSWORD \
             Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
             Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
+            Redis.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi

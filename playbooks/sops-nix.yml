@@ -91,6 +91,7 @@
         grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
         grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
         grafana_datasource_uid_postgres_mattermost_seed: grafana_datasource_uid_postgres_mattermost_random
+        grafana_datasource_uid_redis_gitlab_seed: grafana_datasource_uid_redis_gitlab_random
         grafana_datasource_uid_postgres_gitlab_seed: grafana_datasource_uid_postgres_gitlab_random
       tags:
         - secrets
@@ -144,6 +145,7 @@
         grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
         grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
         grafana_datasource_uid_postgres_mattermost: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_postgres_mattermost_seed) }}"
+        grafana_datasource_uid_redis_gitlab: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_redis_gitlab_seed) }}"
         grafana_datasource_uid_postgres_gitlab: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_postgres_gitlab_seed) }}"
       tags:
         - secrets
@@ -341,6 +343,11 @@
               envs: |
                 POSTGRESQL_USERNAME={{ vault_grafana_postgres_username }}
                 POSTGRESQL_PASSWORD={{ grafana_postgres_password }}
+            redis:
+              envs: |
+                REDIS_USERNAME={{ vault_grafana_redis_username }}
+                REDIS_PASSWORD_CLI={{ grafana_redis_password }}
+                REDIS_PASSWORD_1PASSWORD={{ grafana_redis_password | replace('%', '%25') | replace('`', '%60') | replace('!', '%21') | replace('@', '%40') | replace('#', '%23') | replace('$', '%24') | replace('^', '%5E') | replace('&', '%26') | replace('*', '%2A') | replace('(', '%28') | replace(')', '%29') | replace('=', '%3D') | replace('+', '%2B') | replace('[', '%5B') | replace(']', '%5D') | replace('{', '%7B') | replace('}', '%7D') | replace('|', '%7C') | replace(';', '%3B') | replace(',', '%2C') | replace('<', '%3C') | replace('>', '%3E') | replace('/', '%2F') | replace('?', '%3F') }}
             application:
               envs: |
                 USERNAME={{ grafana_application_username }}
@@ -350,6 +357,7 @@
                 DATASOURCE_UID_LOKI={{ grafana_datasource_uid_loki }}
                 DATASOURCE_UID_POSTGRESQL_MATTERMOST={{ grafana_datasource_uid_postgres_mattermost }}
                 POSTGRESQL_DATABASE_MATTERMOST={{ vault_mattermost_postgres_database }}
+                DATASOURCE_UID_REDIS_GITLAB={{ grafana_datasource_uid_redis_gitlab }}
                 DATASOURCE_UID_POSTGRESQL_GITLAB={{ grafana_datasource_uid_postgres_gitlab }}
                 POSTGRESQL_DATABASE_GITLAB={{ vault_gitlab_postgres_database }}
         dest: "{{ temp_file_secrets.path }}"

@@ -7,9 +7,10 @@
     - name: check if a grafana dashboard has been downloaded to the local machine
       ansible.builtin.command: "grep '\"uid\": \"\",' '{{ item }}'"
       with_fileglob:
+        - ../dashboards/*
         - ../dashboards/Mimir/*
         - ../dashboards/Prometheus/*
-        - ../dashboards/*
+        - ../dashboards/Redis/*
         - ../dashboards/GitLab/*
       register: dashboard_uid
       delegate_to: localhost
@@ -27,9 +28,10 @@
             regexp: '{% raw %}("){{(.*)}}(.*){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\2{{ "}}{% endraw %}" }}\3{{ "{% raw %}{{" }}\4{{ "}}{% endraw %}" }}\5'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         # find and escape double curly braces which looks like:
@@ -40,9 +42,10 @@
             regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(:){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4{{ "{% raw %}{{" }}\5{{ "}}{% endraw %}" }}\6'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         # find and escape double curly braces which looks like:
@@ -56,9 +59,10 @@
             regexp: '{% raw %}(":((?!{% raw %}).)*){{(.*)}}(.*",){% endraw %}'
             replace: '\1{{ "{% raw %}{{" }}\3{{ "}}{% endraw %}" }}\4'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         - name: change mimir datasource uid to variable
@@ -67,8 +71,8 @@
             regexp: "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
             replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}{% endraw %}"
           with_fileglob:
-            - ../dashboards/Mimir/*
             - ../dashboards/*
+            - ../dashboards/Mimir/*
             - ../dashboards/GitLab/*
 
         - name: change prometheus datasource uid to variable
@@ -83,7 +87,9 @@
             path: "{{ item }}"
             regexp: "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
             replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}{% endraw %}"
-          with_fileglob: ../dashboards/GitLab/*
+          with_fileglob:
+            - ../dashboards/Redis/*
+            - ../dashboards/GitLab/*
 
         - name: reset location number in folder
           ansible.builtin.replace:
@@ -93,9 +99,10 @@
             regexp: '"id":\s.*,'
             replace: '"id": 0,'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         - name: reset dashboard uid
@@ -104,9 +111,10 @@
             regexp: '("uid":\s").*(",)'
             replace: '\1\2'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         - name: reset dashboard version
@@ -115,9 +123,10 @@
             regexp: '"version":\s.*,'
             replace: '"version": 0,'
           with_fileglob:
+            - ../dashboards/*
             - ../dashboards/Mimir/*
             - ../dashboards/Prometheus/*
-            - ../dashboards/*
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
       delegate_to: localhost
       become: false
