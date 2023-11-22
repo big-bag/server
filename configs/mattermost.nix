@@ -91,7 +91,7 @@ in
               ON ALL TABLES IN SCHEMA public
               FROM PUBLIC;
 
-          GRANT CREATE, USAGE
+          GRANT USAGE, CREATE
               ON SCHEMA public
               TO $POSTGRESQL_USERNAME;
           GRANT SELECT, INSERT, UPDATE, DELETE

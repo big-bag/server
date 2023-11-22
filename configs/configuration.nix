@@ -32,6 +32,7 @@
       ./redis.nix
       ./redisinsight.nix
       ./gitlab.nix
+      ./postgres-exporter.nix
       ./pgadmin.nix
       ./grafana.nix
     ];

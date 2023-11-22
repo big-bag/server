@@ -24,7 +24,9 @@
   services = {
     grafana-agent = {
       enable = true;
-      settings = {
+      settings = let
+        IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+      in {
         metrics = {
           wal_directory = "/var/lib/private/grafana-agent/wal";
           configs = [{
@@ -35,7 +37,7 @@
               scrape_timeout = "5s";
               scheme = "http";
               static_configs = [{
-                targets = [ "127.0.0.1:9009" ];
+                targets = [ "${IP_ADDRESS}:9009" ];
                 labels = {
                   cluster = "local";
                   namespace = "local";
@@ -45,7 +47,7 @@
               metrics_path = "/mimir/metrics";
             }];
             remote_write = [{
-              url = "http://127.0.0.1:9009/mimir/api/v1/push";
+              url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
             }];
           }];
         };
@@ -92,7 +94,7 @@
             scrape_integration = false;
           };
           prometheus_remote_write = [{
-            url = "http://127.0.0.1:9009/mimir/api/v1/push";
+            url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
           }];
         };
       };

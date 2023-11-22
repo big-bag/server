@@ -230,8 +230,10 @@ in
                   AND schema_name <> 'pg_catalog'
                   AND schema_name <> 'information_schema';
 
+          ALTER SCHEMA public OWNER TO $POSTGRESQL_USERNAME;
+
           SELECT format('
-              GRANT CREATE, USAGE
+              GRANT USAGE, CREATE
                   ON SCHEMA %I
                   TO $POSTGRESQL_USERNAME
               ', schema_name)

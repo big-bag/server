@@ -117,7 +117,7 @@ in
         }
       ];
       remoteWrite = [{
-        url = "http://127.0.0.1:9009/mimir/api/v1/push";
+        url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
         write_relabel_configs = [{
           source_labels = [
             "__name__"

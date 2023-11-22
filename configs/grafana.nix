@@ -1,20 +1,112 @@
 { config, pkgs, ... }:
 
 let
-  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+  MINIO_BUCKET = "grafana";
+  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
 in
 
 {
+  sops.secrets = {
+    "minio/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  sops.secrets = {
+    "grafana/minio/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
-    grafana-prepare = {
-      before = [ "grafana.service" ];
+    grafana-minio = {
+      before = [ "${CONTAINERS_BACKEND}-grafana.service" ];
       serviceConfig = {
         Type = "oneshot";
+        EnvironmentFile = [
+          config.sops.secrets."minio/application/envs".path
+          config.sops.secrets."grafana/minio/envs".path
+        ];
       };
-      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/monitoring";
-      wantedBy = [ "grafana.service" ];
+      environment = {
+        ALIAS = "local";
+      };
+      path = [ pkgs.getent ];
+      script = let
+        policy_json = pkgs.writeTextFile {
+          name = "policy.json";
+          text = ''
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": "arn:aws:s3:::${MINIO_BUCKET}/*"
+                    }
+                ]
+            }
+          '';
+        };
+      in ''
+        set +e
+
+        # args: host port
+        check_port_is_open() {
+          local exit_status_code
+          ${pkgs.curl}/bin/curl --silent --connect-timeout 1 --telnet-option "" telnet://"$1:$2" </dev/null
+          exit_status_code=$?
+          case $exit_status_code in
+            49) return 0 ;;
+            *) return "$exit_status_code" ;;
+          esac
+        }
+
+        while true
+        do
+          check_port_is_open ${IP_ADDRESS} 9000
+          if [ $? == 0 ]; then
+            ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/${MINIO_BUCKET}
+
+            ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
+
+            if [ $? != 0 ]
+            then
+              ${pkgs.minio-client}/bin/mc admin user svcacct add \
+                --access-key $MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
+                --policy ${policy_json} \
+                --comment grafana \
+                $ALIAS \
+                $MINIO_ROOT_USER > /dev/null
+              ${pkgs.coreutils}/bin/echo "Service account created successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
+            else
+              ${pkgs.minio-client}/bin/mc admin user svcacct edit \
+                --secret-key $MINIO_SERVICE_ACCOUNT_SECRET_KEY \
+                --policy ${policy_json} \
+                $ALIAS \
+                $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
+              ${pkgs.coreutils}/bin/echo "Service account updated successfully \`$MINIO_SERVICE_ACCOUNT_ACCESS_KEY\`."
+            fi
+
+            break
+          fi
+          ${pkgs.coreutils}/bin/echo "Waiting for MinIO availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+      '';
+      wantedBy = [ "${CONTAINERS_BACKEND}-grafana.service" ];
     };
   };
 
@@ -29,7 +121,7 @@ in
   systemd.services = {
     grafana-postgres = {
       after = [ "postgresql.service" ];
-      before = [ "grafana.service" ];
+      before = [ "${CONTAINERS_BACKEND}-grafana.service" ];
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = config.sops.secrets."grafana/postgres/envs".path;
@@ -145,7 +237,7 @@ in
       '';
       wantedBy = [
         "postgresql.service"
-        "grafana.service"
+        "${CONTAINERS_BACKEND}-grafana.service"
       ];
     };
   };
@@ -169,7 +261,7 @@ in
   systemd.services = {
     grafana-redis = {
       after = [ "${CONTAINERS_BACKEND}-redis.service" ];
-      before = [ "grafana.service" ];
+      before = [ "${CONTAINERS_BACKEND}-grafana.service" ];
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -255,7 +347,7 @@ in
       '';
       wantedBy = [
         "${CONTAINERS_BACKEND}-redis.service"
-        "grafana.service"
+        "${CONTAINERS_BACKEND}-grafana.service"
       ];
     };
   };
@@ -268,177 +360,185 @@ in
     };
   };
 
-  services = {
-    grafana = {
-      enable = true;
-      dataDir = "/mnt/ssd/monitoring/grafana";
-      settings = {
-        server = {
-          protocol = "http";
-          http_addr = "127.0.0.1";
-          http_port = 3000;
-          domain = "${DOMAIN_NAME_INTERNAL}";
-          root_url = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
-          enable_gzip = true;
+  virtualisation = {
+    oci-containers = {
+      containers = {
+        grafana = {
+          autoStart = true;
+          ports = [ "127.0.0.1:3000:3000" ];
+          volumes = let
+            datasources_yml = pkgs.writeTextFile {
+              name = "config.yml";
+              text = ''
+                apiVersion: 1
+
+                datasources:
+                  - name: Mimir
+                    type: prometheus
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_MIMIR
+                    isDefault: false
+                    url: http://${IP_ADDRESS}:9009/mimir/prometheus
+                    jsonData:
+                      manageAlerts: true
+                      timeInterval: 1m # 'Scrape interval' in Grafana UI, defaults to 15s
+                      httpMethod: POST
+                      prometheusType: Mimir
+                    editable: true
+
+                  - name: Prometheus
+                    type: prometheus
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_PROMETHEUS
+                    isDefault: false
+                    url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
+                    jsonData:
+                      manageAlerts: true
+                      timeInterval: ${config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
+                      httpMethod: POST
+                      prometheusType: Prometheus
+                    editable: true
+
+                  - name: Loki
+                    type: loki
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_LOKI
+                    isDefault: true
+                    url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
+                    jsonData:
+                      manageAlerts: true
+                      maxLines: 1000
+                    editable: true
+
+                  - name: Mattermost
+                    type: postgres
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_POSTGRESQL_MATTERMOST
+                    isDefault: false
+                    url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
+                    user: $POSTGRESQL_USERNAME
+                    jsonData:
+                      database: $POSTGRESQL_DATABASE_MATTERMOST
+                      sslmode: disable # disable/require/verify-ca/verify-full
+                      maxOpenConns: 100
+                      maxIdleConns: 100
+                      maxIdleConnsAuto: true
+                      connMaxLifetime: 14400
+                      postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+                      timescaledb: false
+                    secureJsonData:
+                      password: $POSTGRESQL_PASSWORD
+                    editable: true
+
+                  - name: GitLab-Redis
+                    type: redis-datasource
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_REDIS_GITLAB
+                    isDefault: false
+                    url: redis://${IP_ADDRESS}:6379
+                    jsonData:
+                      client: standalone
+                      acl: true
+                      user: $REDIS_USERNAME
+                      poolSize: 5
+                      timeout: 10
+                      pingInterval: 0
+                      pipelineWindow: 0
+                      tlsAuth: false
+                    secureJsonData:
+                      password: $REDIS_PASSWORD_CLI
+                    editable: true
+
+                  - name: GitLab-Postgres
+                    type: postgres
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    uid: $DATASOURCE_UID_POSTGRESQL_GITLAB
+                    isDefault: false
+                    url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
+                    user: $POSTGRESQL_USERNAME
+                    jsonData:
+                      database: $POSTGRESQL_DATABASE_GITLAB
+                      sslmode: disable # disable/require/verify-ca/verify-full
+                      maxOpenConns: 100
+                      maxIdleConns: 100
+                      maxIdleConnsAuto: true
+                      connMaxLifetime: 14400
+                      postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+                      timescaledb: false
+                    secureJsonData:
+                      password: $POSTGRESQL_PASSWORD
+                    editable: true
+              '';
+            };
+            dashboards_yml = pkgs.writeTextFile {
+              name = "config.yml";
+              text = ''
+                apiVersion: 1
+
+                providers:
+                  - name: Dashboards
+                    orgId: 1
+                    type: file
+                    disableDeletion: true
+                    updateIntervalSeconds: 60
+                    allowUiUpdates: true
+                    options:
+                      path: /var/lib/grafana/dashboards
+                      foldersFromFilesStructure: true
+              '';
+            };
+          in [
+            "${datasources_yml}:/etc/grafana/provisioning/datasources/config.yml:ro"
+            "/mnt/ssd/monitoring/grafana-dashboards:/var/lib/grafana/dashboards:ro"
+            "${dashboards_yml}:/etc/grafana/provisioning/dashboards/config.yml:ro"
+          ];
+          environmentFiles = [
+            config.sops.secrets."grafana/application/envs".path
+            config.sops.secrets."grafana/postgres/envs".path
+            config.sops.secrets."grafana/redis/envs".path
+          ];
+          environment = {
+            GF_SERVER_PROTOCOL = "http";
+            GF_SERVER_HTTP_ADDR = "0.0.0.0";
+            GF_SERVER_HTTP_PORT = "3000";
+            GF_SERVER_DOMAIN = "${DOMAIN_NAME_INTERNAL}";
+            GF_SERVER_ROOT_URL = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
+            GF_SERVER_ENABLE_GZIP = "true";
+
+            GF_SECURITY_ADMIN_USER = "$__env{USERNAME}";
+            GF_SECURITY_ADMIN_PASSWORD = "$__env{PASSWORD}";
+
+            GF_USERS_DEFAULT_THEME = "light";
+
+            GF_EXTERNAL_IMAGE_STORAGE_PROVIDER = "s3";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_ENDPOINT = "http://${IP_ADDRESS}:9000";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_PATH_STYLE_ACCESS = "true";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_BUCKET = "${MINIO_BUCKET}";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
+            GF_EXTERNAL_IMAGE_STORAGE_S3_ACCESS_KEY = "$__env{MINIO_SERVICE_ACCOUNT_ACCESS_KEY}";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_SECRET_KEY = "$__env{MINIO_SERVICE_ACCOUNT_SECRET_KEY}";
+
+            GF_INSTALL_PLUGINS = "redis-datasource";
+          };
+          extraOptions = [
+            "--cpus=0.5"
+            "--memory-reservation=1946m"
+            "--memory=2048m"
+          ];
+          image = (import ./variables.nix).grafana_image;
         };
-        security = {
-          admin_user = "$__env{USERNAME}";
-          admin_password = "$__env{PASSWORD}";
-        };
-      };
-      declarativePlugins = with pkgs.grafanaPlugins; [ redis-datasource ];
-      provision = {
-        enable = true;
-        datasources.path = pkgs.writeTextFile {
-          name = "datasources.yml";
-          text = ''
-            apiVersion: 1
-
-            datasources:
-              - name: Mimir
-                type: prometheus
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_MIMIR
-                isDefault: false
-                url: http://127.0.0.1:9009/mimir/prometheus
-                jsonData:
-                  manageAlerts: true
-                  timeInterval: 1m # 'Scrape interval' in Grafana UI, defaults to 15s
-                  httpMethod: POST
-                  prometheusType: Mimir
-                editable: true
-
-              - name: Prometheus
-                type: prometheus
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_PROMETHEUS
-                isDefault: false
-                url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
-                jsonData:
-                  manageAlerts: true
-                  timeInterval: ${config.services.prometheus.globalConfig.scrape_interval} # 'Scrape interval' in Grafana UI, defaults to 15s
-                  httpMethod: POST
-                  prometheusType: Prometheus
-                editable: true
-
-              - name: Loki
-                type: loki
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_LOKI
-                isDefault: true
-                url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
-                jsonData:
-                  manageAlerts: true
-                  maxLines: 1000
-                editable: true
-
-              - name: Mattermost
-                type: postgres
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_POSTGRESQL_MATTERMOST
-                isDefault: false
-                url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
-                user: $POSTGRESQL_USERNAME
-                jsonData:
-                  database: $POSTGRESQL_DATABASE_MATTERMOST
-                  sslmode: disable # disable/require/verify-ca/verify-full
-                  maxOpenConns: 100
-                  maxIdleConns: 100
-                  maxIdleConnsAuto: true
-                  connMaxLifetime: 14400
-                  postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
-                  timescaledb: false
-                secureJsonData:
-                  password: $POSTGRESQL_PASSWORD
-                editable: true
-
-              - name: GitLab-Redis
-                type: redis-datasource
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_REDIS_GITLAB
-                isDefault: false
-                url: redis://${IP_ADDRESS}:6379
-                jsonData:
-                  client: standalone
-                  acl: true
-                  user: $REDIS_USERNAME
-                  poolSize: 5
-                  timeout: 10
-                  pingInterval: 0
-                  pipelineWindow: 0
-                  tlsAuth: false
-                secureJsonData:
-                  password: $REDIS_PASSWORD_CLI
-                editable: true
-
-              - name: GitLab-Postgres
-                type: postgres
-                access: proxy
-                version: 1
-                orgId: 1
-                uid: $DATASOURCE_UID_POSTGRESQL_GITLAB
-                isDefault: false
-                url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
-                user: $POSTGRESQL_USERNAME
-                jsonData:
-                  database: $POSTGRESQL_DATABASE_GITLAB
-                  sslmode: disable # disable/require/verify-ca/verify-full
-                  maxOpenConns: 100
-                  maxIdleConns: 100
-                  maxIdleConnsAuto: true
-                  connMaxLifetime: 14400
-                  postgresVersion: 1400 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
-                  timescaledb: false
-                secureJsonData:
-                  password: $POSTGRESQL_PASSWORD
-                editable: true
-          '';
-        };
-        dashboards.path = pkgs.writeTextFile {
-          name = "dashboards.yml";
-          text = ''
-            apiVersion: 1
-
-            providers:
-              - name: Dashboards
-                orgId: 1
-                type: file
-                disableDeletion: true
-                updateIntervalSeconds: 30
-                allowUiUpdates: true
-                options:
-                  path: /mnt/ssd/monitoring/grafana-dashboards
-                  foldersFromFilesStructure: true
-          '';
-        };
-      };
-    };
-  };
-
-  systemd.services = {
-    grafana = {
-      environment = {
-        GF_LOG_LEVEL = "info"; # Options are “debug”, “info”, “warn”, “error”, and “critical”. Default is info.
-      };
-      serviceConfig = {
-        EnvironmentFile = [
-          config.sops.secrets."grafana/application/envs".path
-          config.sops.secrets."grafana/postgres/envs".path
-          config.sops.secrets."grafana/redis/envs".path
-        ];
-        CPUQuota = "6%";
-        MemoryHigh = "1946M";
-        MemoryMax = "2048M";
       };
     };
   };
@@ -446,9 +546,7 @@ in
   services = {
     nginx = {
       upstreams."grafana" = {
-        servers = let
-          GRAFANA_ADDRESS = "${config.services.grafana.settings.server.http_addr}:${toString config.services.grafana.settings.server.http_port}";
-        in { "${GRAFANA_ADDRESS}" = {}; };
+        servers = { "127.0.0.1:3000" = {}; };
       };
 
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
@@ -486,7 +584,7 @@ in
 
   systemd.services = {
     grafana-1password = {
-      after = [ "grafana.service" ];
+      after = [ "${CONTAINERS_BACKEND}-grafana.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
@@ -538,7 +636,7 @@ in
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
-      wantedBy = [ "grafana.service" ];
+      wantedBy = [ "${CONTAINERS_BACKEND}-grafana.service" ];
     };
   };
 
@@ -554,12 +652,12 @@ in
               scrape_timeout = "10s";
               scheme = "http";
               static_configs = [{
-                targets = [ "${config.services.grafana.settings.server.http_addr}:${toString config.services.grafana.settings.server.http_port}" ];
+                targets = [ "127.0.0.1:3000" ];
               }];
               metrics_path = "/metrics";
             }];
             remote_write = [{
-              url = "http://127.0.0.1:9009/mimir/api/v1/push";
+              url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
             }];
           }];
         };
@@ -586,7 +684,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(grafana-prepare|grafana-postgres|grafana|grafana-1password).service";
+                  regex = "(grafana-minio|grafana-postgres|grafana-redis|${CONTAINERS_BACKEND}-grafana|grafana-1password).service";
                   action = "keep";
                 }
                 {

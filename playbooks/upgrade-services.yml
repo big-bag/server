@@ -10,6 +10,7 @@
     redisinsight_repository: redislabs/redisinsight
     gitlab_repository: gitlab/gitlab-ce
     pgadmin_repository: dpage/pgadmin4
+    grafana_repository: grafana/grafana-oss
   tasks:
 
     # ------------------- sops-nix ------------------- #
@@ -55,14 +56,15 @@
         redisinsight_repo_split: "{{ redisinsight_repository.split('/') }}"
         gitlab_repo_split: "{{ gitlab_repository.split('/') }}"
         pgadmin_repo_split: "{{ pgadmin_repository.split('/') }}"
+        grafana_repo_split: "{{ grafana_repository.split('/') }}"
 
     - name: find digest of the latest docker image
       ansible.builtin.shell: |
         curl --silent --request GET https://hub.docker.com/v2/namespaces/{{ item.namespace }}/repositories/{{ item.repository }}/tags |
           jq '.results[] |
-            select(.name | contains ("latest")) |
+            select(.name == "latest") |
               .images[] |
-                select(.architecture | contains ("amd64")) |
+                select(.architecture == "amd64") |
           .digest'
       loop:
         - {
@@ -84,6 +86,10 @@
         - {
             namespace: '{{ pgadmin_repo_split.0 }}',
             repository: '{{ pgadmin_repo_split.1 }}'
+          }
+        - {
+            namespace: '{{ grafana_repo_split.0 }}',
+            repository: '{{ grafana_repo_split.1 }}'
           }
       register: docker_image_digest
       changed_when: false
@@ -137,12 +143,20 @@
             # 7.5
             filter: '[0-9]\\.[0-9]'
           }
+        - {
+            namespace: '{{ grafana_repo_split.0 }}',
+            repository: '{{ grafana_repo_split.1 }}',
+            digest: "{{ docker_image_digest.results.5.stdout | replace('\"','') }}",
+            # find tags which looks like:
+            # 10.2.1
+            filter: '[0-9]\\.[0-9]\\.[0-9]'
+          }
       register: docker_image_tag_by_digest
       changed_when: false
 
     - name: find a fixed tag by filter
       ansible.builtin.shell: |
-        curl --silent --request GET https://hub.docker.com/v2/namespaces/{{ item.namespace }}/repositories/{{ item.repository }}/tags |
+        curl --silent --request GET https://hub.docker.com/v2/namespaces/{{ item.namespace }}/repositories/{{ item.repository }}/tags?page_size=100 |
           jq '.results[] |
             select(.name | test("{{ item.filter }}")) |
             select(.name | test("{{ item.exclude }}") | not) |
@@ -169,6 +183,7 @@
         redisinsight_image: "{{ redisinsight_repository }}:{{ docker_image_tag_by_digest.results.2.stdout | replace('\"','') }}"
         gitlab_image: "{{ gitlab_repository }}:{{ docker_image_tag_by_digest.results.3.stdout | replace('\"','') }}"
         pgadmin_image: "{{ pgadmin_repository }}:{{ docker_image_tag_by_digest.results.4.stdout | replace('\"','') }}"
+        grafana_image: "{{ grafana_repository }}:{{ docker_image_tag_by_digest.results.5.stdout | replace('\"','') }}"
 
     # NOTE: File can be saved directly on server
     - name: update variables
@@ -181,5 +196,6 @@
             redisinsight_image = "{{ redisinsight_image }}";
             gitlab_image = "{{ gitlab_image }}";
             pgadmin_image = "{{ pgadmin_image }}";
+            grafana_image = "{{ grafana_image }}";
           }
         dest: ../configs/variables.nix

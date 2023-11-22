@@ -135,7 +135,7 @@ in
       configuration = {
         auth_enabled = false;
         server = {
-          http_listen_address = "127.0.0.1";
+          http_listen_address = "${IP_ADDRESS}";
           http_listen_port = 3100;
           grpc_listen_address = "0.0.0.0";
           grpc_listen_port = 9096;
@@ -205,6 +205,12 @@ in
         MemoryHigh = "486M";
         MemoryMax = "512M";
       };
+    };
+  };
+
+  networking = {
+    firewall = {
+      allowedTCPPorts = [ 3100 ];
     };
   };
 
