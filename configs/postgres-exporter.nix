@@ -6,7 +6,7 @@ in
 
 {
   sops.secrets = {
-    "postgres_exporter/grafana_agent/envs" = {
+    "postgres_exporter/postgres/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -14,12 +14,12 @@ in
   };
 
   systemd.services = {
-    grafana-agent-postgres = {
+    postgres-exporter-postgres = {
       after = [ "postgresql.service" ];
       before = [ "grafana-agent.service" ];
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = config.sops.secrets."postgres_exporter/grafana_agent/envs".path;
+        EnvironmentFile = config.sops.secrets."postgres_exporter/postgres/envs".path;
       };
       script = ''
         while ! ${pkgs.netcat}/bin/nc -w 1 -v -z ${IP_ADDRESS} ${toString config.services.postgresql.port}
@@ -83,13 +83,13 @@ in
 
   systemd.services = {
     postgres-exporter-1password = {
-      after = [ "grafana-agent-postgres.service" ];
+      after = [ "postgres-exporter-postgres.service" ];
       preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
-          config.sops.secrets."postgres_exporter/grafana_agent/envs".path
+          config.sops.secrets."postgres_exporter/postgres/envs".path
         ];
       };
       environment = {
@@ -125,12 +125,12 @@ in
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
       '';
-      wantedBy = [ "grafana-agent-postgres.service" ];
+      wantedBy = [ "postgres-exporter-postgres.service" ];
     };
   };
 
   sops.secrets = {
-    "postgres_exporter/grafana_agent/file/username" = {
+    "postgres_exporter/postgres/file/username" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -138,7 +138,7 @@ in
   };
 
   sops.secrets = {
-    "postgres_exporter/grafana_agent/file/password" = {
+    "postgres_exporter/postgres/file/password" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -148,8 +148,8 @@ in
   services = {
     grafana-agent = {
       credentials = {
-        POSTGRESQL_USERNAME = config.sops.secrets."postgres_exporter/grafana_agent/file/username".path;
-        POSTGRESQL_PASSWORD = config.sops.secrets."postgres_exporter/grafana_agent/file/password".path;
+        POSTGRESQL_USERNAME = config.sops.secrets."postgres_exporter/postgres/file/username".path;
+        POSTGRESQL_PASSWORD = config.sops.secrets."postgres_exporter/postgres/file/password".path;
       };
 
       settings = {
@@ -175,7 +175,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(grafana-agent-postgres|postgres-exporter-1password).service";
+                  regex = "(postgres-exporter-postgres|postgres-exporter-1password).service";
                   action = "keep";
                 }
                 {

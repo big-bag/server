@@ -175,6 +175,15 @@ in
             # CLI flag: -server.grpc-listen-port
             grpc_listen_port: 9095
 
+            # (advanced) Limit on the size of a gRPC message this server can receive
+            # (bytes).
+            # CLI flag: -server.grpc-max-recv-msg-size-bytes
+            grpc_server_max_recv_msg_size: 104857600
+
+            # (advanced) Limit on the size of a gRPC message this server can send (bytes).
+            # CLI flag: -server.grpc-max-send-msg-size-bytes
+            grpc_server_max_send_msg_size: 104857600
+
             # (advanced) Base path to serve all API routes from (e.g. /v1/)
             # CLI flag: -server.path-prefix
             http_path_prefix: /mimir/
@@ -429,9 +438,9 @@ in
 
         if [ $? != 0 ]
         then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Mimir \
-            --url https://${DOMAIN_NAME_INTERNAL}/mimir \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/mimir \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
@@ -441,7 +450,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit Mimir \
             --vault Server \
-            --url https://${DOMAIN_NAME_INTERNAL}/mimir \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/mimir \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \

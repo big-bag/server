@@ -97,7 +97,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -195,7 +195,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -294,7 +294,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -389,7 +389,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -514,7 +514,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -611,7 +611,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -710,7 +710,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -825,7 +825,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -886,7 +886,6 @@
   ],
   "refresh": "1m",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [
     "managed",
     "general",
@@ -896,9 +895,9 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,

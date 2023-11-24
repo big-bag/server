@@ -286,7 +286,7 @@ in
           --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
           redis \
             /bin/bash -c '
-              COMMAND=$(
+              CLI_COMMAND=$(
                 echo "ACL SETUSER $USERNAME \
                   reset \
                   +ping \
@@ -327,19 +327,20 @@ in
                   +ts.queryindex \
                   +ts.range \
                   +dbsize \
+                  +command \
                   allkeys \
                   on \
                   >$PASSWORD" |
                 redis-cli
               )
 
-              case "$COMMAND" in
+              case "$CLI_COMMAND" in
                 "OK" )
-                  echo $COMMAND
+                  echo $CLI_COMMAND
                   exit 0
                 ;;
                 "ERR"* )
-                  echo $COMMAND
+                  echo $CLI_COMMAND
                   exit 1
                 ;;
               esac
@@ -482,6 +483,19 @@ in
                     editable: true
               '';
             };
+
+            plugins_yml = pkgs.writeTextFile {
+              name = "config.yml";
+              text = ''
+                apiVersion: 1
+
+                apps:
+                  - type: redis-app
+                    org_id: 1
+                    disabled: false
+              '';
+            };
+
             dashboards_yml = pkgs.writeTextFile {
               name = "config.yml";
               text = ''
@@ -501,6 +515,7 @@ in
             };
           in [
             "${datasources_yml}:/etc/grafana/provisioning/datasources/config.yml:ro"
+            "${plugins_yml}:/etc/grafana/provisioning/plugins/config.yml:ro"
             "/mnt/ssd/monitoring/grafana-dashboards:/var/lib/grafana/dashboards:ro"
             "${dashboards_yml}:/etc/grafana/provisioning/dashboards/config.yml:ro"
           ];
@@ -530,7 +545,10 @@ in
             GF_EXTERNAL_IMAGE_STORAGE_S3_ACCESS_KEY = "$__env{MINIO_SERVICE_ACCOUNT_ACCESS_KEY}";
             GF_EXTERNAL_IMAGE_STORAGE_S3_SECRET_KEY = "$__env{MINIO_SERVICE_ACCOUNT_SECRET_KEY}";
 
-            GF_INSTALL_PLUGINS = "redis-datasource";
+            GF_INSTALL_PLUGINS = ''
+              redis-datasource,
+              redis-app
+            '';
           };
           extraOptions = [
             "--cpus=0.5"

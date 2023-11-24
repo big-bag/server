@@ -87,12 +87,13 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^addr$/",
+          "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -175,9 +176,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -220,7 +222,6 @@
       },
       "hiddenSeries": false,
       "id": 2,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -239,7 +240,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -319,7 +320,6 @@
       },
       "hiddenSeries": false,
       "id": 1,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -338,7 +338,7 @@
       },
       "paceLength": 10,
       "percentage": true,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -437,7 +437,6 @@
       },
       "hiddenSeries": false,
       "id": 7,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -458,7 +457,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -558,7 +557,6 @@
       },
       "hiddenSeries": false,
       "id": 8,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -577,7 +575,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -674,7 +672,6 @@
       },
       "hiddenSeries": false,
       "id": 10,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -693,7 +690,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -783,7 +780,6 @@
       },
       "hiddenSeries": false,
       "id": 14,
-      "isNew": true,
       "legend": {
         "alignAsTable": true,
         "avg": true,
@@ -804,7 +800,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -882,7 +878,6 @@
       },
       "hiddenSeries": false,
       "id": 13,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -901,7 +896,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -983,6 +978,7 @@
       "editable": true,
       "error": false,
       "fill": 7,
+      "fillGradient": 0,
       "grid": {},
       "gridPos": {
         "h": 7,
@@ -990,8 +986,8 @@
         "x": 0,
         "y": 20
       },
+      "hiddenSeries": false,
       "id": 5,
-      "isNew": true,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -1007,8 +1003,12 @@
       "linewidth": 2,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "paceLength": 10,
       "percentage": false,
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1066,8 +1066,7 @@
     }
   ],
   "refresh": "1m",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "redis"
   ],
@@ -1076,8 +1075,8 @@
       {
         "current": {
           "selected": false,
-          "text": "127.0.0.1:6379",
-          "value": "127.0.0.1:6379"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",

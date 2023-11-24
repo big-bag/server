@@ -71,7 +71,7 @@ in
   };
 
   sops.secrets = {
-    "redis/grafana_agent/envs" = {
+    "redis_exporter/redis/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -86,7 +86,7 @@ in
         Type = "oneshot";
         EnvironmentFile = [
           config.sops.secrets."redis/application/envs".path
-          config.sops.secrets."redis/grafana_agent/envs".path
+          config.sops.secrets."redis_exporter/redis/envs".path
         ];
       };
       script = ''
@@ -106,7 +106,7 @@ in
           --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
           redis \
             /bin/bash -c '
-              COMMAND=$(
+              CLI_COMMAND=$(
                 echo "ACL SETUSER $USERNAME \
                   reset \
                   +client \
@@ -136,13 +136,13 @@ in
                 redis-cli
               )
 
-              case "$COMMAND" in
+              case "$CLI_COMMAND" in
                 "OK" )
-                  echo $COMMAND
+                  echo $CLI_COMMAND
                   exit 0
                 ;;
                 "ERR"* )
-                  echo $COMMAND
+                  echo $CLI_COMMAND
                   exit 1
                 ;;
               esac
@@ -172,7 +172,7 @@ in
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
           config.sops.secrets."redis/application/envs".path
-          config.sops.secrets."redis/grafana_agent/envs".path
+          config.sops.secrets."redis_exporter/redis/envs".path
         ];
       };
       environment = {
@@ -213,7 +213,7 @@ in
   };
 
   sops.secrets = {
-    "redis/grafana_agent/file/username" = {
+    "redis_exporter/redis/file/username" = {
       mode = "0400";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -221,7 +221,7 @@ in
   };
 
   sops.secrets = {
-    "redis/grafana_agent/file/password" = {
+    "redis_exporter/redis/file/password" = {
       mode = "0404";
       owner = config.users.users.root.name;
       group = config.users.users.root.group;
@@ -231,7 +231,7 @@ in
   services = {
     grafana-agent = {
       credentials = {
-        REDIS_USERNAME = config.sops.secrets."redis/grafana_agent/file/username".path;
+        REDIS_USERNAME = config.sops.secrets."redis_exporter/redis/file/username".path;
       };
 
       settings = {
@@ -277,7 +277,7 @@ in
             scrape_timeout = "10s";
             redis_addr = "${IP_ADDRESS}:6379";
             redis_user = "\${REDIS_USERNAME}";
-            redis_password_file = config.sops.secrets."redis/grafana_agent/file/password".path;
+            redis_password_file = config.sops.secrets."redis_exporter/redis/file/password".path;
           };
         };
       };

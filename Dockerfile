@@ -66,6 +66,9 @@ RUN apk add --update --no-cache \
       jq \
       rsync && \
     \
+    apk add --update --no-cache tzdata && \
+    ln -s /usr/share/zoneinfo/Europe/Moscow /etc/localtime && \
+    \
     addgroup -g $GID $GROUP && \
     adduser -h /home/$USER -s /bin/sh -G $GROUP -D -u $UID $USER && \
     \
@@ -81,8 +84,11 @@ RUN ansible-galaxy collection install \
       community.general \
       community.crypto \
       ansible.posix
-ENV ANSIBLE_VAULT_PASSWORD_FILE=.vault_password \
-    ANSIBLE_HOST_KEY_CHECKING=False \
+ENV ANSIBLE_CALLBACKS_ENABLED=ansible.posix.profile_tasks \
     ANSIBLE_INVENTORY=hosts \
+    ANSIBLE_VAULT_PASSWORD_FILE=.vault_password \
+    ANSIBLE_HOST_KEY_CHECKING=False \
+    ANSIBLE_PIPELINING=True \
+    ANSIBLE_SSH_ARGS="-C -o ControlMaster=auto -o ControlPersist=60s" \
     SOPS_AGE_KEY_FILE=configs/key.txt
 WORKDIR /etc/ansible

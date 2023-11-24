@@ -90,7 +90,7 @@
         "content": "<p>\n  This dashboard shows health metrics for the read path.\n  It is broken into sections for each service on the read path, and organized by the order in which the read request flows.\n  <br/>\n  Incoming queries travel from the gateway → query frontend → query scheduler → querier → ingester and/or store-gateway (depending on the time range of the query).\n  <br/>\n  For each service, there are 3 panels showing (1) requests per second to that service, (2) average, median, and p99 latency of requests to that service, and (3) p99 latency of requests to each instance of that service.\n</p>\n<p>\n  The dashboard also shows metrics for the 4 optional caches that can be deployed:\n  the query results cache, the metadata cache, the chunks cache, and the index cache.\n  <br/>\n  These panels will show “no data” if the caches are not deployed.\n</p>\n<p>\n  Lastly, it also includes metrics for how the ingester and store-gateway interact with object storage.\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -178,9 +178,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -246,9 +247,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -314,9 +316,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -382,9 +385,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -450,9 +454,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -539,7 +544,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -629,7 +634,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -720,6 +725,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -733,6 +739,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -5785,8 +5792,7 @@
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "mimir"
   ],
@@ -5796,7 +5802,7 @@
         "current": {
           "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,

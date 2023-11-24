@@ -90,7 +90,7 @@
         "content": "<p>\n  This dashboard shows various health metrics for the write path.\n  It is broken into sections for each service on the write path,\n  and organized by the order in which the write request flows.\n  <br/>\n  Incoming metrics data travels from the gateway → distributor → ingester.\n  <br/>\n  For each service, there are 3 panels showing\n  (1) requests per second to that service,\n  (2) average, median, and p99 latency of requests to that service, and\n  (3) p99 latency of requests to each instance of that service.\n</p>\n<p>\n  It also includes metrics for the key-value (KV) stores used to manage\n  the high-availability tracker and the ingesters.\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -177,9 +177,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -244,9 +245,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -310,9 +312,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -376,9 +379,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -441,9 +445,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -529,7 +534,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -619,7 +624,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -710,6 +715,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -723,6 +729,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -3502,8 +3509,7 @@
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "mimir"
   ],
@@ -3513,7 +3519,7 @@
         "current": {
           "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,

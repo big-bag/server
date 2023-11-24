@@ -65,7 +65,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -179,7 +179,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -268,7 +268,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -382,7 +382,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -467,16 +467,15 @@
     }
   ],
   "refresh": "1m",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
           "selected": false,
-          "text": "127.0.0.1:8181",
-          "value": "127.0.0.1:8181"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",

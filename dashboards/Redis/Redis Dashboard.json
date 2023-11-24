@@ -122,9 +122,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "info",
@@ -192,6 +193,8 @@
       },
       "id": 25,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -204,7 +207,7 @@
         "showThresholdMarkers": true,
         "text": {}
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -335,6 +338,7 @@
         "displayMode": "lcd",
         "minVizHeight": 10,
         "minVizWidth": 0,
+        "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -347,7 +351,7 @@
         "text": {},
         "valueMode": "color"
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "info",
@@ -440,9 +444,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "info",
@@ -511,9 +516,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "info",
@@ -581,9 +587,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -649,9 +656,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -699,6 +707,7 @@
         "displayMode": "lcd",
         "minVizHeight": 10,
         "minVizWidth": 0,
+        "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -711,7 +720,7 @@
         "text": {},
         "valueMode": "color"
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -783,6 +792,7 @@
         "displayMode": "lcd",
         "minVizHeight": 10,
         "minVizWidth": 0,
+        "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -795,7 +805,7 @@
         "text": {},
         "valueMode": "color"
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -874,9 +884,10 @@
           "values": true
         },
         "text": {},
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -936,6 +947,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
+            "align": "auto",
             "cellOptions": {
               "type": "color-text"
             },
@@ -1033,7 +1045,7 @@
           }
         ]
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "clientList",
@@ -1084,6 +1096,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
+            "align": "auto",
             "cellOptions": {
               "type": "color-text"
             },
@@ -1205,7 +1218,7 @@
           }
         ]
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "info",
@@ -1243,6 +1256,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
+            "align": "auto",
             "cellOptions": {
               "type": "color-text"
             },
@@ -1335,7 +1349,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "9.5.7",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "command": "slowlogGet",
@@ -1397,8 +1411,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "dark-blue",
-                    "value": null
+                    "color": "dark-blue"
                   }
                 ]
               }
@@ -1465,8 +1478,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "dark-blue",
-                    "value": null
+                    "color": "dark-blue"
                   }
                 ]
               }
@@ -1536,8 +1548,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "dark-green",
-                    "value": null
+                    "color": "dark-green"
                   }
                 ]
               },
@@ -1623,8 +1634,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "dark-green",
-                    "value": null
+                    "color": "dark-green"
                   }
                 ]
               }
@@ -1786,7 +1796,6 @@
   ],
   "refresh": "10s",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [
     "redis"
   ],
@@ -1796,7 +1805,7 @@
         "current": {
           "selected": false,
           "text": "GitLab-Redis",
-          "value": "GitLab-Redis"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}"
         },
         "hide": 0,
         "includeAll": false,

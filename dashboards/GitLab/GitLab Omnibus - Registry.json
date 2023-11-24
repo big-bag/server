@@ -65,7 +65,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -199,7 +199,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -269,7 +269,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -375,6 +375,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -386,7 +388,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -441,7 +443,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -496,8 +498,7 @@
     }
   ],
   "refresh": "1m",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": [

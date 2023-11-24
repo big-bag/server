@@ -211,9 +211,9 @@ in
 
         if [ $? != 0 ]
         then
-          ${pkgs._1password}/bin/op item template get Login --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
+          ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Prometheus \
-            --url https://${DOMAIN_NAME_INTERNAL}/prometheus \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/prometheus \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
@@ -221,7 +221,7 @@ in
         else
           ${pkgs._1password}/bin/op item edit Prometheus \
             --vault Server \
-            --url https://${DOMAIN_NAME_INTERNAL}/prometheus \
+            website[url]=https://${DOMAIN_NAME_INTERNAL}/prometheus \
             username=$NGINX_USERNAME \
             password=$NGINX_PASSWORD \
             --session $SESSION_TOKEN > /dev/null
@@ -229,6 +229,47 @@ in
         fi
       '';
       wantedBy = [ "prometheus.service" ];
+    };
+  };
+
+  services = {
+    grafana-agent = {
+      settings = {
+        logs = {
+          configs = [{
+            name = "prometheus";
+            clients = [{
+              url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
+            }];
+            positions = {
+              filename = "/var/lib/private/grafana-agent/positions/prometheus.yml";
+            };
+            scrape_configs = [{
+              job_name = "journal";
+              journal = {
+                json = false;
+                max_age = "12h";
+                labels = {
+                  job = "systemd-journal";
+                };
+                path = "/var/log/journal";
+              };
+              relabel_configs = [
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  regex = "(prometheus-prepare|var-lib-prometheus2|prometheus-minio|prometheus|prometheus-1password).(service|mount)";
+                  action = "keep";
+                }
+                {
+                  source_labels = [ "__journal__systemd_unit" ];
+                  target_label = "unit";
+                  action = "replace";
+                }
+              ];
+            }];
+          }];
+        };
+      };
     };
   };
 }

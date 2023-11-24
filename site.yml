@@ -9,25 +9,58 @@
   gather_facts: false
   tasks:
     - name: upload nixos configuration files
-      ansible.builtin.copy:
-        src: "{{ item }}"
+      ansible.posix.synchronize:
+        mode: push
+        src: configs/
         dest: /etc/nixos/
-      with_fileglob: configs/*
+        rsync_opts: "--chown=root:root"
       notify: apply config
 
   handlers:
     - name: check compilation
       ansible.builtin.command: nixos-rebuild build
+      register: build_output
+      ignore_errors: true
+      listen: apply config
+
+    - name: success
+      ansible.builtin.debug:
+        msg: "{{ build_output.stderr_lines }}"
+      when: build_output.rc == 0
+      listen: apply config
+
+    - name: error
+      ansible.builtin.debug:
+        msg: "{{ build_output.stderr_lines }}"
+      when: build_output.rc == 1
+      listen: apply config
+
+    - name: stop
+      ansible.builtin.meta: end_host
+      when: build_output.rc == 1
       listen: apply config
 
     - name: rebuild system
-      ansible.builtin.command: nixos-rebuild switch
-      register: rebuild_output
+      ansible.builtin.raw: nixos-rebuild switch
+      register: switch_output
+      ignore_errors: true
       listen: apply config
 
-    - name: display rebuild output
+    - name: success
       ansible.builtin.debug:
-        msg: "{{ rebuild_output.stderr_lines }}"
+        msg: "{{ switch_output.stdout_lines }}"
+      when: switch_output.rc == 0
+      listen: apply config
+
+    - name: error
+      ansible.builtin.debug:
+        msg: "{{ switch_output.stdout_lines }}"
+      when: switch_output.rc == 1
+      listen: apply config
+
+    - name: stop
+      ansible.builtin.meta: end_host
+      when: switch_output.rc == 1
       listen: apply config
 
   post_tasks:

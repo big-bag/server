@@ -93,6 +93,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -104,18 +106,20 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
-          "expr": "avg(\n  avg_over_time(up{job=~\"gitlab-(rails|unicorn)\",instance=~\"($node):.*\"}[$__interval])\n)",
+          "editorMode": "code",
+          "expr": "avg(\n  avg_over_time(up{job=~\"gitlab-(rails|unicorn)\",instance=~\"($private_ip):.*\"}[$__interval])\n)",
           "format": "time_series",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -176,6 +180,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -187,7 +193,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -195,7 +201,7 @@
             "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
-          "expr": "avg(\n  avg_over_time(pg_up{instance=~\".*($node):.*\"}[$__interval])\n)",
+          "expr": "avg(\n  avg_over_time(pg_up{instance=~\".*($private_ip):.*\"}[$__interval])\n)",
           "format": "time_series",
           "interval": "1m",
           "intervalFactor": 2,
@@ -261,6 +267,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -272,7 +280,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -344,6 +352,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -355,7 +365,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -427,6 +437,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -438,7 +450,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -446,7 +458,7 @@
             "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
           },
           "editorMode": "code",
-          "expr": "avg(\n  avg_over_time(redis_up{instance=~\"($node):6379\"}[$__interval])\n)",
+          "expr": "avg(\n  avg_over_time(redis_up{instance=~\"($private_ip):6379\"}[$__interval])\n)",
           "format": "time_series",
           "interval": "1m",
           "intervalFactor": 2,
@@ -512,6 +524,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -523,7 +537,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -598,6 +612,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -609,7 +625,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -684,6 +700,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -695,7 +713,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -769,6 +787,8 @@
       "links": [],
       "maxDataPoints": 100,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -780,7 +800,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -839,7 +859,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -972,7 +992,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -1006,8 +1026,7 @@
     }
   ],
   "refresh": "1m",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "GitLab"
   ],
@@ -1035,6 +1054,36 @@
         },
         "refresh": 1,
         "regex": "/(.*):9229/",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "{{ ansible_facts.default_ipv4.address }}",
+          "value": "{{ ansible_facts.default_ipv4.address }}"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        },
+        "definition": "label_values(up{job=\"gitlab-rails\"},instance)",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "private_ip",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up{job=\"gitlab-rails\"},instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "/(.*):8181/",
         "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",

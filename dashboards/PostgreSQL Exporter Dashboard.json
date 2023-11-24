@@ -51,7 +51,6 @@
       },
       "hiddenSeries": false,
       "id": 1,
-      "isNew": true,
       "legend": {
         "alignAsTable": true,
         "avg": true,
@@ -71,7 +70,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -457,9 +456,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -543,7 +543,6 @@
       },
       "hiddenSeries": false,
       "id": 2,
-      "isNew": true,
       "legend": {
         "alignAsTable": true,
         "avg": true,
@@ -564,7 +563,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -902,7 +901,6 @@
       },
       "hiddenSeries": false,
       "id": 3,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -920,7 +918,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1093,7 +1091,6 @@
       },
       "hiddenSeries": false,
       "id": 12,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -1111,7 +1108,7 @@
         "alertThreshold": true
       },
       "percentage": true,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -1184,7 +1181,6 @@
       },
       "hiddenSeries": false,
       "id": 13,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -1202,7 +1198,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1255,9 +1251,8 @@
       }
     }
   ],
-  "refresh": false,
-  "schemaVersion": 37,
-  "style": "dark",
+  "refresh": "",
+  "schemaVersion": 38,
   "tags": [
     "postgres"
   ],
@@ -1265,9 +1260,9 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,
@@ -1284,7 +1279,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "integrations/postgres_exporter",
           "value": "integrations/postgres_exporter"
         },
@@ -1314,9 +1309,9 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": true,
-          "text": "postgresql://127.0.0.1:5432/postgres",
-          "value": "postgresql://127.0.0.1:5432/postgres"
+          "selected": false,
+          "text": "postgresql://{% raw %}{{ ansible_facts.default_ipv4.address }}{% endraw %}:5432/postgres",
+          "value": "postgresql://{{ ansible_facts.default_ipv4.address }}:5432/postgres"
         },
         "datasource": {
           "uid": "$datasource"

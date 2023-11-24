@@ -76,7 +76,7 @@
               in [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(systemd-timesyncd|sshd|nginx-prepare|nginx|${CONTAINERS_BACKEND}|minio-prepare|${CONTAINERS_BACKEND}-minio|minio-1password|mimir-prepare|var-lib-private-mimir|mimir-minio|mimir|mimir-1password|prometheus-prepare|var-lib-prometheus2|prometheus-minio|prometheus|prometheus-1password|loki-prepare|loki-minio|loki|grafana-agent-prepare|var-lib-private-grafana\\x2dagent|grafana-agent).(service|mount)";
+                  regex = "(systemd-timesyncd|sshd|nginx-prepare|nginx|${CONTAINERS_BACKEND}|${CONTAINERS_BACKEND}-minio|minio-1password|mimir-prepare|var-lib-private-mimir|mimir-minio|mimir|mimir-1password|loki-prepare|loki-minio|loki|loki-1password|grafana-agent-prepare|var-lib-private-grafana\\x2dagent|grafana-agent).(service|mount)";
                   action = "keep";
                 }
                 {

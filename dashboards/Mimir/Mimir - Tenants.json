@@ -90,7 +90,7 @@
         "content": "<p>\n  This dashboard shows various metrics detailed by tenant (user) selected above.\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -165,7 +165,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -292,7 +292,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -380,7 +380,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -468,7 +468,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -582,7 +582,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -670,7 +670,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -775,7 +775,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2835,8 +2835,7 @@
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "mimir"
   ],
@@ -2846,7 +2845,7 @@
         "current": {
           "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,
@@ -2970,33 +2969,7 @@
         "includeAll": false,
         "multi": false,
         "name": "limit",
-        "options": [
-          {
-            "selected": true,
-            "text": "10",
-            "value": "10"
-          },
-          {
-            "selected": false,
-            "text": "50",
-            "value": "50"
-          },
-          {
-            "selected": false,
-            "text": "100",
-            "value": "100"
-          },
-          {
-            "selected": false,
-            "text": "500",
-            "value": "500"
-          },
-          {
-            "selected": false,
-            "text": "1000",
-            "value": "1000"
-          }
-        ],
+        "options": [],
         "query": "",
         "skipUrlSync": false,
         "type": "custom"

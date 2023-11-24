@@ -73,6 +73,16 @@
           with_fileglob:
             - ../dashboards/*
             - ../dashboards/Mimir/*
+            - ../dashboards/Redis/*
+            - ../dashboards/GitLab/*
+
+        - name: change loki datasource uid to variable
+          ansible.builtin.replace:
+            path: "{{ item }}"
+            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}{% endraw %}"
+          with_fileglob:
+            - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
         - name: change prometheus datasource uid to variable
@@ -82,12 +92,21 @@
             replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_prometheus'] }}{% endraw %}"
           with_fileglob: ../dashboards/Prometheus/*
 
-        - name: change loki datasource uid to variable
+        - name: change redis datasource uid to variable
           ansible.builtin.replace:
             path: "{{ item }}"
-            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
-            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}{% endraw %}"
+            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}"
+            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}{% endraw %}"
+          with_fileglob: ../dashboards/Redis/*
+
+        - name: change ip address to variable
+          ansible.builtin.replace:
+            path: "{{ item }}"
+            regexp: '(".*){{ ansible_facts.default_ipv4.address }}(.*")'
+            replace: '\1{% raw %}{{ ansible_facts.default_ipv4.address }}{% endraw %}\2'
           with_fileglob:
+            - ../dashboards/*
+            - ../dashboards/Prometheus/*
             - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 

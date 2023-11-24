@@ -90,7 +90,7 @@
         "content": "<p>\n  This dashboard shows the top tenants based on multiple selection criterias.\n  Rows are collapsed by default to avoid querying all of them.\n  Use the templating variable \"limit\" above to select the amount of users to be shown.\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
@@ -1574,8 +1574,7 @@
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 37,
-  "style": "dark",
+  "schemaVersion": 38,
   "tags": [
     "mimir"
   ],
@@ -1585,7 +1584,7 @@
         "current": {
           "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,
@@ -1679,23 +1678,7 @@
         "includeAll": false,
         "multi": false,
         "name": "limit",
-        "options": [
-          {
-            "selected": true,
-            "text": "10",
-            "value": "10"
-          },
-          {
-            "selected": false,
-            "text": "50",
-            "value": "50"
-          },
-          {
-            "selected": false,
-            "text": "100",
-            "value": "100"
-          }
-        ],
+        "options": [],
         "query": "",
         "skipUrlSync": false,
         "type": "custom"

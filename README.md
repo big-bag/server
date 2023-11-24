@@ -194,15 +194,15 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
    vault_domain_name_internal: example.com
 
-   vault_grafana_agent_postgres_username: [VALUE]
-
    vault_mattermost_postgres_username: [VALUE]
    vault_mattermost_postgres_database: [VALUE]
 
-   vault_grafana_agent_redis_username: [VALUE]
+   vault_redis_exporter_redis_username: [VALUE]
 
    vault_gitlab_postgres_username: [VALUE]
    vault_gitlab_postgres_database: [VALUE]
+
+   vault_postgres_exporter_postgres_username: [VALUE]
 
    vault_pgadmin_postgres_username: [VALUE]
 

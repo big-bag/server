@@ -7,24 +7,34 @@
     - name: set seed variables
       ansible.builtin.set_fact:
         server_ssh_port_seed: server_ssh_port_random
-      tags: [ prepare, secrets, upgrade ]
+      tags:
+        - prepare
+        - secrets
+        - upgrade
 
     - name: create random but idempotent numbers
       ansible.builtin.set_fact:
         server_ssh_port_generated: "{{ 65535 | random(start=49152, seed=server_ssh_port_seed) }}"
-      tags: [ prepare, secrets, upgrade ]
+      tags:
+        - prepare
+        - secrets
+        - upgrade
 
     - name: check connection to server on custom ssh port
       ansible.builtin.command: nc -w 1 -v -z {{ vault_server_ip_address }} {{ server_ssh_port_generated }}
       register: port_available
       failed_when: false
       changed_when: false
-      tags: [ prepare, upgrade ]
+      tags:
+        - prepare
+        - upgrade
 
     - name: set server ssh port
       ansible.builtin.set_fact:
         server_ssh_port: "{% if port_available.rc == 0 %}{{ server_ssh_port_generated }}{% else %}22{% endif %}"
-      tags: [ prepare, upgrade ]
+      tags:
+        - prepare
+        - upgrade
 
     - name: check connection to server under root
       ansible.builtin.command: sshpass -e ssh -o StrictHostKeyChecking=no root@{{ vault_server_ip_address }} -p {{ server_ssh_port }} 'exit'
@@ -33,7 +43,9 @@
       register: root_available
       failed_when: false
       changed_when: false
-      tags: [ prepare, upgrade ]
+      tags:
+        - prepare
+        - upgrade
 
     - name: add a host to the ansible-playbook in-memory inventory | root
       ansible.builtin.add_host:
@@ -45,7 +57,9 @@
       changed_when: false
       no_log: true
       when: root_available.rc == 0
-      tags: [ prepare, upgrade ]
+      tags:
+        - prepare
+        - upgrade
 
     - name: add a host to the ansible-playbook in-memory inventory | technical account
       ansible.builtin.add_host:
@@ -58,15 +72,18 @@
       changed_when: false
       no_log: true
       when: root_available.rc != 0
-      tags: [ prepare, upgrade ]
+      tags:
+        - prepare
+        - upgrade
 
 - name: include a play to install requirements for ansible
   ansible.builtin.import_playbook: python.yml
-  tags: [ prepare, upgrade ]
+  tags:
+    - prepare
+    - upgrade
 
 - name: include a play to save connection parameters on server
   ansible.builtin.import_playbook: connection-parameters.yml
-  tags: prepare
 
 - name: include a play to configure connection parameters
   ansible.builtin.import_playbook: technical-account.yml

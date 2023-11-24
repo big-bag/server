@@ -14,6 +14,9 @@
         filter:
           - default_ipv4
           - dns
+      tags:
+        - prepare
+        - dashboards
 
     - name: create a file
       ansible.builtin.copy:
@@ -25,3 +28,4 @@
             nameserver = "{{ ansible_facts.dns.nameservers.0 }}";
           }
         dest: /etc/nixos/connection-parameters.nix
+      tags: prepare

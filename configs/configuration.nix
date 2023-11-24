@@ -23,9 +23,9 @@
       }}/modules/sops"
       ./minio.nix
       ./mimir.nix
-      ./prometheus.nix
       ./loki.nix
       ./grafana-agent.nix
+      ./prometheus.nix
       ./node-exporter.nix
       ./postgres.nix
       ./mattermost.nix

@@ -1,22 +1,11 @@
 { config, pkgs, ... }:
 
 let
-  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
   DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
 in
 
 {
-  systemd.services = {
-    minio-prepare = {
-      before = [ "${CONTAINERS_BACKEND}-minio.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-      };
-      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/hdd/data-stores";
-      wantedBy = [ "${CONTAINERS_BACKEND}-minio.service" ];
-    };
-  };
-
   sops.secrets = {
     "minio/application/envs" = {
       mode = "0400";

@@ -84,7 +84,6 @@
       },
       "hiddenSeries": false,
       "id": 18,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -104,7 +103,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -186,7 +185,6 @@
       },
       "hiddenSeries": false,
       "id": 20,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -206,7 +204,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -291,7 +289,6 @@
       },
       "hiddenSeries": false,
       "id": 1,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -309,7 +306,7 @@
         "alertThreshold": true
       },
       "percentage": true,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -441,7 +438,6 @@
       },
       "hiddenSeries": false,
       "id": 7,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -461,7 +457,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -576,7 +572,6 @@
       },
       "hiddenSeries": false,
       "id": 10,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -594,7 +589,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -687,7 +682,6 @@
       },
       "hiddenSeries": false,
       "id": 8,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -705,7 +699,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -831,7 +825,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -923,7 +917,6 @@
       },
       "hiddenSeries": false,
       "id": 5,
-      "isNew": true,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -945,7 +938,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1027,7 +1020,6 @@
       },
       "hiddenSeries": false,
       "id": 13,
-      "isNew": true,
       "legend": {
         "avg": false,
         "current": false,
@@ -1045,7 +1037,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1154,7 +1146,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1244,7 +1236,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -1294,9 +1286,8 @@
       }
     }
   ],
-  "refresh": false,
-  "schemaVersion": 37,
-  "style": "dark",
+  "refresh": "",
+  "schemaVersion": 38,
   "tags": [
     "prometheus",
     "redis"
@@ -1305,13 +1296,9 @@
     "list": [
       {
         "current": {
-          "selected": true,
-          "text": [
-            "127.0.0.1:6379"
-          ],
-          "value": [
-            "127.0.0.1:6379"
-          ]
+          "selected": false,
+          "text": "{% raw %}{{ ansible_facts.default_ipv4.address }}{% endraw %}:6379",
+          "value": "{{ ansible_facts.default_ipv4.address }}:6379"
         },
         "datasource": {
           "uid": "${datasource}"
@@ -1339,7 +1326,7 @@
         "current": {
           "selected": false,
           "text": "Mimir",
-          "value": "Mimir"
+          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
         },
         "hide": 0,
         "includeAll": false,
