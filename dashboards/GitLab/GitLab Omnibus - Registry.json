@@ -35,7 +35,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -77,7 +77,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum by (handler) (\n  rate(registry_http_requests_total{instance=\"$instance\",handler=~\"$handler\"}[$__interval])\n)",
           "format": "time_series",
@@ -130,7 +130,7 @@
       "dataFormat": "tsbuckets",
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -205,7 +205,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum by (le) (\n  rate(registry_http_request_duration_seconds_bucket{instance=\"$instance\",handler=~\"$handler\"}[$__interval])\n) > 0",
           "format": "heatmap",
@@ -239,7 +239,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -281,7 +281,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum by (code) (\n  rate(registry_http_requests_total{instance=\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -324,7 +324,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -393,7 +393,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(rate(registry_storage_cache_total{instance=\"$instance\",type=\"Hit\"}[$__interval])) / sum(rate(registry_storage_cache_total{instance=\"$instance\",type=\"Request\"}[$__interval]))",
           "format": "time_series",
@@ -413,7 +413,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -455,7 +455,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(rate(registry_storage_cache_total{instance=\"$instance\",type=\"Request\"}[$__interval]))",
           "format": "time_series",
@@ -505,15 +505,32 @@
       {
         "current": {
           "selected": false,
-          "text": "127.0.0.1:5001",
-          "value": "127.0.0.1:5001"
+          "text": "",
+          "value": ""
+        },
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "Mimir",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(up{job=\"gitlab-registry\"}, instance)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": false,
         "multi": false,
         "name": "instance",
@@ -543,10 +560,10 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(registry_http_requests_total{instance=\"$instance\"}, handler)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": true,
         "multi": true,
         "name": "handler",

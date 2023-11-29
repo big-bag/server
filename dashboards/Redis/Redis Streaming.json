@@ -482,8 +482,8 @@
     {
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+        "type": "redis-datasource",
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -496,8 +496,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+            "type": "redis-datasource",
+            "uid": ""
           },
           "refId": "A"
         }
@@ -811,8 +811,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -913,8 +912,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -997,8 +995,8 @@
       {
         "current": {
           "selected": false,
-          "text": "GitLab-Redis",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}"
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "includeAll": false,

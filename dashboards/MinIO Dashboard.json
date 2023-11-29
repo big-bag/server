@@ -43,7 +43,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -102,7 +102,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "time() - max(minio_node_process_starttime_seconds{job=\"$scrape_jobs\"})",
@@ -122,7 +122,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -181,7 +181,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (instance) (minio_s3_traffic_received_bytes{job=\"$scrape_jobs\"})",
@@ -202,7 +202,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -301,7 +301,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "topk(1, sum(minio_cluster_capacity_usable_total_bytes{job=\"$scrape_jobs\"}) by (instance)) - topk(1, sum(minio_cluster_capacity_usable_free_bytes{job=\"$scrape_jobs\"}) by (instance))",
@@ -316,7 +316,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "topk(1, sum(minio_cluster_capacity_usable_free_bytes{job=\"$scrape_jobs\"}) by (instance)) ",
@@ -332,7 +332,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -453,7 +453,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum(minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}) by (instance)",
@@ -468,7 +468,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -519,7 +519,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "max by (range) (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"})",
@@ -538,7 +538,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -601,7 +601,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum (minio_node_file_descriptor_open_total{job=\"$scrape_jobs\"})",
@@ -622,7 +622,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -681,7 +681,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (instance) (minio_s3_traffic_sent_bytes{job=\"$scrape_jobs\"})",
@@ -702,7 +702,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -765,7 +765,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum without (server,instance) (minio_node_go_routine_total{job=\"$scrape_jobs\"})",
@@ -786,7 +786,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -849,7 +849,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_cluster_nodes_online_total{job=\"$scrape_jobs\"}",
@@ -870,7 +870,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -933,7 +933,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_cluster_disk_online_total{job=\"$scrape_jobs\"}",
@@ -954,7 +954,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1020,7 +1020,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "count(count by (bucket) (minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}))",
@@ -1045,7 +1045,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -1085,7 +1085,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server) (rate(minio_s3_traffic_received_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -1137,7 +1137,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -1177,7 +1177,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server) (rate(minio_s3_traffic_sent_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -1222,7 +1222,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -1285,7 +1285,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_cluster_nodes_offline_total{job=\"$scrape_jobs\"}",
@@ -1306,7 +1306,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -1369,7 +1369,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_cluster_disk_offline_total{job=\"$scrape_jobs\"}",
@@ -1390,7 +1390,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1456,7 +1456,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "topk(1, sum(minio_bucket_usage_object_total{job=\"$scrape_jobs\"}) by (instance))",
@@ -1474,7 +1474,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -1526,7 +1526,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_heal_time_last_activity_nano_seconds{job=\"$scrape_jobs\"}",
@@ -1546,7 +1546,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -1598,7 +1598,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_usage_last_activity_nano_seconds{job=\"$scrape_jobs\"}",
@@ -1625,7 +1625,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -1665,7 +1665,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server,api) (increase(minio_s3_requests_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -1717,7 +1717,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -1757,7 +1757,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server,api) (increase(minio_s3_requests_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -1802,7 +1802,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "Total s3 bytes sent per bucket",
       "fieldConfig": {
@@ -1811,6 +1811,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -1824,6 +1825,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 1,
             "pointSize": 2,
@@ -1845,7 +1847,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1886,7 +1889,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "editorMode": "builder",
           "expr": "sum by(bucket) (minio_bucket_traffic_sent_bytes{job=\"$scrape_jobs\"})",
@@ -1901,7 +1904,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "Total s3 bytes received per bucket",
       "fieldConfig": {
@@ -1910,6 +1913,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -1923,6 +1927,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 1,
             "pointSize": 2,
@@ -1944,7 +1949,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1983,7 +1989,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "editorMode": "builder",
           "expr": "sum by(bucket) (minio_bucket_traffic_received_bytes{job=\"$scrape_jobs\"})",
@@ -2005,7 +2011,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2033,7 +2039,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2045,7 +2051,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server,api) (increase(minio_s3_requests_5xx_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -2097,7 +2103,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2125,7 +2131,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2137,7 +2143,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (server,api) (increase(minio_s3_requests_4xx_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
@@ -2190,7 +2196,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "Total number of bytes received and sent among all MinIO server instances",
       "fieldConfig": {
@@ -2227,7 +2233,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2239,7 +2245,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_inter_node_traffic_sent_bytes{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -2254,7 +2260,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_inter_node_traffic_received_bytes{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -2302,7 +2308,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2330,7 +2336,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2342,7 +2348,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (instance) (minio_heal_objects_heal_total{job=\"$scrape_jobs\"})",
@@ -2353,7 +2359,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (instance) (minio_heal_objects_error_total{job=\"$scrape_jobs\"})",
@@ -2365,7 +2371,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "sum by (instance) (minio_heal_objects_total{job=\"$scrape_jobs\"}) ",
@@ -2414,7 +2420,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2442,7 +2448,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2454,7 +2460,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_node_process_cpu_total_seconds{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -2502,7 +2508,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2530,7 +2536,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2542,7 +2548,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_node_process_resident_memory_bytes{job=\"$scrape_jobs\"}",
@@ -2590,7 +2596,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2618,7 +2624,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2630,7 +2636,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_node_disk_used_bytes{job=\"$scrape_jobs\"}",
@@ -2680,7 +2686,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -2708,7 +2714,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2720,7 +2726,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_cluster_disk_free_inodes{job=\"$scrape_jobs\"}",
@@ -2773,7 +2779,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "Number of online disks per MinIO Server",
       "fieldConfig": {
@@ -2810,7 +2816,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2822,7 +2828,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_node_syscall_read_total{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -2837,7 +2843,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_node_syscall_write_total{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -2890,7 +2896,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -2927,7 +2933,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -2939,7 +2945,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "minio_node_file_descriptor_open_total{job=\"$scrape_jobs\"}",
@@ -2989,7 +2995,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fill": 1,
       "fillGradient": 0,
@@ -3017,7 +3023,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -3029,7 +3035,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_node_io_rchar_bytes{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -3042,7 +3048,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "exemplar": true,
           "expr": "rate(minio_node_io_wchar_bytes{job=\"$scrape_jobs\"}[$__rate_interval])",
@@ -3093,22 +3099,35 @@
     "list": [
       {
         "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "Mimir",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
           "selected": true,
-          "text": [
-            "minio-job"
-          ],
-          "value": [
-            "minio-job"
-          ]
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(job)",
-        "hide": 0,
-        "includeAll": true,
-        "multi": true,
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
         "name": "scrape_jobs",
         "options": [],
         "query": {
@@ -3116,7 +3135,7 @@
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
-        "regex": "",
+        "regex": "minio-job",
         "skipUrlSync": false,
         "sort": 0,
         "type": "query"

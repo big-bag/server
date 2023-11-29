@@ -32,8 +32,8 @@
       "collapse": false,
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+        "type": "prometheus",
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -47,8 +47,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+            "type": "prometheus",
+            "uid": ""
           },
           "refId": "A"
         }
@@ -63,7 +63,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "Saturation is a measure of the most saturated component of the service. Lower is better.",
@@ -108,7 +108,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "expr": "\n        max(\n          max_over_time(\n            gitlab_sli:gitlab_service_saturation:ratio[$__interval]\n          )\n        ) by (component)\n        ",
           "format": "time_series",
@@ -161,7 +161,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "Availability measures the ratio of component processes in the service that are currently healthy and able to handle requests. The closer to 100% the better.",
@@ -206,7 +206,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "expr": "\n        min(\n          min_over_time(\n            gitlab_sli:job:availability:ratio[$__interval]\n          )\n        ) by (job)\n        ",
           "format": "time_series",
@@ -260,7 +260,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "Error rates are a measure of unhandled service exceptions within a minute period. Client errors are excluded when possible. Lower is better",
@@ -305,7 +305,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "expr": "\n      max(\n        max_over_time(\n          gitlab_sli:gitlab_component_errors:ratio[$__interval]\n        )\n      ) by (job)\n      ",
           "format": "time_series",
@@ -355,7 +355,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "The operation rate is the sum total of all requests being handle for all components within this service. Note that a single user request can lead to requests to multiple components. Higher is busier.",
@@ -400,7 +400,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "expr": "\n        max(\n          avg_over_time(\n            gitlab_sli:code_method_route:workhorse_http_request_count:rate1m[$__interval]\n          ) \n        ) \n          ",
           "format": "time_series",
@@ -448,8 +448,8 @@
       "collapse": true,
       "collapsed": false,
       "datasource": {
-        "type": "loki",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+        "type": "prometheus",
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -463,8 +463,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
+            "type": "prometheus",
+            "uid": ""
           },
           "refId": "A"
         }
@@ -480,7 +480,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "The amount of non-idle time consumed by nodes for this service",
@@ -525,7 +525,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "avg(1 - rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"($instance):12345\"}[$__interval])) by (instance)",
@@ -577,7 +577,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 0,
       "description": "The maximum utilization of a single core on each node. Lower is better",
@@ -622,7 +622,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "clamp_min(clamp_max(\n          max(1 - rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"($instance):12345\"}[$__interval])) by (instance)\n        ,1),0)",
@@ -676,7 +676,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 2,
       "description": "Network utilization for nodes for this service",
@@ -726,7 +726,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "\n          sum(rate(node_network_transmit_bytes_total{instance=~\"($instance):12345\"}[$__interval])) by (instance)\n          ",
@@ -739,7 +739,7 @@
         },
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "\n          sum(rate(node_network_receive_bytes_total{instance=~\"($instance):12345\"}[$__interval])) by (instance)\n          ",
@@ -791,7 +791,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "$PROMETHEUS_DS"
+        "uid": "$datasource"
       },
       "decimals": 0,
       "description": "Memory utilization. Lower is better.",
@@ -836,7 +836,7 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$PROMETHEUS_DS"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "clamp_min(clamp_max(\n        1 -\n        (\n          (\n            node_memory_MemFree_bytes{instance=~\"($instance):12345\"} +\n            node_memory_Buffers_bytes{instance=~\"($instance):12345\"} +\n            node_memory_Cached_bytes{instance=~\"($instance):12345\"}\n          )\n        )\n        /\n        node_memory_MemTotal_bytes{instance=~\"($instance):12345\"}\n      ,1),0)",
@@ -896,13 +896,13 @@
       {
         "current": {
           "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "text": "",
+          "value": ""
         },
-        "hide": 0,
+        "hide": 2,
         "includeAll": false,
         "multi": false,
-        "name": "PROMETHEUS_DS",
+        "name": "datasource",
         "options": [],
         "query": "prometheus",
         "queryValue": "",
@@ -914,14 +914,14 @@
       {
         "current": {
           "selected": false,
-          "text": "nixos",
-          "value": "nixos"
+          "text": "",
+          "value": ""
         },
         "datasource": {
-          "uid": "$PROMETHEUS_DS"
+          "uid": "$datasource"
         },
         "definition": "label_values(up{job=\"integrations/node_exporter\"}, instance)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": true,
         "label": "Node",
         "multi": false,

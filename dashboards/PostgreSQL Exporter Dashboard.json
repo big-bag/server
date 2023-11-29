@@ -1261,10 +1261,10 @@
       {
         "current": {
           "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "text": "",
+          "value": ""
         },
-        "hide": 0,
+        "hide": 2,
         "includeAll": false,
         "label": "datasource",
         "multi": false,
@@ -1273,21 +1273,21 @@
         "query": "prometheus",
         "queryValue": "",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },
       {
         "current": {
-          "selected": false,
-          "text": "integrations/postgres_exporter",
-          "value": "integrations/postgres_exporter"
+          "selected": true,
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "uid": "$datasource"
         },
         "definition": "label_values(pg_up, job)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": false,
         "label": "job",
         "multi": false,
@@ -1309,15 +1309,15 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
-          "text": "postgresql://{% raw %}{{ ansible_facts.default_ipv4.address }}{% endraw %}:5432/postgres",
-          "value": "postgresql://{{ ansible_facts.default_ipv4.address }}:5432/postgres"
+          "selected": true,
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "uid": "$datasource"
         },
         "definition": "label_values(up{job=~\"$job\"},instance)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": true,
         "multi": false,
         "name": "instance",
@@ -1338,9 +1338,9 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "uid": "$datasource"

@@ -65,50 +65,98 @@
             - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
-        - name: change mimir datasource uid to variable
+        - name: reset variable values (1/2)
           ansible.builtin.replace:
             path: "{{ item }}"
-            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
-            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}{% endraw %}"
+            after: '"templating":\s{'
+            before: '"time":\s{'
+            regexp: '("text":\s").*(",)'
+            replace: '\1\2'
           with_fileglob:
             - ../dashboards/*
             - ../dashboards/Mimir/*
-            - ../dashboards/Redis/*
-            - ../dashboards/GitLab/*
-
-        - name: change loki datasource uid to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}"
-            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_loki'] }}{% endraw %}"
-          with_fileglob:
-            - ../dashboards/Redis/*
-            - ../dashboards/GitLab/*
-
-        - name: change prometheus datasource uid to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_prometheus'] }}"
-            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_prometheus'] }}{% endraw %}"
-          with_fileglob: ../dashboards/Prometheus/*
-
-        - name: change redis datasource uid to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: "{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}"
-            replace: "{% raw %}{{ hostvars['localhost']['grafana_datasource_uid_redis_gitlab'] }}{% endraw %}"
-          with_fileglob: ../dashboards/Redis/*
-
-        - name: change ip address to variable
-          ansible.builtin.replace:
-            path: "{{ item }}"
-            regexp: '(".*){{ ansible_facts.default_ipv4.address }}(.*")'
-            replace: '\1{% raw %}{{ ansible_facts.default_ipv4.address }}{% endraw %}\2'
-          with_fileglob:
-            - ../dashboards/*
             - ../dashboards/Prometheus/*
             - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
+
+        - name: reset variable values (2/2)
+          ansible.builtin.replace:
+            path: "{{ item }}"
+            after: '"templating":\s{'
+            before: '"time":\s{'
+            regexp: '("value":\s").*(")'
+            replace: '\1\2'
+          with_fileglob:
+            - ../dashboards/*
+            - ../dashboards/Mimir/*
+            - ../dashboards/Prometheus/*
+            - ../dashboards/Redis/*
+            - ../dashboards/GitLab/*
+
+        - name: set variable values in github dashboard (1/2)
+          ansible.builtin.replace:
+            path: ../dashboards/GitHub Default.json
+            after: '"name":\s"datasource",'
+            before: '"name":\s"organization",'
+            regexp: "{{ item }}"
+            replace: '\1big-bag\2'
+          loop:
+            - '("text":\s").*(",)'
+            - '("value":\s").*(")'
+
+        - name: set variable values in github dashboard (2/2)
+          ansible.builtin.replace:
+            path: ../dashboards/GitHub Default.json
+            after: '"type":\s"textbox"'
+            before: '"name":\s"repository",'
+            regexp: "{{ item }}"
+            replace: '\1server\2'
+          loop:
+            - '("text":\s").*(",)'
+            - '("value":\s").*(")'
+
+        - name: set variable values in mimir dashboard (1/5)
+          ansible.builtin.replace:
+            path: ../dashboards/Mimir/Mimir - Overrides.json
+            after: '"name":\s"tenant_id",'
+            before: '"type":\s"textbox"'
+            regexp: "{{ item }}"
+            replace: '\1.*\2'
+          loop:
+            - '("text":\s").*(",)'
+            - '("value":\s").*(")'
+
+        - name: set variable values in mimir dashboard (2/5)
+          ansible.builtin.replace:
+            path: ../dashboards/Mimir/Mimir - Tenants.json
+            after: '"name":\s"user",'
+            before: '"name":\s"limit",'
+            regexp: '("text":\s").*(",)'
+            replace: '"text": "10",'
+
+        - name: set variable values in mimir dashboard (3/5)
+          ansible.builtin.replace:
+            path: ../dashboards/Mimir/Mimir - Tenants.json
+            after: '"name":\s"user",'
+            before: '"name":\s"limit",'
+            regexp: '("value":\s").*(")'
+            replace: '"value": "10"'
+
+        - name: set variable values in mimir dashboard (4/5)
+          ansible.builtin.replace:
+            path: ../dashboards/Mimir/Mimir - Top tenants.json
+            after: '"name":\s"namespace",'
+            before: '"name":\s"limit",'
+            regexp: '("text":\s").*(",)'
+            replace: '"text": "10",'
+
+        - name: set variable values in mimir dashboard (5/5)
+          ansible.builtin.replace:
+            path: ../dashboards/Mimir/Mimir - Top tenants.json
+            after: '"name":\s"namespace",'
+            before: '"name":\s"limit",'
+            regexp: '("value":\s").*(")'
+            replace: '"value": "10"'
 
         - name: reset location number in folder
           ansible.builtin.replace:
@@ -150,6 +198,11 @@
       delegate_to: localhost
       become: false
       when: dashboard_uid.results | community.general.json_query('[*].rc') | reject('match', '0')
+
+    - name: create a directory
+      ansible.builtin.file:
+        path: /mnt/ssd/monitoring/grafana-dashboards
+        state: directory
 
     - name: create folders
       ansible.builtin.file:

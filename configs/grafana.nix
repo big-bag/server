@@ -361,6 +361,14 @@ in
     };
   };
 
+  sops.secrets = {
+    "grafana/github/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   virtualisation = {
     oci-containers = {
       containers = {
@@ -374,12 +382,24 @@ in
                 apiVersion: 1
 
                 datasources:
+                  - name: GitHub
+                    type: grafana-github-datasource
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    isDefault: false
+                    jsonData:
+                      owner: 'big-bag'
+                      repository: 'server'
+                    secureJsonData:
+                      accessToken: $GITHUB_TOKEN
+                    editable: true
+
                   - name: Mimir
                     type: prometheus
                     access: proxy
                     version: 1
                     orgId: 1
-                    uid: $DATASOURCE_UID_MIMIR
                     isDefault: false
                     url: http://${IP_ADDRESS}:9009/mimir/prometheus
                     jsonData:
@@ -389,12 +409,23 @@ in
                       prometheusType: Mimir
                     editable: true
 
+                  - name: Loki
+                    type: loki
+                    access: proxy
+                    version: 1
+                    orgId: 1
+                    isDefault: true
+                    url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
+                    jsonData:
+                      manageAlerts: true
+                      maxLines: 1000
+                    editable: true
+
                   - name: Prometheus
                     type: prometheus
                     access: proxy
                     version: 1
                     orgId: 1
-                    uid: $DATASOURCE_UID_PROMETHEUS
                     isDefault: false
                     url: http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus
                     jsonData:
@@ -404,25 +435,11 @@ in
                       prometheusType: Prometheus
                     editable: true
 
-                  - name: Loki
-                    type: loki
-                    access: proxy
-                    version: 1
-                    orgId: 1
-                    uid: $DATASOURCE_UID_LOKI
-                    isDefault: true
-                    url: http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}
-                    jsonData:
-                      manageAlerts: true
-                      maxLines: 1000
-                    editable: true
-
                   - name: Mattermost
                     type: postgres
                     access: proxy
                     version: 1
                     orgId: 1
-                    uid: $DATASOURCE_UID_POSTGRESQL_MATTERMOST
                     isDefault: false
                     url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
                     user: $POSTGRESQL_USERNAME
@@ -444,7 +461,6 @@ in
                     access: proxy
                     version: 1
                     orgId: 1
-                    uid: $DATASOURCE_UID_REDIS_GITLAB
                     isDefault: false
                     url: redis://${IP_ADDRESS}:6379
                     jsonData:
@@ -465,7 +481,6 @@ in
                     access: proxy
                     version: 1
                     orgId: 1
-                    uid: $DATASOURCE_UID_POSTGRESQL_GITLAB
                     isDefault: false
                     url: ${IP_ADDRESS}:${toString config.services.postgresql.port}
                     user: $POSTGRESQL_USERNAME
@@ -521,6 +536,8 @@ in
           ];
           environmentFiles = [
             config.sops.secrets."grafana/application/envs".path
+            config.sops.secrets."grafana/github/envs".path
+            config.sops.secrets."grafana/minio/envs".path
             config.sops.secrets."grafana/postgres/envs".path
             config.sops.secrets."grafana/redis/envs".path
           ];
@@ -546,6 +563,7 @@ in
             GF_EXTERNAL_IMAGE_STORAGE_S3_SECRET_KEY = "$__env{MINIO_SERVICE_ACCOUNT_SECRET_KEY}";
 
             GF_INSTALL_PLUGINS = ''
+              grafana-github-datasource,
               redis-datasource,
               redis-app
             '';
@@ -609,6 +627,8 @@ in
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
           config.sops.secrets."grafana/application/envs".path
+          config.sops.secrets."grafana/github/envs".path
+          config.sops.secrets."grafana/minio/envs".path
           config.sops.secrets."grafana/postgres/envs".path
           config.sops.secrets."grafana/redis/envs".path
         ];
@@ -636,6 +656,9 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
+            GitHub.'Personal access tokens (classic)'[password]=$GITHUB_TOKEN \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
             Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
             Redis.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
@@ -647,6 +670,9 @@ in
             --url https://${DOMAIN_NAME_INTERNAL}/grafana \
             username=$USERNAME \
             password=$PASSWORD \
+            GitHub.'Personal access tokens (classic)'[password]=$GITHUB_TOKEN \
+            MinIO.'Access Key'[text]=$MINIO_SERVICE_ACCOUNT_ACCESS_KEY \
+            MinIO.'Secret Key'[password]=$MINIO_SERVICE_ACCOUNT_SECRET_KEY \
             Postgres.'Connection command to Mattermost database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_MATTERMOST" \
             Postgres.'Connection command to GitLab database'[password]="PGPASSWORD='$POSTGRESQL_PASSWORD' psql -h ${IP_ADDRESS} -p ${toString config.services.postgresql.port} -U $POSTGRESQL_USERNAME $POSTGRESQL_DATABASE_GITLAB" \
             Redis.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \

@@ -3,17 +3,32 @@
   ansible.builtin.import_playbook: playbooks/main.yml
   tags: never
 
+- name: include a play to create secrets
+  ansible.builtin.import_playbook: playbooks/sops-nix.yml
+
 - name: configure server
   hosts: server
   become: true
   gather_facts: false
   tasks:
+    - name: upload secrets
+      ansible.builtin.copy:
+        src: configs/secrets.yml
+        dest: /etc/nixos/secrets.yml
+        owner: root
+        group: root
+      changed_when: false
+
     - name: upload nixos configuration files
       ansible.posix.synchronize:
         mode: push
         src: configs/
         dest: /etc/nixos/
-        rsync_opts: "--chown=root:root"
+        rsync_opts:
+          - "--exclude=secrets.yml"
+          - "--chown=root:root"
+        times: false
+        checksum: true
       notify: apply config
 
   handlers:
@@ -23,19 +38,19 @@
       ignore_errors: true
       listen: apply config
 
-    - name: success
+    - name: success output
       ansible.builtin.debug:
         msg: "{{ build_output.stderr_lines }}"
       when: build_output.rc == 0
       listen: apply config
 
-    - name: error
+    - name: error output
       ansible.builtin.debug:
         msg: "{{ build_output.stderr_lines }}"
       when: build_output.rc == 1
       listen: apply config
 
-    - name: stop
+    - name: stop play
       ansible.builtin.meta: end_host
       when: build_output.rc == 1
       listen: apply config
@@ -46,19 +61,19 @@
       ignore_errors: true
       listen: apply config
 
-    - name: success
+    - name: success output
       ansible.builtin.debug:
         msg: "{{ switch_output.stdout_lines }}"
       when: switch_output.rc == 0
       listen: apply config
 
-    - name: error
+    - name: error output
       ansible.builtin.debug:
         msg: "{{ switch_output.stdout_lines }}"
       when: switch_output.rc == 1
       listen: apply config
 
-    - name: stop
+    - name: stop play
       ansible.builtin.meta: end_host
       when: switch_output.rc == 1
       listen: apply config

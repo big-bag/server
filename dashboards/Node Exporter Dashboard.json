@@ -720,7 +720,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -777,7 +777,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "1 - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''} / node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'}",
@@ -831,7 +831,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -947,7 +947,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1035,7 +1035,7 @@
       ],
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -1074,7 +1074,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "(node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'} - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance'}) / deriv(node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''}[3d]) > 0",
@@ -1090,7 +1090,7 @@
       ],
       "timeFrom": "1h",
       "title": "Disk Fill Up Time",
-      "transform": "timeseries_aggregations",
+      "transform": "table",
       "type": "table-old"
     },
     {
@@ -1131,7 +1131,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1224,7 +1224,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.6",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1288,10 +1288,10 @@
       {
         "current": {
           "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "text": "",
+          "value": ""
         },
-        "hide": 0,
+        "hide": 2,
         "includeAll": false,
         "multi": false,
         "name": "datasource",
@@ -1299,15 +1299,15 @@
         "query": "prometheus",
         "queryValue": "",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },
       {
         "current": {
           "selected": false,
-          "text": "nixos:12345",
-          "value": "nixos:12345"
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",

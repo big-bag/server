@@ -33,7 +33,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -98,7 +98,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "avg(time() - redis_start_time_seconds{instance=~\"$instance\"})",
           "format": "time_series",
@@ -117,7 +117,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -184,7 +184,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  avg_over_time(redis_connected_clients{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -207,7 +207,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -252,7 +252,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  rate(redis_commands_processed_total{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -304,7 +304,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "decimals": 2,
       "editable": true,
@@ -350,7 +350,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  rate(redis_keyspace_hits_total{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -366,7 +366,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  rate(redis_keyspace_misses_total{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -422,7 +422,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -474,7 +474,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "redis_memory_used_bytes{instance=~\"$instance\"}",
           "format": "time_series",
@@ -488,7 +488,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "redis_config_maxmemory{instance=~\"$instance\"} > 0",
           "format": "time_series",
@@ -542,7 +542,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -592,7 +592,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(rate(redis_expired_keys_total{instance=~\"$instance\"}[$__interval]))",
           "format": "time_series",
@@ -607,7 +607,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(rate(redis_evicted_keys_total{instance=~\"$instance\"}[$__interval]))",
           "format": "time_series",
@@ -657,7 +657,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -702,7 +702,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  rate(redis_net_input_bytes_total{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -715,7 +715,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(\n  rate(redis_net_output_bytes_total{instance=~\"$instance\"}[$__interval])\n)",
           "format": "time_series",
@@ -765,7 +765,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -812,7 +812,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum without (instance) (\n  rate(redis_commands_total{instance=~\"$instance\"}[$__interval])\n) > 0",
           "format": "time_series",
@@ -863,7 +863,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -908,7 +908,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(redis_db_keys{instance=~\"$instance\"} - redis_db_keys_expiring{instance=~\"$instance\"}) ",
           "format": "time_series",
@@ -922,7 +922,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum(redis_db_keys_expiring{instance=~\"$instance\"})",
           "format": "time_series",
@@ -973,7 +973,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": "${datasource}"
       },
       "editable": true,
       "error": false,
@@ -1020,7 +1020,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": "${datasource}"
           },
           "expr": "sum by (db) (\n  redis_db_keys{instance=~\"$instance\"}\n)",
           "format": "time_series",
@@ -1075,15 +1075,32 @@
       {
         "current": {
           "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "text": "",
+          "value": ""
+        },
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "Mimir",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(up{job=\"integrations/redis_exporter\"}, instance)",
-        "hide": 0,
+        "hide": 2,
         "includeAll": true,
         "multi": false,
         "name": "instance",

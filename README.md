@@ -164,22 +164,35 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 <summary>Prepare</summary>
 <br>
 
-1. build an image
+1. create personal access tokens (classic) in GitHub
+   * Note: grafana
+   * Expiration: No expiration
+   * Scopes:
+     * repo:status
+     * repo_deployment
+     * public_repo
+     * read:packages
+     * read:org
+     * read:user
+     * user:email
+     * read:project
+
+2. build an image
    ```bash
-   docker build --rm --file Dockerfile --tag ansible:2.15.1 .
+   docker build --rm --file Dockerfile --tag ansible:2.16.0 .
    ```
 
-2. create a Vault password file named `.vault_password` and add a password in it
+3. create a Vault password file named `.vault_password` and add a password in it
 
-3. create an encrypted file
+4. create an encrypted file
    ```bash
    docker run --rm -ti \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
+     ansible:2.16.0 \
        ansible-vault create host_vars/localhost/vault.yml
    ```
 
-4. write credentials to encrypted file
+5. write credentials to encrypted file
    ```bash
    ---
    vault_server_ip_address: 192.168.0.1
@@ -206,44 +219,38 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 
    vault_pgadmin_postgres_username: [VALUE]
 
+   vault_grafana_github_token: [VALUE]
    vault_grafana_postgres_username: [VALUE]
    vault_grafana_redis_username: [VALUE]
    ```
 
-5. run a playbook to do an initial configuration on a server and configure a local environment
+6. run a playbook to do an initial configuration on a server and configure a local environment
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
+     ansible:2.16.0 \
        ansible-playbook site.yml --tags prepare
-   ```
-
-6. run a playbook to create secrets
-   ```bash
-   docker run --rm -t \
-     --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
-       ansible-playbook site.yml --tags secrets
    ```
 
 7. grafana dashboard sources
 
    | Service | Dashboard source (based on) |
    | :--- | :--- |
+   | GitHub | Connections -> Data sources -> GitHub -> Dashboards -> GitHub Default |
    | MinIO | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
    | Mimir | https://grafana.com/grafana/dashboards/16007-mimir-alertmanager/<br>https://grafana.com/grafana/dashboards/16009-mimir-compactor/<br>https://grafana.com/grafana/dashboards/16011-mimir-object-store/<br>https://grafana.com/grafana/dashboards/16012-mimir-overrides/<br>https://grafana.com/grafana/dashboards/16013-mimir-queries/<br>https://grafana.com/grafana/dashboards/16016-mimir-reads/<br>https://grafana.com/grafana/dashboards/16018-mimir-ruler/<br>https://grafana.com/grafana/dashboards/16021-mimir-tenants/<br>https://grafana.com/grafana/dashboards/16022-mimir-top-tenants/<br>https://grafana.com/grafana/dashboards/16026-mimir-writes/ |
-   | Prometheus | Administration -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats<br>Administration -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
+   | Prometheus | Connections -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats<br>Connections -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
    | Node Exporter | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/<br>https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
    | PostgreSQL Exporter | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
-   | Redis | https://grafana.com/grafana/dashboards/14091-redis-dashboard-for-prometheus-redis-exporter-1-x/<br>Administration -> Data Sources -> GitLab-Redis -> Dashboards -> Redis<br>Administration -> Data Sources -> GitLab-Redis -> Dashboards -> Redis Streaming |
+   | Redis | https://grafana.com/grafana/dashboards/14091-redis-dashboard-for-prometheus-redis-exporter-1-x/<br>Connections -> Data Sources -> GitLab-Redis -> Dashboards -> Redis<br>Connections -> Data Sources -> GitLab-Redis -> Dashboards -> Redis Streaming |
    | GitLab | https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/gitaly.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/overview.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/postgresql.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/rails-app.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |
-   | Grafana | Administration -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
+   | Grafana | Connections -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
 
 8. run a playbook to upload grafana dashboards
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
+     ansible:2.16.0 \
        ansible-playbook site.yml --tags dashboards
    ```
 
@@ -251,7 +258,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    ```bash
    docker run --rm -ti \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
+     ansible:2.16.0 \
        ansible-playbook site.yml --tags upgrade
    ```
 
@@ -267,7 +274,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    ```bash
    docker run --rm -t \
      --volume=$(pwd):/etc/ansible \
-     ansible:2.15.1 \
+     ansible:2.16.0 \
        ansible-playbook site.yml
    ```
 

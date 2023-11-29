@@ -46,7 +46,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -60,7 +60,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -246,7 +246,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -260,7 +260,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -446,7 +446,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -460,7 +460,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -798,7 +798,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -812,7 +812,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -1157,8 +1157,8 @@
       {
         "current": {
           "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "includeAll": false,
@@ -1168,7 +1168,7 @@
         "options": [],
         "query": "prometheus",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },

@@ -46,7 +46,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -60,7 +60,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -172,7 +172,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -186,7 +186,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -295,9 +295,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "selected": true,
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "includeAll": false,
@@ -306,8 +306,9 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "queryValue": "",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },
@@ -315,8 +316,8 @@
         "allValue": ".*",
         "current": {
           "selected": false,
-          "text": "local",
-          "value": "local"
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
@@ -345,8 +346,8 @@
       {
         "current": {
           "selected": false,
-          "text": "local",
-          "value": "local"
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
@@ -375,8 +376,8 @@
       {
         "current": {
           "selected": true,
-          "text": ".*",
-          "value": ".*"
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "label": "Tenant ID",

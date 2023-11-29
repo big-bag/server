@@ -9,7 +9,6 @@
         server_ssh_port_seed: server_ssh_port_random
       tags:
         - prepare
-        - secrets
         - upgrade
 
     - name: create random but idempotent numbers
@@ -17,7 +16,6 @@
         server_ssh_port_generated: "{{ 65535 | random(start=49152, seed=server_ssh_port_seed) }}"
       tags:
         - prepare
-        - secrets
         - upgrade
 
     - name: check connection to server on custom ssh port
@@ -92,9 +90,6 @@
 - name: include a play to configure disks
   ansible.builtin.import_playbook: disks.yml
   tags: prepare
-
-- name: include a play to create secrets
-  ansible.builtin.import_playbook: sops-nix.yml
 
 - name: include a play to upload dashboards to the server
   ansible.builtin.import_playbook: dashboards.yml

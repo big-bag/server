@@ -8,13 +8,11 @@
       ansible.builtin.shell: ssh-to-age -private-key -i ../id_ed25519 > ../configs/key.txt
       args:
         creates: ../configs/key.txt
-      tags: secrets
 
     - name: get user public key
       ansible.builtin.command: age-keygen -y ../configs/key.txt
       register: user_public_key
       changed_when: false
-      tags: secrets
 
     - name: create a temporary file to write secrets
       ansible.builtin.tempfile:
@@ -24,7 +22,6 @@
         state: file
       register: temp_file_secrets
       changed_when: false
-      tags: secrets
 
     - name: create sops configuration file
       ansible.builtin.copy:
@@ -41,7 +38,6 @@
               - age:
                 - *user
         dest: ../.sops.yaml
-      tags: secrets
 
     - name: set seed variables
       ansible.builtin.set_fact:
@@ -89,15 +85,6 @@
         grafana_redis_password_seed: grafana_redis_password_random
         grafana_application_username_seed: grafana_application_username_random
         grafana_application_password_seed: grafana_application_password_random
-        grafana_datasource_uid_mimir_seed: grafana_datasource_uid_mimir_random
-        grafana_datasource_uid_prometheus_seed: grafana_datasource_uid_prometheus_random
-        grafana_datasource_uid_loki_seed: grafana_datasource_uid_loki_random
-        grafana_datasource_uid_postgres_mattermost_seed: grafana_datasource_uid_postgres_mattermost_random
-        grafana_datasource_uid_redis_gitlab_seed: grafana_datasource_uid_redis_gitlab_random
-        grafana_datasource_uid_postgres_gitlab_seed: grafana_datasource_uid_postgres_gitlab_random
-      tags:
-        - secrets
-        - dashboards
 
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
@@ -145,15 +132,6 @@
         grafana_redis_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,<>/? length=48', seed=grafana_redis_password_seed) }}"
         grafana_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_application_username_seed) }}"
         grafana_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_application_password_seed) }}"
-        grafana_datasource_uid_mimir: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_mimir_seed) }}"
-        grafana_datasource_uid_prometheus: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_prometheus_seed) }}"
-        grafana_datasource_uid_loki: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_loki_seed) }}"
-        grafana_datasource_uid_postgres_mattermost: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_postgres_mattermost_seed) }}"
-        grafana_datasource_uid_redis_gitlab: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_redis_gitlab_seed) }}"
-        grafana_datasource_uid_postgres_gitlab: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,- length=9', seed=grafana_datasource_uid_postgres_gitlab_seed) }}"
-      tags:
-        - secrets
-        - dashboards
 
     - name: create a temporary file to write basic auth credentials | mimir
       ansible.builtin.tempfile:
@@ -163,7 +141,6 @@
         state: file
       register: temp_file_mimir
       changed_when: false
-      tags: secrets
 
     - name: add basic auth credentials to a temporary file | mimir
       community.general.htpasswd:
@@ -171,13 +148,11 @@
         name: "{{ mimir_nginx_username }}"
         password: "{{ mimir_nginx_password }}"
       changed_when: false
-      tags: secrets
 
     - name: read basic auth credentials from a temporary file | mimir
       ansible.builtin.command: cat {{ temp_file_mimir.path }}
       register: basic_auth_mimir
       changed_when: false
-      tags: secrets
 
     - name: create a temporary file to write basic auth credentials | prometheus
       ansible.builtin.tempfile:
@@ -187,7 +162,6 @@
         state: file
       register: temp_file_prometheus
       changed_when: false
-      tags: secrets
 
     - name: add basic auth credentials to a temporary file | prometheus
       community.general.htpasswd:
@@ -195,13 +169,11 @@
         name: "{{ prometheus_nginx_username }}"
         password: "{{ prometheus_nginx_password }}"
       changed_when: false
-      tags: secrets
 
     - name: read basic auth credentials from a temporary file | prometheus
       ansible.builtin.command: cat {{ temp_file_prometheus.path }}
       register: basic_auth_prometheus
       changed_when: false
-      tags: secrets
 
     - name: create a temporary file to write basic auth credentials | redisinsight
       ansible.builtin.tempfile:
@@ -211,7 +183,6 @@
         state: file
       register: temp_file_redisinsight
       changed_when: false
-      tags: secrets
 
     - name: add basic auth credentials to a temporary file | redisinsight
       community.general.htpasswd:
@@ -219,13 +190,11 @@
         name: "{{ redisinsight_nginx_username }}"
         password: "{{ redisinsight_nginx_password }}"
       changed_when: false
-      tags: secrets
 
     - name: read basic auth credentials from a temporary file | redisinsight
       ansible.builtin.command: cat {{ temp_file_redisinsight.path }}
       register: basic_auth_redisinsight
       changed_when: false
-      tags: secrets
 
     - name: write secrets in plain text to a temporary file
       ansible.builtin.copy:
@@ -344,6 +313,9 @@
                 PGADMIN_DEFAULT_EMAIL={{ pgadmin_application_username }}@{{ vault_domain_name_internal }}
                 PGADMIN_DEFAULT_PASSWORD={{ pgadmin_application_password }}
           grafana:
+            github:
+              envs: |
+                GITHUB_TOKEN={{ vault_grafana_github_token }}
             minio:
               envs: |
                 MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ grafana_minio_access_key }}
@@ -361,19 +333,11 @@
               envs: |
                 USERNAME={{ grafana_application_username }}
                 PASSWORD={{ grafana_application_password }}
-                DATASOURCE_UID_MIMIR={{ grafana_datasource_uid_mimir }}
-                DATASOURCE_UID_PROMETHEUS={{ grafana_datasource_uid_prometheus }}
-                DATASOURCE_UID_LOKI={{ grafana_datasource_uid_loki }}
-                DATASOURCE_UID_POSTGRESQL_MATTERMOST={{ grafana_datasource_uid_postgres_mattermost }}
                 POSTGRESQL_DATABASE_MATTERMOST={{ vault_mattermost_postgres_database }}
-                DATASOURCE_UID_REDIS_GITLAB={{ grafana_datasource_uid_redis_gitlab }}
-                DATASOURCE_UID_POSTGRESQL_GITLAB={{ grafana_datasource_uid_postgres_gitlab }}
                 POSTGRESQL_DATABASE_GITLAB={{ vault_gitlab_postgres_database }}
         dest: "{{ temp_file_secrets.path }}"
       changed_when: false
-      tags: secrets
 
     - name: encrypt a temporary file
       ansible.builtin.shell: sops -e {{ temp_file_secrets.path }} > ../configs/secrets.yml
       changed_when: false
-      tags: secrets

@@ -46,7 +46,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -60,7 +60,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -71,7 +71,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "description": "",
       "gridPos": {
@@ -95,7 +95,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -107,7 +107,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -121,7 +121,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -478,7 +478,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -492,7 +492,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -808,7 +808,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -822,7 +822,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -833,7 +833,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "description": "",
       "gridPos": {
@@ -852,12 +852,12 @@
         "content": "<p>\n  The query scheduler is an optional service that moves\n  the internal queue from the query-frontend into a\n  separate component.\n  If this service is not deployed,\n  these panels will show \"No data.\"\n</p>\n",
         "mode": "markdown"
       },
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -908,7 +908,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -995,7 +995,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1073,7 +1073,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -1087,7 +1087,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -1130,7 +1130,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1217,7 +1217,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1295,7 +1295,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -1309,7 +1309,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -1361,7 +1361,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1451,7 +1451,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1542,6 +1542,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -1555,6 +1556,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1623,7 +1625,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -1637,7 +1639,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -1688,7 +1690,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1775,7 +1777,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1859,6 +1861,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -1872,6 +1875,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1938,7 +1942,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -1952,7 +1956,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -2003,7 +2007,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2090,7 +2094,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2174,6 +2178,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -2187,6 +2192,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -2253,7 +2259,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -2267,7 +2273,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -2311,7 +2317,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2420,7 +2426,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2513,7 +2519,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2569,7 +2575,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -2583,7 +2589,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -2634,7 +2640,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2721,7 +2727,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2799,7 +2805,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -2813,7 +2819,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -2856,7 +2862,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2943,7 +2949,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3053,7 +3059,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3109,7 +3115,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -3123,7 +3129,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -3166,7 +3172,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3253,7 +3259,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3362,7 +3368,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3418,7 +3424,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -3432,7 +3438,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -3475,7 +3481,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3562,7 +3568,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3671,7 +3677,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3727,7 +3733,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -3741,7 +3747,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -3784,7 +3790,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3871,7 +3877,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3980,7 +3986,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4036,7 +4042,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -4050,7 +4056,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -4093,7 +4099,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4180,7 +4186,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4267,7 +4273,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4376,7 +4382,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4454,7 +4460,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -4468,7 +4474,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -4510,7 +4516,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4619,7 +4625,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4728,7 +4734,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4837,7 +4843,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -4915,7 +4921,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -4929,7 +4935,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -4972,7 +4978,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5059,7 +5065,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5146,7 +5152,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5255,7 +5261,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5333,7 +5339,7 @@
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+        "uid": ""
       },
       "gridPos": {
         "h": 1,
@@ -5347,7 +5353,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+            "uid": ""
           },
           "refId": "A"
         }
@@ -5389,7 +5395,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5498,7 +5504,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5607,7 +5613,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5716,7 +5722,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "9.3.1",
+      "pluginVersion": "10.2.1",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5801,8 +5807,8 @@
       {
         "current": {
           "selected": false,
-          "text": "Mimir",
-          "value": "{{ hostvars['localhost']['grafana_datasource_uid_mimir'] }}"
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "includeAll": false,
@@ -5812,7 +5818,7 @@
         "options": [],
         "query": "prometheus",
         "refresh": 1,
-        "regex": "",
+        "regex": "Mimir",
         "skipUrlSync": false,
         "type": "datasource"
       },

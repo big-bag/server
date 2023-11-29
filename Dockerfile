@@ -1,10 +1,10 @@
-ARG ALPINE_VERSION=3.18.2 \
-    ANSIBLE_CORE_VERSION=2.15.1 \
-    ONE_PASSWORD_CLI_VERSION=2.18.0 \
+ARG ALPINE_VERSION=3.18.4 \
+    ANSIBLE_CORE_VERSION=2.16.0 \
+    ONE_PASSWORD_CLI_VERSION=2.23.0 \
     ONE_PASSWORD_CLI_ARCH=arm64 \
-    GOLANG_VERSION=1.21rc2-alpine3.18 \
-    SSH_TO_AGE_VERSION=1.1.4 \
-    SOPS_VERSION=3.7.3
+    GOLANG_VERSION=1.21.4-alpine3.18 \
+    SSH_TO_AGE_VERSION=1.1.6 \
+    SOPS_VERSION=3.8.1
 
 FROM alpine:$ALPINE_VERSION
 ARG ANSIBLE_CORE_VERSION
@@ -23,7 +23,8 @@ FROM alpine:$ALPINE_VERSION
 ARG ONE_PASSWORD_CLI_VERSION \
     ONE_PASSWORD_CLI_ARCH
 # https://developer.1password.com/docs/cli/get-started
-RUN wget https://cache.agilebits.com/dist/1P/op2/pkg/v${ONE_PASSWORD_CLI_VERSION}/op_linux_${ONE_PASSWORD_CLI_ARCH}_v${ONE_PASSWORD_CLI_VERSION}.zip -O op.zip && \
+RUN apk add --update --no-cache curl && \
+    curl https://cache.agilebits.com/dist/1P/op2/pkg/v${ONE_PASSWORD_CLI_VERSION}/op_linux_${ONE_PASSWORD_CLI_ARCH}_v${ONE_PASSWORD_CLI_VERSION}.zip -o op.zip && \
     unzip -d op op.zip
 
 FROM golang:$GOLANG_VERSION
