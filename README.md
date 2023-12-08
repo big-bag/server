@@ -164,7 +164,7 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 <summary>Prepare</summary>
 <br>
 
-1. create personal access tokens (classic) in GitHub
+1. create a personal access token (classic) in GitHub
    * Note: grafana
    * Expiration: No expiration
    * Scopes:
@@ -237,13 +237,14 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
    | Service | Dashboard source (based on) |
    | :--- | :--- |
    | GitHub | Connections -> Data sources -> GitHub -> Dashboards -> GitHub Default |
-   | MinIO | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
    | Mimir | https://grafana.com/grafana/dashboards/16007-mimir-alertmanager/<br>https://grafana.com/grafana/dashboards/16009-mimir-compactor/<br>https://grafana.com/grafana/dashboards/16011-mimir-object-store/<br>https://grafana.com/grafana/dashboards/16012-mimir-overrides/<br>https://grafana.com/grafana/dashboards/16013-mimir-queries/<br>https://grafana.com/grafana/dashboards/16016-mimir-reads/<br>https://grafana.com/grafana/dashboards/16018-mimir-ruler/<br>https://grafana.com/grafana/dashboards/16021-mimir-tenants/<br>https://grafana.com/grafana/dashboards/16022-mimir-top-tenants/<br>https://grafana.com/grafana/dashboards/16026-mimir-writes/ |
+   | Nginx | https://github.com/nginxinc/nginx-prometheus-exporter/blob/main/grafana/README.md |
    | Prometheus | Connections -> Data Sources -> Prometheus -> Dashboards -> Prometheus Stats<br>Connections -> Data Sources -> Prometheus -> Dashboards -> Prometheus 2.0 Stats |
+   | MinIO | https://grafana.com/grafana/dashboards/13502-minio-dashboard/ |
    | Node Exporter | https://grafana.com/grafana/dashboards/13978-node-exporter-quickstart-and-dashboard/<br>https://grafana.com/grafana/dashboards/6014-host-stats-0-16-0/ |
-   | PostgreSQL Exporter | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
    | Redis | https://grafana.com/grafana/dashboards/14091-redis-dashboard-for-prometheus-redis-exporter-1-x/<br>Connections -> Data Sources -> GitLab-Redis -> Dashboards -> Redis<br>Connections -> Data Sources -> GitLab-Redis -> Dashboards -> Redis Streaming |
    | GitLab | https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/gitaly.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/overview.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/postgresql.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/rails-app.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/redis.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/registry.json<br>https://gitlab.com/gitlab-org/grafana-dashboards/-/blob/master/omnibus/service_platform_metrics.json |
+   | PostgreSQL Exporter | https://grafana.com/grafana/dashboards/14114-postgres-overview/ |
    | Grafana | Connections -> Data Sources -> Prometheus -> Dashboards -> Grafana metrics |
 
 8. run a playbook to upload grafana dashboards

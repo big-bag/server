@@ -92,6 +92,7 @@ in
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/${MINIO_BUCKET}
+            ${pkgs.minio-client}/bin/mc version enable $ALIAS/${MINIO_BUCKET}
 
             ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
 
@@ -188,9 +189,13 @@ in
         compactor = {
           working_directory = "./compactor";
           shared_store = "s3";
+          retention_enabled = true;
+          delete_request_cancel_period = "24h";
         };
         limits_config = {
           enforce_metric_name = false;
+          deletion_mode = "filter-and-delete";
+          retention_period = "0s";
         };
       };
     };

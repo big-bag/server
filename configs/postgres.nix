@@ -43,10 +43,10 @@ in
         host    all             all             172.17.0.0/16           md5
       '';
       settings = {
-        max_connections = 70;               # (change requires restart)
+        max_connections = 80;               # (change requires restart)
         shared_buffers = "512MB";           # min 128kB (change requires restart)
         huge_pages = "off";                 # on, off, or try (change requires restart)
-        work_mem = "1872kB";                # min 64kB
+        work_mem = "1638kB";                # min 64kB
         maintenance_work_mem = "128MB";     # min 1MB
         effective_io_concurrency = 200;     # 1-1000; 0 disables prefetching
         wal_buffers = "16MB";               # min 32kB, -1 sets based on shared_buffers (change requires restart)
@@ -123,7 +123,7 @@ in
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -135,7 +135,7 @@ in
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

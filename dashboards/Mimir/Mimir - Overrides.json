@@ -376,8 +376,8 @@
       {
         "current": {
           "selected": true,
-          "text": "",
-          "value": ""
+          "text": ".*",
+          "value": ".*"
         },
         "hide": 0,
         "label": "Tenant ID",

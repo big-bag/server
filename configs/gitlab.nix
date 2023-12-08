@@ -666,7 +666,7 @@ in
             "--memory-reservation=3891m"
             "--memory=4096m"
           ];
-          image = (import ./variables.nix).gitlab_image;
+          image = (import ./variables.nix).docker_image_gitlab;
         };
       };
     };
@@ -1429,7 +1429,7 @@ in
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -1441,7 +1441,7 @@ in
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

@@ -39,7 +39,7 @@ in
               --port 6379
               --save 900 1 300 10 60 10000
               --dbfilename dump.rdb
-              --maxclients 200
+              --maxclients 225
               --maxmemory 973mb
               --appendonly yes
               --appendfilename appendonly.aof
@@ -52,7 +52,7 @@ in
             "--memory-reservation=973m"
             "--memory=1024m"
           ];
-          image = (import ./variables.nix).redis_image;
+          image = (import ./variables.nix).docker_image_redis;
           cmd = [
             "-c" "
               export REDIS_ARGS=\"--requirepass $DEFAULT_USER_PASSWORD $REDIS_ARGS\"
@@ -250,7 +250,7 @@ in
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -262,7 +262,7 @@ in
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

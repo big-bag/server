@@ -1,17 +1,15 @@
 # Edit this configuration file to define what should be installed on
 # your system.  Help is available in the configuration.nix(5) man page
-# and in the NixOS manual (accessible by running ‘nixos-help’).
+# and in the NixOS manual (accessible by running `nixos-help`).
 
 { config, pkgs, lib, ... }:
 
 {
   imports =
-    # BEGIN ANSIBLE MANAGED BLOCK GITHUB HASH
     let
-      SOPS_NIX_COMMIT = "0e3a94167dcd10a47b89141f35b2ff9e04b34c46";
-      SOPS_NIX_SHA256 = "1GeczM7XfgHcYGYiYNcdwSFu3E62vmh4d7mffWZvyzE=";
+      SOPS_NIX_COMMIT = (import ./variables.nix).github_sops_nix_commit;
+      SOPS_NIX_SHA256 = (import ./variables.nix).github_sops_nix_sha256;
     in
-    # END ANSIBLE MANAGED BLOCK GITHUB HASH
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./python.nix
@@ -25,6 +23,7 @@
       ./mimir.nix
       ./loki.nix
       ./grafana-agent.nix
+      ./nginx-exporter.nix
       ./prometheus.nix
       ./node-exporter.nix
       ./postgres.nix
@@ -80,10 +79,7 @@
 
   # Configure keymap in X11
   # services.xserver.layout = "us";
-  # services.xserver.xkbOptions = {
-  #   "eurosign:e";
-  #   "caps:escape" # map caps to escape.
-  # };
+  # services.xserver.xkbOptions = "eurosign:e,caps:escape";
 
   # Enable CUPS to print documents.
   # services.printing.enable = true;
@@ -104,12 +100,12 @@
   };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  # users.users.jane = {
+  # users.users.alice = {
   #   isNormalUser = true;
   #   extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
   #   packages = with pkgs; [
   #     firefox
-  #     thunderbird
+  #     tree
   #   ];
   # };
 
@@ -391,12 +387,18 @@
     NAMESERVER = (import ./connection-parameters.nix).nameserver;
   in {
     enable = true;
+
     user = "nginx";
     group = "nginx";
+
     appendHttpConfig = "client_body_temp_path /tmp/nginx_client_body 1 2;";
+
     sslProtocols = "TLSv1.3";
     sslCiphers = null;
     sslDhparam = "${config.security.dhparams.path}/nginx.pem";
+
+    statusPage = true;
+
     virtualHosts.${DOMAIN_NAME_INTERNAL} = {
       listen = [
         { addr = "${IP_ADDRESS}"; port = 80; }
@@ -412,6 +414,9 @@
       sslTrustedCertificate = "/mnt/ssd/services/nginx/ca.pem";
 
       extraConfig = ''
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+
         ssl_session_timeout 1d;
         ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
         ssl_session_tickets off;
@@ -433,7 +438,7 @@
 
         # Authentication based on a client certificate
         ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-        ssl_verify_client      on;
+        ssl_verify_client on;
       '';
     };
 
@@ -477,11 +482,11 @@
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions
-  # on your system were taken. It‘s perfectly fine and recommended to leave
+  # on your system were taken. It's perfectly fine and recommended to leave
   # this value at the release version of the first install of this system.
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-  system.stateVersion = "22.05"; # Did you read the comment?
+  system.stateVersion = "23.05"; # Did you read the comment?
 
 }
 

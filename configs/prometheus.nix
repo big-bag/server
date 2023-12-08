@@ -250,7 +250,7 @@ in
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -262,7 +262,7 @@ in
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

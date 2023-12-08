@@ -63,7 +63,6 @@
             # Allow people in group wheel to run all commands without a password
             security.sudo.wheelNeedsPassword = false;
         marker: "  # {mark} ANSIBLE MANAGED BLOCK WHEEL"
-        backup: true
       notify: apply config
 
     - name: insert an empty line after the marker line
@@ -77,7 +76,6 @@
         path: /etc/nixos/configuration.nix
         insertafter: ".\/python.nix"
         line: "      ./technical-account.nix"
-        backup: true
       notify: apply config
 
     - name: forbid root login
@@ -85,7 +83,6 @@
         path: /etc/nixos/configuration.nix
         regexp: '(settings.PermitRootLogin\s=\s").*(";)'
         replace: '\1no\2'
-        backup: true
       notify: apply config
 
     - name: configure server ssh port
@@ -95,7 +92,6 @@
         block: |2
               ports = [ (import ./connection-parameters.nix).ssh_port ];
         marker: "    # {mark} ANSIBLE MANAGED BLOCK SSH PORT"
-        backup: true
       notify: apply config
 
   handlers:
@@ -162,7 +158,8 @@
 
     - name: create an item in vault with credentials for technical account
       ansible.builtin.shell: |
-        op item template get Server --session {{ op_session_token.stdout }} | op item create --vault Server - \
+        op item template get Server --session {{ op_session_token.stdout }} | op item create \
+          --vault Server - \
           --title NixOS \
           'Root account'.username[text]=root \
           'Root account'.password[password]='{{ hostvars['localhost']['vault_server_root_account_password'] }}' \
@@ -176,7 +173,8 @@
 
     - name: edit an item in vault with credentials for technical account
       ansible.builtin.shell: |
-        op item edit NixOS \
+        op item get NixOS --format=json --session {{ op_session_token.stdout }} | op item edit \
+          NixOS \
           --vault Server \
           'Root account'.username[text]=root \
           'Root account'.password[password]='{{ hostvars['localhost']['vault_server_root_account_password'] }}' \

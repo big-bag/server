@@ -19,6 +19,14 @@
         group: root
       changed_when: false
 
+    - name: upload derivations
+      ansible.posix.synchronize:
+        mode: push
+        src: derivations
+        dest: /etc/nixos
+        rsync_opts: "--chown=root:root"
+      notify: apply config
+
     - name: upload nixos configuration files
       ansible.posix.synchronize:
         mode: push
@@ -38,21 +46,21 @@
       ignore_errors: true
       listen: apply config
 
-    - name: success output
+    - name: success
       ansible.builtin.debug:
         msg: "{{ build_output.stderr_lines }}"
       when: build_output.rc == 0
       listen: apply config
 
-    - name: error output
+    - name: error
       ansible.builtin.debug:
         msg: "{{ build_output.stderr_lines }}"
-      when: build_output.rc == 1
+      when: build_output.rc != 0
       listen: apply config
 
-    - name: stop play
+    - name: stop
       ansible.builtin.meta: end_host
-      when: build_output.rc == 1
+      when: build_output.rc != 0
       listen: apply config
 
     - name: rebuild system
@@ -61,21 +69,18 @@
       ignore_errors: true
       listen: apply config
 
-    - name: success output
-      ansible.builtin.debug:
+    - ansible.builtin.debug:
         msg: "{{ switch_output.stdout_lines }}"
       when: switch_output.rc == 0
       listen: apply config
 
-    - name: error output
-      ansible.builtin.debug:
+    - ansible.builtin.debug:
         msg: "{{ switch_output.stdout_lines }}"
-      when: switch_output.rc == 1
+      when: switch_output.rc != 0
       listen: apply config
 
-    - name: stop play
-      ansible.builtin.meta: end_host
-      when: switch_output.rc == 1
+    - ansible.builtin.meta: end_host
+      when: switch_output.rc != 0
       listen: apply config
 
   post_tasks:

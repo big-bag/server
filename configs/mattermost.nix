@@ -283,7 +283,7 @@ in
             "--memory-reservation=243m"
             "--memory=256m"
           ];
-          image = (import ./variables.nix).mattermost_image;
+          image = (import ./variables.nix).docker_image_mattermost;
         };
       };
     };
@@ -407,10 +407,6 @@ in
 
       virtualHosts.${DOMAIN_NAME_INTERNAL} = let
         CONFIG_LOCATION = ''
-          # logging
-          access_log /var/log/nginx/mattermost.access.log;
-          error_log /var/log/nginx/mattermost.error.log warn;
-
           client_max_body_size 50M;
 
           # gzip for performance
@@ -570,7 +566,7 @@ in
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -582,7 +578,7 @@ in
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

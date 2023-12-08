@@ -43,7 +43,7 @@ in
             "--memory-reservation=973m"
             "--memory=1024m"
           ];
-          image = (import ./variables.nix).minio_image;
+          image = (import ./variables.nix).docker_image_minio;
           cmd = [
             "server"
             "/data"

@@ -33,8 +33,8 @@
             name = "mimir";
             scrape_configs = [{
               job_name = "local/mimir";
-              scrape_interval = "5s";
-              scrape_timeout = "5s";
+              scrape_interval = "1m";
+              scrape_timeout = "10s";
               scheme = "http";
               static_configs = [{
                 targets = [ "${IP_ADDRESS}:9009" ];
@@ -67,7 +67,7 @@
                 json = false;
                 max_age = "12h";
                 labels = {
-                  job = "systemd-journal";
+                  systemd_job = "systemd-journal";
                 };
                 path = "/var/log/journal";
               };
@@ -76,12 +76,12 @@
               in [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(systemd-timesyncd|sshd|nginx-prepare|nginx|${CONTAINERS_BACKEND}|${CONTAINERS_BACKEND}-minio|minio-1password|mimir-prepare|var-lib-private-mimir|mimir-minio|mimir|mimir-1password|loki-prepare|loki-minio|loki|loki-1password|grafana-agent-prepare|var-lib-private-grafana\\x2dagent|grafana-agent).(service|mount)";
+                  regex = "(systemd-timesyncd|sshd|${CONTAINERS_BACKEND}|${CONTAINERS_BACKEND}-minio|minio-1password|mimir-prepare|var-lib-private-mimir|mimir-minio|mimir|mimir-1password|loki-prepare|loki-minio|loki|loki-1password|grafana-agent-prepare|var-lib-private-grafana\\x2dagent|grafana-agent).(service|mount)";
                   action = "keep";
                 }
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  target_label = "unit";
+                  target_label = "systemd_unit";
                   action = "replace";
                 }
               ];

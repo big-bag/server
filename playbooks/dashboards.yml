@@ -20,7 +20,7 @@
 
     - name: templatization of grafana dashboards
       block:
-        # find and escape double curly braces which looks like:
+        # find and escape double curly braces which look like:
         # "legendFormat": "{{quantile}} ({{interval}})",
         - name: escape double curly braces (1/3)
           ansible.builtin.replace:
@@ -34,7 +34,7 @@
             - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
-        # find and escape double curly braces which looks like:
+        # find and escape double curly braces which look like:
         # "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
         - name: escape double curly braces (2/3)
           ansible.builtin.replace:
@@ -48,7 +48,7 @@
             - ../dashboards/Redis/*
             - ../dashboards/GitLab/*
 
-        # find and escape double curly braces which looks like:
+        # find and escape double curly braces which look like:
         # "legendFormat": "{{job}}",
         # "legendFormat": "duration-{{p99}}",
         # "legendFormat": "{{slice}}_p99",
@@ -118,7 +118,7 @@
         - name: set variable values in mimir dashboard (1/5)
           ansible.builtin.replace:
             path: ../dashboards/Mimir/Mimir - Overrides.json
-            after: '"name":\s"tenant_id",'
+            after: '"name":\s"namespace",'
             before: '"type":\s"textbox"'
             regexp: "{{ item }}"
             replace: '\1.*\2'

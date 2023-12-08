@@ -10,7 +10,11 @@
       changed_when: false
 
     - name: find the latest version of nixos
-      ansible.builtin.shell: git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' | head -n 1 | sed -E 's|.*refs/tags/(.+)|\1|'
+      ansible.builtin.shell: |
+        git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code \
+          https://github.com/NixOS/nixpkgs.git '[0-9][0-9].[0-9][0-9]' |
+            head -n 1 |
+            sed -E 's|.*refs/tags/(.+)|\1|'
       register: nixos_latest_version
       delegate_to: localhost
       changed_when: false

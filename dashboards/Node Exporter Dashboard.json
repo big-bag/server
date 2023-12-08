@@ -68,7 +68,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -84,8 +84,8 @@
           "editorMode": "code",
           "expr": "(\n  (1 - rate(node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"}[$__interval]))\n/ ignoring(cpu) group_left\n  count without (cpu)( node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"})\n)\n",
           "format": "time_series",
-          "interval": "1s",
-          "intervalFactor": 5,
+          "interval": "10s",
+          "intervalFactor": 2,
           "legendFormat": "{% raw %}{{cpu}}{% endraw %}",
           "range": true,
           "refId": "A"
@@ -163,7 +163,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -179,7 +179,7 @@
           "editorMode": "code",
           "expr": "node_load1{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "1m load average",
           "range": true,
@@ -192,7 +192,7 @@
           "editorMode": "code",
           "expr": "node_load5{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "5m load average",
           "range": true,
@@ -205,7 +205,7 @@
           "editorMode": "code",
           "expr": "node_load15{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "15m load average",
           "range": true,
@@ -218,7 +218,7 @@
           "editorMode": "code",
           "expr": "count(node_cpu_seconds_total{job=\"integrations/node_exporter\", instance=\"$instance\", mode=\"idle\"})",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "logical cores",
           "range": true,
@@ -295,7 +295,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -311,7 +311,7 @@
           "editorMode": "code",
           "expr": "(\n  node_memory_MemTotal_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_MemFree_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_Buffers_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n-\n  node_memory_Cached_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}\n)\n",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "memory used",
           "range": true,
@@ -324,7 +324,7 @@
           "editorMode": "code",
           "expr": "node_memory_Buffers_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "memory buffers",
           "range": true,
@@ -337,7 +337,7 @@
           "editorMode": "code",
           "expr": "node_memory_Cached_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "memory cached",
           "range": true,
@@ -350,7 +350,7 @@
           "editorMode": "code",
           "expr": "node_memory_MemFree_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "memory free",
           "range": true,
@@ -399,6 +399,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 0,
           "mappings": [
             {
               "options": {
@@ -456,7 +457,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -465,7 +466,7 @@
           "editorMode": "code",
           "expr": "100 -\n(\n  avg(node_memory_MemAvailable_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"})\n/\n  avg(node_memory_MemTotal_bytes{job=\"integrations/node_exporter\", instance=\"$instance\"})\n* 100\n)\n",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "",
           "range": true,
@@ -513,7 +514,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -538,7 +539,7 @@
           "editorMode": "code",
           "expr": "rate(node_disk_read_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
-          "interval": "2s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{device}}{% endraw %} read",
           "range": true,
@@ -551,7 +552,7 @@
           "editorMode": "code",
           "expr": "rate(node_disk_written_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
-          "interval": "2s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{device}}{% endraw %} written",
           "range": true,
@@ -564,7 +565,7 @@
           "editorMode": "code",
           "expr": "rate(node_disk_io_time_seconds_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"\"}[$__interval])",
           "format": "time_series",
-          "interval": "2s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{device}}{% endraw %} io time",
           "range": true,
@@ -639,7 +640,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -665,7 +666,7 @@
           "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "used",
           "range": true,
@@ -678,7 +679,7 @@
           "editorMode": "code",
           "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/\"}\n  )\n)\n",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "available",
           "range": true,
@@ -727,9 +728,9 @@
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 2,
+          "decimals": 0,
           "mappings": [],
-          "max": 100,
+          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -740,7 +741,7 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 0.8
               }
             ]
           },
@@ -772,7 +773,7 @@
         "showUnfilled": true,
         "valueMode": "color"
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -782,7 +783,7 @@
           "editorMode": "code",
           "expr": "1 - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''} / node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'}",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{mountpoint}}{% endraw %}",
           "range": true,
@@ -831,7 +832,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -857,7 +858,7 @@
           "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "used",
           "range": true,
@@ -870,7 +871,7 @@
           "editorMode": "code",
           "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/ssd\"}\n  )\n)\n",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "available",
           "range": true,
@@ -947,7 +948,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -973,7 +974,7 @@
           "expr": "sum(\n  max by (device) (\n    node_filesystem_size_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  -\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\"}\n  )\n)\n",
           "format": "time_series",
           "hide": false,
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "used",
           "range": true,
@@ -986,7 +987,7 @@
           "editorMode": "code",
           "expr": "sum(\n  max by (device) (\n    node_filesystem_avail_bytes{job=\"integrations/node_exporter\", instance=\"$instance\", fstype!=\"\", mountpoint=\"/mnt/hdd\"}\n  )\n)\n",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "available",
           "range": true,
@@ -1079,7 +1080,7 @@
           "editorMode": "code",
           "expr": "(node_filesystem_size_bytes{job='integrations/node_exporter',instance='$instance'} - node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance'}) / deriv(node_filesystem_free_bytes{job='integrations/node_exporter',instance='$instance',fstype!='rootfs',mountpoint!~'/(run|var|boot|nix).*',mountpoint!=''}[3d]) > 0",
           "format": "time_series",
-          "interval": "1s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{mountpoint}}{% endraw %}",
           "metric": "",
@@ -1131,7 +1132,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1145,9 +1146,9 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_network_receive_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
+          "expr": "rate(node_network_receive_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!~\"lo|docker.*|veth.*\"}[$__interval])",
           "format": "time_series",
-          "interval": "2s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{device}}{% endraw %}",
           "range": true,
@@ -1224,7 +1225,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1238,9 +1239,9 @@
             "uid": "$datasource"
           },
           "editorMode": "code",
-          "expr": "rate(node_network_transmit_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!=\"lo\"}[$__interval])",
+          "expr": "rate(node_network_transmit_bytes_total{job=\"integrations/node_exporter\", instance=\"$instance\", device!~\"lo|docker.*|veth.*\"}[$__interval])",
           "format": "time_series",
-          "interval": "2s",
+          "interval": "10s",
           "intervalFactor": 2,
           "legendFormat": "{% raw %}{{device}}{% endraw %}",
           "range": true,
