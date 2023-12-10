@@ -85,8 +85,7 @@ RUN ansible-galaxy collection install \
       community.general \
       community.crypto \
       ansible.posix
-ENV ANSIBLE_CALLBACKS_ENABLED=ansible.posix.profile_tasks \
-    ANSIBLE_INVENTORY=hosts \
+ENV ANSIBLE_INVENTORY=hosts \
     ANSIBLE_VAULT_PASSWORD_FILE=.vault_password \
     ANSIBLE_HOST_KEY_CHECKING=False \
     ANSIBLE_PIPELINING=True \

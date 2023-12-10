@@ -34,6 +34,7 @@ in
             MINIO_REGION = "eu-west-3";
             MINIO_BROWSER = "on";
             MINIO_BROWSER_REDIRECT_URL = "https://${DOMAIN_NAME_INTERNAL}/minio";
+            MINIO_PROMETHEUS_AUTH_TYPE = "jwt";
             MINIO_PROMETHEUS_URL = "http://${IP_ADDRESS}:9090/prometheus";
             MINIO_PROMETHEUS_JOB_ID = "minio-job";
           };
@@ -124,7 +125,7 @@ in
   systemd.services = {
     minio-1password = {
       after = [ "${CONTAINERS_BACKEND}-minio.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

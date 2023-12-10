@@ -18,7 +18,7 @@
     - name: find latest commit | sops-nix
       ansible.builtin.shell: |
         git ls-remote --exit-code https://github.com/Mic92/sops-nix.git HEAD |
-            awk '{print $1}'
+          awk '{print $1}'
       register: github_sops_nix_commit
       changed_when: false
 
@@ -35,7 +35,11 @@
 
     - name: find sha256 of latest commit | sops-nix (2/2)
       ansible.builtin.set_fact:
-        github_sops_nix_sha256: "{{ github_sops_nix_sha256_json.stdout | from_json }}"
+        github_sops_nix_sha256: "{{ github_sops_nix_sha256_json.stdout |
+                                    from_json |
+                                    community.general.json_query('hash') |
+                                    regex_replace('^sha256-(.*)$', '\\1')
+                                }}"
 
     # ------------------- nginx-prometheus-exporter ------------------- #
 
@@ -214,7 +218,7 @@
         content: |
           {
             github_sops_nix_commit = "{{ github_sops_nix_commit.stdout }}";
-            github_sops_nix_sha256 = "{{ github_sops_nix_sha256.sha256 }}";
+            github_sops_nix_sha256 = "{{ github_sops_nix_sha256 }}";
             docker_image_minio = "{{ docker_image_minio }}";
             github_nginx_exporter_tag = "{{ github_nginx_exporter_tag.stdout }}";
             github_nginx_exporter_sha256 = "{{ github_nginx_exporter_sha256.stdout }}";

@@ -71,91 +71,6 @@ in
   };
 
   sops.secrets = {
-    "redis_exporter/redis/envs" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  systemd.services = {
-    grafana-agent-redis = {
-      after = [ "${CONTAINERS_BACKEND}-redis.service" ];
-      before = [ "grafana-agent.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        EnvironmentFile = [
-          config.sops.secrets."redis/application/envs".path
-          config.sops.secrets."redis_exporter/redis/envs".path
-        ];
-      };
-      script = ''
-        while ! ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
-          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
-          redis \
-            redis-cli PING |
-          ${pkgs.gnugrep}/bin/grep PONG
-        do
-          ${pkgs.coreutils}/bin/echo "Waiting for Redis availability."
-          ${pkgs.coreutils}/bin/sleep 1
-        done
-
-        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec \
-          --env USERNAME=$REDIS_USERNAME \
-          --env PASSWORD=$REDIS_PASSWORD_CLI \
-          --env REDISCLI_AUTH=$DEFAULT_USER_PASSWORD \
-          redis \
-            /bin/bash -c '
-              CLI_COMMAND=$(
-                echo "ACL SETUSER $USERNAME \
-                  reset \
-                  +client \
-                  +ping \
-                  +info \
-                  +config|get \
-                  +cluster|info \
-                  +slowlog \
-                  +latency \
-                  +memory \
-                  +select \
-                  +get \
-                  +scan \
-                  +xinfo \
-                  +type \
-                  +pfcount \
-                  +strlen \
-                  +llen \
-                  +scard \
-                  +zcard \
-                  +hlen \
-                  +xlen \
-                  +eval \
-                  allkeys \
-                  on \
-                  >$PASSWORD" |
-                redis-cli
-              )
-
-              case "$CLI_COMMAND" in
-                "OK" )
-                  echo $CLI_COMMAND
-                  exit 0
-                ;;
-                "ERR"* )
-                  echo $CLI_COMMAND
-                  exit 1
-                ;;
-              esac
-            '
-      '';
-      wantedBy = [
-        "${CONTAINERS_BACKEND}-redis.service"
-        "grafana-agent.service"
-      ];
-    };
-  };
-
-  sops.secrets = {
     "1password/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
@@ -166,13 +81,12 @@ in
   systemd.services = {
     redis-1password = {
       after = [ "${CONTAINERS_BACKEND}-redis.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
           config.sops.secrets."1password/application/envs".path
           config.sops.secrets."redis/application/envs".path
-          config.sops.secrets."redis_exporter/redis/envs".path
         ];
       };
       environment = {
@@ -196,14 +110,12 @@ in
           ${pkgs._1password}/bin/op item template get Database --session $SESSION_TOKEN | ${pkgs._1password}/bin/op item create --vault Server - \
             --title Redis \
             'Default user'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -a '$DEFAULT_USER_PASSWORD'" \
-            'Grafana Agent'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item created successfully."
         else
           ${pkgs._1password}/bin/op item edit Redis \
             --vault Server \
             'Default user'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -a '$DEFAULT_USER_PASSWORD'" \
-            'Grafana Agent'.'Connection command'[password]="sudo docker exec -ti redis redis-cli -u 'redis://$REDIS_USERNAME:$REDIS_PASSWORD_1PASSWORD@127.0.0.1:6379'" \
             --session $SESSION_TOKEN > /dev/null
           ${pkgs.coreutils}/bin/echo "Item updated successfully."
         fi
@@ -212,28 +124,8 @@ in
     };
   };
 
-  sops.secrets = {
-    "redis_exporter/redis/file/username" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
-  sops.secrets = {
-    "redis_exporter/redis/file/password" = {
-      mode = "0404";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
   services = {
     grafana-agent = {
-      credentials = {
-        REDIS_USERNAME = config.sops.secrets."redis_exporter/redis/file/username".path;
-      };
-
       settings = {
         logs = {
           configs = [{
@@ -257,7 +149,7 @@ in
               relabel_configs = [
                 {
                   source_labels = [ "__journal__systemd_unit" ];
-                  regex = "(${CONTAINERS_BACKEND}-redis|grafana-agent-redis|redis-1password).service";
+                  regex = "(${CONTAINERS_BACKEND}-redis|redis-1password).service";
                   action = "keep";
                 }
                 {
@@ -268,17 +160,6 @@ in
               ];
             }];
           }];
-        };
-
-        integrations = {
-          redis_exporter = {
-            enabled = true;
-            scrape_interval = "1m";
-            scrape_timeout = "10s";
-            redis_addr = "${IP_ADDRESS}:6379";
-            redis_user = "\${REDIS_USERNAME}";
-            redis_password_file = config.sops.secrets."redis_exporter/redis/file/password".path;
-          };
         };
       };
     };

@@ -621,7 +621,7 @@ in
   systemd.services = {
     grafana-1password = {
       after = [ "${CONTAINERS_BACKEND}-grafana.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

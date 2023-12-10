@@ -490,7 +490,7 @@ in
         "${CONTAINERS_BACKEND}-mattermost.service"
         "mattermost-configure.service"
       ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

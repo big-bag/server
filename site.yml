@@ -58,6 +58,12 @@
       when: build_output.rc != 0
       listen: apply config
 
+    - name: time
+      ansible.builtin.debug:
+        msg: "{{ '%A %d %B %Y %H:%M:%S %z' | strftime }}"
+      when: build_output.rc != 0
+      listen: apply config
+
     - name: stop
       ansible.builtin.meta: end_host
       when: build_output.rc != 0
@@ -76,6 +82,11 @@
 
     - ansible.builtin.debug:
         msg: "{{ switch_output.stdout_lines }}"
+      when: switch_output.rc != 0
+      listen: apply config
+
+    - ansible.builtin.debug:
+        msg: "{{ '%A %d %B %Y %H:%M:%S %z' | strftime }}"
       when: switch_output.rc != 0
       listen: apply config
 
@@ -109,3 +120,7 @@
       when:
         - certificates.results.0.stat.exists
         - certificates.results.1.stat.exists
+
+    - name: display time
+      ansible.builtin.debug:
+        msg: "{{ '%A %d %B %Y %H:%M:%S %z' | strftime }}"

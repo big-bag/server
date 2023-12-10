@@ -238,7 +238,7 @@ in
   systemd.services = {
     pgadmin-1password = {
       after = [ "${CONTAINERS_BACKEND}-pgadmin.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

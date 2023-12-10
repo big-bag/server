@@ -99,7 +99,19 @@ in
       };
       scrapeConfigs = [
         {
+          job_name = "prometheus";
+          scrape_interval = "1m";
+          scrape_timeout = "10s";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}" ];
+          }];
+          metrics_path = "/prometheus/metrics";
+        }
+        {
           job_name = "minio-job";
+          scrape_interval = "1m";
+          scrape_timeout = "10s";
           scheme = "http";
           static_configs = [{
             targets = [ "${IP_ADDRESS}:9000" ];
@@ -107,25 +119,13 @@ in
           metrics_path = "/minio/v2/metrics/cluster";
           bearer_token_file = "/mnt/ssd/monitoring/.minioScrapeBearerToken";
         }
-        {
-          job_name = "prometheus";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}" ];
-          }];
-          metrics_path = "/prometheus/metrics";
-        }
       ];
       remoteWrite = [{
         url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
         write_relabel_configs = [{
-          source_labels = [
-            "__name__"
-            "instance"
-            "job"
-          ];
-          regex = ".*;${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port};prometheus";
-          action = "drop";
+          source_labels = [ "__name__" ];
+          regex = "go_.*|process_.*|minio_.*|action_.*|ci_.*|db_.*|deployments|exporter_.*|gitaly_.*|gitlab_.*|grpc_.*|http_.*|limited_.*|puma_.*|rack_requests_total|registry_.*|ruby_.*|sidekiq_.*|up|web_exporter_.*";
+          action = "keep";
         }];
       }];
     };
@@ -185,7 +185,7 @@ in
   systemd.services = {
     prometheus-1password = {
       after = [ "prometheus.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

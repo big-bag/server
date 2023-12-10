@@ -128,6 +128,8 @@ in
   services = {
     loki = {
       enable = true;
+      user = "loki";
+      group = "loki";
       dataDir = "/mnt/ssd/monitoring/loki";
       extraFlags = [
         "-log-config-reverse-order"
@@ -222,7 +224,7 @@ in
   systemd.services = {
     loki-1password = {
       after = [ "loki.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 33))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

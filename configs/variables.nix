@@ -1,7 +1,7 @@
 {
-  github_sops_nix_commit = "e91ece6d2cf5a0ae729796b8f0dedceab5107c3d";
-  github_sops_nix_sha256 = "7lOMc3PtW5a55vFReBJLLLOnopsoi1W7MkjJ93jPV4E=";
-  docker_image_minio = "minio/minio:RELEASE.2023-12-02T10-51-33Z";
+  github_sops_nix_commit = "d806e546f96c88cd9f7d91c1c19ebc99ba6277d9";
+  github_sops_nix_sha256 = "J2409SyXROoUHYXVy9h4Pj0VU8ReLuy/mzBc9iK4DBg=";
+  docker_image_minio = "minio/minio:RELEASE.2023-12-09T18-17-51Z";
   github_nginx_exporter_tag = "0.11.0";
   github_nginx_exporter_sha256 = "sha256-K4tpPOAGQG2yAMe9mYdFO3BV5OmFEf17NtSS/Gi/wPQ=";
   docker_image_mattermost = "mattermost/mattermost-team-edition:9.3.0";
