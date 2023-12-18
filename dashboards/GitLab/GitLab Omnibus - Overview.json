@@ -106,7 +106,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -193,7 +193,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -280,7 +280,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -365,7 +365,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -450,7 +450,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -537,7 +537,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -625,7 +625,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -633,13 +633,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(\n  node_memory_MemAvailable_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} or\n  (node_memory_MemFree_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} + node_memory_Buffers_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"} + node_memory_Cached_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"})\n) / node_memory_MemTotal_bytes{instance=~\".*:12345\",job=\"integrations/node_exporter\"}",
+          "expr": "(\n  container_spec_memory_limit_bytes{instance=~\".*:12345\",job=\"integrations/cadvisor\",name=\"gitlab\"}\n  -\n  container_memory_working_set_bytes{instance=~\".*:12345\",job=\"integrations/cadvisor\",name=\"gitlab\"}\n)\n/\ncontainer_spec_memory_limit_bytes{instance=~\".*:12345\",job=\"integrations/cadvisor\",name=\"gitlab\"}",
           "format": "time_series",
+          "hide": false,
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "",
           "range": true,
-          "refId": "B"
+          "refId": "A"
         }
       ],
       "title": "Node Available Memory",
@@ -713,7 +714,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -800,7 +801,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -808,13 +809,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg(\n  1 -\n  avg without (mode,cpu) (\n    rate(node_cpu_seconds_total{mode=\"idle\",instance=~\".*:12345\",job=\"integrations/node_exporter\"}[$__interval])\n  )\n)",
+          "expr": "avg(\n  avg without (mode,cpu) (\n    rate(container_cpu_usage_seconds_total{cpu=\"total\",instance=~\".*:12345\",job=\"integrations/cadvisor\",name=\"gitlab\"}[$__interval])\n  )\n)",
           "format": "time_series",
-          "interval": "1m",
+          "hide": false,
+          "interval": "2m",
           "intervalFactor": 1,
           "legendFormat": "",
           "range": true,
-          "refId": "B"
+          "refId": "A"
         }
       ],
       "title": "CPU Load",
@@ -859,7 +861,7 @@
       },
       "paceLength": 10,
       "percentage": false,
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -992,7 +994,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.2.1",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {

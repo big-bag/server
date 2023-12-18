@@ -191,6 +191,7 @@ in
         integrations = {
           postgres_exporter = {
             enabled = true;
+            scrape_integration = true;
             scrape_interval = "1m";
             scrape_timeout = "10s";
             data_source_names = [ "postgresql://\${POSTGRESQL_USERNAME}:\${POSTGRESQL_PASSWORD}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];

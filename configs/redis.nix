@@ -40,7 +40,7 @@ in
               --save 900 1 300 10 60 10000
               --dbfilename dump.rdb
               --maxclients 225
-              --maxmemory 973mb
+              --maxmemory 122mb
               --appendonly yes
               --appendfilename appendonly.aof
               --appenddirname appendonlydir
@@ -48,9 +48,9 @@ in
           };
           entrypoint = "/bin/bash";
           extraOptions = [
-            "--cpus=0.25"
-            "--memory-reservation=973m"
-            "--memory=1024m"
+            "--cpus=0.03125"
+            "--memory-reservation=122m"
+            "--memory=128m"
           ];
           image = (import ./variables.nix).docker_image_redis;
           cmd = [

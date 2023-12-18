@@ -199,6 +199,7 @@ in
         integrations = {
           redis_exporter = {
             enabled = true;
+            scrape_integration = true;
             scrape_interval = "1m";
             scrape_timeout = "10s";
             redis_addr = "${IP_ADDRESS}:6379";

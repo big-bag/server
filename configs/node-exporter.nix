@@ -5,6 +5,7 @@
         integrations = {
           node_exporter = {
             enabled = true;
+            scrape_integration = true;
             scrape_interval = "10s"; # Defaults to "1m"
             scrape_timeout = "10s"; # Defaults to "10s"
             set_collectors = [

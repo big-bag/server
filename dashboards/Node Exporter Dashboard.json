@@ -85,7 +85,7 @@
           "expr": "(\n  (1 - rate(node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"}[$__interval]))\n/ ignoring(cpu) group_left\n  count without (cpu)( node_cpu_seconds_total{job=\"integrations/node_exporter\", mode=\"idle\", instance=\"$instance\"})\n)\n",
           "format": "time_series",
           "interval": "10s",
-          "intervalFactor": 2,
+          "intervalFactor": 3,
           "legendFormat": "{% raw %}{{cpu}}{% endraw %}",
           "range": true,
           "refId": "A"
@@ -107,6 +107,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:57",
           "format": "percentunit",
           "logBase": 1,
           "max": 1,
@@ -114,6 +115,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:58",
           "format": "percentunit",
           "logBase": 1,
           "max": 1,
@@ -1091,7 +1093,7 @@
       ],
       "timeFrom": "1h",
       "title": "Disk Fill Up Time",
-      "transform": "table",
+      "transform": "timeseries_to_rows",
       "type": "table-old"
     },
     {

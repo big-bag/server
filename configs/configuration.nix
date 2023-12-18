@@ -27,6 +27,7 @@
       ./nginx-exporter.nix
       ./prometheus.nix
       ./node-exporter.nix
+      ./cadvisor.nix
       ./postgres.nix
       ./mattermost.nix
       ./redis.nix
