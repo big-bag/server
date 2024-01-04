@@ -1,5 +1,11 @@
+{ config, ... }:
+
+let
+  CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+in
+
 {
-  users.groups.docker.members = [ "grafana-agent" ];
+  users.groups.${CONTAINERS_BACKEND}.members = [ "grafana-agent" ];
 
   services = {
     grafana-agent = {

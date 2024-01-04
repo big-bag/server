@@ -157,7 +157,7 @@ in
       containers = {
         pgadmin = {
           autoStart = true;
-          ports = [ "127.0.0.1:5050:5050" ];
+          ports = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}" ];
           environmentFiles = [
             config.sops.secrets."pgadmin/application/envs".path
             config.sops.secrets."pgadmin/postgres/envs".path
@@ -216,6 +216,10 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/pgadmin4/" = {
           extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+
             proxy_set_header X-Script-Name /pgadmin4;
             proxy_set_header X-Scheme $scheme;
             proxy_set_header Host $host;
@@ -324,6 +328,35 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                pgadmin_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "PING" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "pgadmin-http";
+                address = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.pgadmin.environment.PGADMIN_LISTEN_PORT}/misc/ping";
+                module = "pgadmin_http_probe";
+              }
+            ];
+          };
         };
       };
     };

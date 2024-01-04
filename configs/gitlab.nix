@@ -336,6 +336,7 @@ in
             "127.0.0.1:9229:9229"
             "127.0.0.1:8083:8083"
             "127.0.0.1:8082:8082"
+            "127.0.0.1:8092:8092"
             "127.0.0.1:9235:9235"
             "127.0.0.1:9168:9168"
             "127.0.0.1:9236:9236"
@@ -524,7 +525,7 @@ in
 
               ##! Specifies where health-check endpoints should be made available for Sidekiq processes.
               ##! Defaults to the same settings as for Prometheus metrics (see above).
-              sidekiq['health_checks_listen_address'] = '127.0.0.1'
+              sidekiq['health_checks_listen_address'] = '0.0.0.0'
               sidekiq['health_checks_listen_port'] = 8092
 
               ################################################################
@@ -986,85 +987,6 @@ in
     };
   };
 
-  services = {
-    prometheus = {
-      scrapeConfigs = [
-        {
-          job_name = "gitlab-registry";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:5001" ];
-          }];
-          metrics_path = "/metrics";
-        }
-        {
-          job_name = "gitlab-rails";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "${IP_ADDRESS}:8181" ];
-          }];
-          metrics_path = "/-/metrics";
-        }
-        {
-          job_name = "gitlab-workhorse";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:9229" ];
-          }];
-          metrics_path = "/metrics";
-        }
-        {
-          job_name = "gitlab-puma";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:8083" ];
-          }];
-          metrics_path = "/metrics";
-        }
-        {
-          job_name = "gitlab-sidekiq";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:8082" ];
-          }];
-          metrics_path = "/metrics";
-        }
-        {
-          job_name = "gitlab-pages";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:9235" ];
-          }];
-          metrics_path = "/metrics";
-        }
-        {
-          job_name = "gitlab-exporter-database";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:9168" ];
-          }];
-          metrics_path = "/database";
-        }
-        {
-          job_name = "gitlab-exporter-sidekiq";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:9168" ];
-          }];
-          metrics_path = "/sidekiq";
-        }
-        {
-          job_name = "gitlab-gitaly";
-          scheme = "http";
-          static_configs = [{
-            targets = [ "127.0.0.1:9236" ];
-          }];
-          metrics_path = "/metrics";
-        }
-      ];
-    };
-  };
-
   systemd.services = {
     gitlab-integrations-mattermost-notifications = {
       after = [
@@ -1412,6 +1334,83 @@ in
   };
 
   services = {
+    prometheus = {
+      scrapeConfigs = [
+        {
+          job_name = "gitlab-registry";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:5001" ];
+          }];
+          metrics_path = "/metrics";
+        }
+        {
+          job_name = "gitlab-rails";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "${IP_ADDRESS}:8181" ];
+          }];
+          metrics_path = "/-/metrics";
+        }
+        {
+          job_name = "gitlab-workhorse";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:9229" ];
+          }];
+          metrics_path = "/metrics";
+        }
+        {
+          job_name = "gitlab-puma";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:8083" ];
+          }];
+          metrics_path = "/metrics";
+        }
+        {
+          job_name = "gitlab-sidekiq";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:8082" ];
+          }];
+          metrics_path = "/metrics";
+        }
+        {
+          job_name = "gitlab-pages";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:9235" ];
+          }];
+          metrics_path = "/metrics";
+        }
+        {
+          job_name = "gitlab-exporter-database";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:9168" ];
+          }];
+          metrics_path = "/database";
+        }
+        {
+          job_name = "gitlab-exporter-sidekiq";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:9168" ];
+          }];
+          metrics_path = "/sidekiq";
+        }
+        {
+          job_name = "gitlab-gitaly";
+          scheme = "http";
+          static_configs = [{
+            targets = [ "127.0.0.1:9236" ];
+          }];
+          metrics_path = "/metrics";
+        }
+      ];
+    };
+
     grafana-agent = {
       settings = {
         logs = {
@@ -1447,6 +1446,107 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                gitlab_workhorse_health_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "GitLab OK" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                gitlab_workhorse_readiness_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "{\"status\":\"ok\",\"master_check\":\\[{\"status\":\"ok\"}]}" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                gitlab_workhorse_liveness_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "{\"status\":\"ok\"}" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                gitlab_sidekiq_readiness_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "{\"status\":\"ok\"}" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                gitlab_sidekiq_liveness_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "{\"status\":\"ok\"}" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "gitlab-workhorse-health";
+                address = "http://${IP_ADDRESS}:8181/-/health";
+                module = "gitlab_workhorse_health_probe";
+              }
+              {
+                name = "gitlab-workhorse-readiness";
+                address = "http://${IP_ADDRESS}:8181/-/readiness";
+                module = "gitlab_workhorse_readiness_probe";
+              }
+              {
+                name = "gitlab-workhorse-liveness";
+                address = "http://${IP_ADDRESS}:8181/-/liveness";
+                module = "gitlab_workhorse_liveness_probe";
+              }
+              {
+                name = "gitlab-sidekiq-readiness";
+                address = "http://127.0.0.1:8092/readiness";
+                module = "gitlab_sidekiq_readiness_probe";
+              }
+              {
+                name = "gitlab-sidekiq-liveness";
+                address = "http://127.0.0.1:8092/liveness";
+                module = "gitlab_sidekiq_liveness_probe";
+              }
+            ];
+          };
         };
       };
     };

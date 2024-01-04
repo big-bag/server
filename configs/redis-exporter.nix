@@ -2,7 +2,6 @@
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
-  IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
 in
 
 {
@@ -196,7 +195,9 @@ in
           }];
         };
 
-        integrations = {
+        integrations = let
+          IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+        in {
           redis_exporter = {
             enabled = true;
             scrape_integration = true;
@@ -205,6 +206,28 @@ in
             redis_addr = "${IP_ADDRESS}:6379";
             redis_user = "\${REDIS_USERNAME}";
             redis_password_file = config.sops.secrets."redis_exporter/redis/file/password".path;
+          };
+
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                redis_tcp_probe = {
+                  prober = "tcp";
+                  timeout = "5s";
+                  tcp = {
+                    preferred_ip_protocol = "ip4";
+                    source_ip_address = "${IP_ADDRESS}";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "redis-tcp";
+                address = "${IP_ADDRESS}:6379";
+                module = "redis_tcp_probe";
+              }
+            ];
           };
         };
       };

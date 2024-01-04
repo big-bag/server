@@ -35,7 +35,9 @@
 
   services = {
     grafana-agent = {
-      settings = {
+      settings = let
+        IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+      in {
         metrics = {
           configs = [{
             name = "nginx";
@@ -49,9 +51,7 @@
               }];
               metrics_path = "/metrics";
             }];
-            remote_write = let
-              IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-            in [{
+            remote_write = [{
               url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
             }];
           }];
@@ -150,6 +150,118 @@
               }
             ];
           }];
+        };
+
+        integrations = {
+          blackbox = let
+            DOMAIN_NAME_INTERNAL = (import ./connection-parameters.nix).domain_name_internal;
+          in {
+            blackbox_config = {
+              modules = {
+                nginx_dns_probe = {
+                  prober = "dns";
+                  timeout = "5s";
+                  dns = {
+                    preferred_ip_protocol = "ip4";
+                    source_ip_address = "${IP_ADDRESS}";
+                    query_name = "${DOMAIN_NAME_INTERNAL}";
+                    query_type = "A";
+                    query_class = "IN";
+                    recursion_desired = false;
+                    valid_rcodes = [ "NOERROR" ];
+                    validate_answer_rrs = {
+                      fail_if_not_matches_regexp = [ "${DOMAIN_NAME_INTERNAL}.\t.*\tIN\tA\t${IP_ADDRESS}" ];
+                    };
+                  };
+                };
+                nginx_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 301 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                nginx_https_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/2.0" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_not_ssl = true;
+                    tls_config = {
+                      insecure_skip_verify = false;
+                      ca_file = "/mnt/ssd/services/nginx/ca.pem";
+                      server_name = "${DOMAIN_NAME_INTERNAL}";
+                      min_version = "TLS13";
+                      max_version = "TLS13";
+                    };
+                    enable_http2 = true;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                nginx_localhost_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                nginx_exporter_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = let
+              NAMESERVER = (import ./connection-parameters.nix).nameserver;
+            in [
+              {
+                name = "nginx-dns";
+                address = "${NAMESERVER}";
+                module = "nginx_dns_probe";
+              }
+              {
+                name = "nginx-http";
+                address = "http://${DOMAIN_NAME_INTERNAL}";
+                module = "nginx_http_probe";
+              }
+              {
+                name = "nginx-https";
+                address = "https://${DOMAIN_NAME_INTERNAL}";
+                module = "nginx_https_probe";
+              }
+              {
+                name = "nginx-localhost";
+                address = "http://127.0.0.1";
+                module = "nginx_localhost_probe";
+              }
+              {
+                name = "nginx-exporter";
+                address = "http://127.0.0.1:9113";
+                module = "nginx_exporter_probe";
+              }
+            ];
+          };
         };
       };
     };

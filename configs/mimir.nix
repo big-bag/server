@@ -385,6 +385,11 @@ in
     nginx = {
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/mimir/" = {
+          extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+          '';
           proxyPass = "http://${IP_ADDRESS}:9009";
           basicAuthFile = config.sops.secrets."mimir/nginx/file/basic_auth".path;
         };

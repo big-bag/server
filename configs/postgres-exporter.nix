@@ -197,6 +197,28 @@ in
             data_source_names = [ "postgresql://\${POSTGRESQL_USERNAME}:\${POSTGRESQL_PASSWORD}@${IP_ADDRESS}:${toString config.services.postgresql.port}/postgres?sslmode=disable" ];
             autodiscover_databases = true;
           };
+
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                postgres_tcp_probe = {
+                  prober = "tcp";
+                  timeout = "5s";
+                  tcp = {
+                    preferred_ip_protocol = "ip4";
+                    source_ip_address = "127.0.0.1";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "postgres-tcp";
+                address = "${IP_ADDRESS}:${toString config.services.postgresql.port}";
+                module = "postgres_tcp_probe";
+              }
+            ];
+          };
         };
       };
     };

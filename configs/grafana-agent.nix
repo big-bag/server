@@ -24,9 +24,12 @@
   services = {
     grafana-agent = {
       enable = true;
+      extraFlags = [
+        "-server.http.address=127.0.0.1:12345"
+        "-server.grpc.address=127.0.0.1:12346"
+      ];
       settings = let
         IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-        CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
       in {
         metrics = {
           wal_directory = "/var/lib/private/grafana-agent/wal";
@@ -77,7 +80,9 @@
         };
 
         logs = {
-          configs = [
+          configs = let
+            CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
+          in [
             {
               name = "system";
               clients = [{
@@ -252,6 +257,169 @@
               regex = "(go_.*)";
               action = "keep";
             }];
+          };
+
+          blackbox = {
+            enabled = true;
+            scrape_integration = true;
+            scrape_interval = "1m";
+            scrape_timeout = "10s";
+            blackbox_config = {
+              modules = {
+                ssh_banner = {
+                  prober = "tcp";
+                  timeout = "5s";
+                  tcp = {
+                    preferred_ip_protocol = "ip4";
+                    source_ip_address = "127.0.0.1";
+                    query_response = [
+                      { expect = "^SSH-2.0-"; }
+                      { send = "SSH-2.0-blackbox-ssh-check"; }
+                    ];
+                  };
+                };
+                minio_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                mimir_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "ready" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                mimir_grpc_probe = {
+                  prober = "grpc";
+                  timeout = "5s";
+                  grpc = {
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                loki_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "ready" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                loki_grpc_probe = {
+                  prober = "grpc";
+                  timeout = "5s";
+                  grpc = {
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                grafana_agent_ready_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "Agent is Ready." ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                grafana_agent_healthy_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "Agent is Healthy." ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                grafana_agent_tcp_probe = {
+                  prober = "tcp";
+                  timeout = "5s";
+                  tcp = {
+                    preferred_ip_protocol = "ip4";
+                    source_ip_address = "127.0.0.1";
+                  };
+                };
+              };
+            };
+            blackbox_targets = let
+              SSH_PORT = (import ./connection-parameters.nix).ssh_port;
+            in [
+              {
+                name = "ssh";
+                address = "127.0.0.1:${toString SSH_PORT}";
+                module = "ssh_banner";
+              }
+              {
+                name = "minio-server";
+                address = "http://${IP_ADDRESS}:9000/minio/health/live";
+                module = "minio_http_probe";
+              }
+              {
+                name = "minio-console";
+                address = "http://127.0.0.1:9001";
+                module = "minio_http_probe";
+              }
+              {
+                name = "mimir-http";
+                address = "http://${IP_ADDRESS}:9009/mimir/ready";
+                module = "mimir_http_probe";
+              }
+              {
+                name = "mimir-grpc";
+                address = "127.0.0.1:9095";
+                module = "mimir_grpc_probe";
+              }
+              {
+                name = "loki-http";
+                address = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/ready";
+                module = "loki_http_probe";
+              }
+              {
+                name = "loki-grpc";
+                address = "127.0.0.1:${toString config.services.loki.configuration.server.grpc_listen_port}";
+                module = "loki_grpc_probe";
+              }
+              {
+                name = "grafana-agent-ready";
+                address = "http://127.0.0.1:12345/-/ready";
+                module = "grafana_agent_ready_probe";
+              }
+              {
+                name = "grafana-agent-healthy";
+                address = "http://127.0.0.1:12345/-/healthy";
+                module = "grafana_agent_healthy_probe";
+              }
+              {
+                name = "grafana-agent-tcp";
+                address = "127.0.0.1:12346";
+                module = "grafana_agent_tcp_probe";
+              }
+            ];
           };
           prometheus_remote_write = [{
             url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";

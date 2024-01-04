@@ -159,6 +159,11 @@ in
     nginx = {
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/prometheus" = {
+          extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+          '';
           proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
           basicAuthFile = config.sops.secrets."prometheus/nginx/file/basic_auth".path;
         };
@@ -268,6 +273,53 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                prometheus_healthy_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "Prometheus Server is Healthy." ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+                prometheus_ready_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "Prometheus Server is Ready." ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "prometheus-healthy";
+                address = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus/-/healthy";
+                module = "prometheus_healthy_probe";
+              }
+              {
+                name = "prometheus-ready";
+                address = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}/prometheus/-/ready";
+                module = "prometheus_ready_probe";
+              }
+            ];
+          };
         };
       };
     };

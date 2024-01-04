@@ -374,7 +374,7 @@ in
       containers = {
         grafana = {
           autoStart = true;
-          ports = [ "127.0.0.1:3000:3000" ];
+          ports = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}" ];
           volumes = let
             datasources_yml = pkgs.writeTextFile {
               name = "config.yml";
@@ -582,12 +582,16 @@ in
   services = {
     nginx = {
       upstreams."grafana" = {
-        servers = { "127.0.0.1:3000" = {}; };
+        servers = { "127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}" = {}; };
       };
 
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/grafana/" = {
           extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+
             rewrite ^/grafana/(.*) /$1 break;
             proxy_set_header Host $host;
           '';
@@ -597,6 +601,10 @@ in
         # Proxy Grafana Live WebSocket connections.
         locations."/grafana/api/live/" = {
           extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+
             rewrite ^/grafana/(.*) /$1 break;
             proxy_http_version 1.1;
 
@@ -696,7 +704,7 @@ in
               scrape_timeout = "10s";
               scheme = "http";
               static_configs = [{
-                targets = [ "127.0.0.1:3000" ];
+                targets = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}" ];
               }];
               metrics_path = "/metrics";
             }];
@@ -739,6 +747,38 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                grafana_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    headers = {
+                      Accept = "application/json";
+                    };
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "\"database\": \"ok\"," ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "grafana-http";
+                address = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}/api/health";
+                module = "grafana_http_probe";
+              }
+            ];
+          };
         };
       };
     };

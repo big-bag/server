@@ -242,10 +242,7 @@ in
   # generated 2023-09-18, Mozilla Guideline v5.7, nginx 1.24.0, OpenSSL 3.0.10, modern configuration
   # https://ssl-config.mozilla.org/#server=nginx&version=1.24.0&config=modern&openssl=3.0.10&guideline=5.7
   services = {
-    nginx = let
-      IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
-      NAMESERVER = (import ./connection-parameters.nix).nameserver;
-    in {
+    nginx = {
       enable = true;
 
       user = "nginx";
@@ -259,7 +256,9 @@ in
 
       statusPage = true;
 
-      virtualHosts.${DOMAIN_NAME_INTERNAL} = {
+      virtualHosts.${DOMAIN_NAME_INTERNAL} = let
+        IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
+      in {
         listen = [
           { addr = "${IP_ADDRESS}"; port = 80; }
           { addr = "${IP_ADDRESS}"; port = 443; ssl = true; }
@@ -298,11 +297,26 @@ in
 
           # Authentication based on a client certificate
           ssl_client_certificate /mnt/ssd/services/nginx/ca.pem;
-          ssl_verify_client on;
+          ssl_verify_client optional;
         '';
+
+        locations."/" = {
+          extraConfig = ''
+            if ($remote_addr = ${IP_ADDRESS}) {
+              proxy_pass http://127.0.0.1;
+              break;
+            }
+
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+          '';
+        };
       };
 
-      resolver = {
+      resolver = let
+        NAMESERVER = (import ./connection-parameters.nix).nameserver;
+      in {
         addresses = ["${NAMESERVER}:53"];
       };
     };

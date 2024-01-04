@@ -12,7 +12,7 @@ in
       containers = {
         redisinsight = {
           autoStart = true;
-          ports = [ "127.0.0.1:8001:8001" ];
+          ports = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}" ];
           environment = {
             RIHOST = "0.0.0.0";
             RIPORT = "8001";
@@ -21,9 +21,9 @@ in
             RIPROXYPATH = "/redisinsight/";
           };
           extraOptions = [
-            "--cpus=0.03125"
-            "--memory-reservation=122m"
-            "--memory=128m"
+            "--cpus=0.0625"
+            "--memory-reservation=243m"
+            "--memory=256m"
           ];
           image = (import ./variables.nix).docker_image_redisinsight;
         };
@@ -95,6 +95,10 @@ in
       virtualHosts.${DOMAIN_NAME_INTERNAL} = {
         locations."/redisinsight/" = {
           extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+
             proxy_read_timeout 900;
             proxy_set_header Host $host;
           '';
@@ -207,6 +211,35 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                redisinsight_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "OK" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "redisinsight-http";
+                address = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/healthcheck/";
+                module = "redisinsight_http_probe";
+              }
+            ];
+          };
         };
       };
     };

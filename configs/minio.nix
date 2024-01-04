@@ -81,6 +81,10 @@ in
 
         locations."/minio/" = {
           extraConfig = ''
+            if ($ssl_client_verify != "SUCCESS") {
+              return 496;
+            }
+
             # Allow any size file to be uploaded.
             # Set to a value such as 1000m; to restrict file size to a specific value
             client_max_body_size 0;

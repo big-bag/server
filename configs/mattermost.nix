@@ -407,6 +407,10 @@ in
 
       virtualHosts.${DOMAIN_NAME_INTERNAL} = let
         CONFIG_LOCATION = ''
+          if ($ssl_client_verify != "SUCCESS") {
+            return 496;
+          }
+
           client_max_body_size 50M;
 
           # gzip for performance
@@ -584,6 +588,35 @@ in
               ];
             }];
           }];
+        };
+
+        integrations = {
+          blackbox = {
+            blackbox_config = {
+              modules = {
+                mattermost_http_probe = {
+                  prober = "http";
+                  timeout = "5s";
+                  http = {
+                    valid_status_codes = [ 200 ];
+                    valid_http_versions = [ "HTTP/1.1" ];
+                    method = "GET";
+                    follow_redirects = false;
+                    fail_if_body_not_matches_regexp = [ "\"status\":\"OK\"" ];
+                    enable_http2 = false;
+                    preferred_ip_protocol = "ip4";
+                  };
+                };
+              };
+            };
+            blackbox_targets = [
+              {
+                name = "mattermost-http";
+                address = "http://${IP_ADDRESS}:8065/mattermost/api/v4/system/ping";
+                module = "mattermost_http_probe";
+              }
+            ];
+          };
         };
       };
     };
