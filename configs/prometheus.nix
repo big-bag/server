@@ -70,7 +70,7 @@ in
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-            ${pkgs.minio-client}/bin/mc admin prometheus generate $ALIAS | ${pkgs.gnugrep}/bin/grep bearer_token | ${pkgs.gawk}/bin/awk '{ print $2 }' | ${pkgs.coreutils}/bin/tr -d '\n' > /mnt/ssd/monitoring/.minioScrapeBearerToken
+            ${pkgs.minio-client}/bin/mc admin prometheus generate $ALIAS | ${pkgs.gnugrep}/bin/grep bearer_token | ${pkgs.gawk}/bin/awk '{ print $2 }' | ${pkgs.coreutils}/bin/tr -d '\n' > /var/lib/prometheus2/.minioScrapeBearerToken
             ${pkgs.coreutils}/bin/echo "Prometheus bearer token generated successfully."
             break
           fi
@@ -117,9 +117,19 @@ in
             targets = [ "${IP_ADDRESS}:9000" ];
           }];
           metrics_path = "/minio/v2/metrics/cluster";
-          bearer_token_file = "/mnt/ssd/monitoring/.minioScrapeBearerToken";
+          bearer_token_file = "/var/lib/prometheus2/.minioScrapeBearerToken";
         }
       ];
+      alertmanagers = [{
+        scheme = "http";
+        static_configs = [{
+          targets = [ "127.0.0.1:9093" ];
+        }];
+        path_prefix = "/alertmanager/alertmanager";
+        follow_redirects = false;
+        enable_http2 = false;
+        api_version = "v2";
+      }];
       remoteWrite = [{
         url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
         write_relabel_configs = [{
@@ -190,7 +200,7 @@ in
   systemd.services = {
     prometheus-1password = {
       after = [ "prometheus.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -247,7 +257,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/prometheus.yml";
+              filename = "\${STATE_DIRECTORY}/positions/prometheus.yml";
             };
             scrape_configs = [{
               job_name = "journal";

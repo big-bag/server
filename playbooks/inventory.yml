@@ -1,0 +1,54 @@
+---
+- name: configure in-memory inventory
+  hosts: localhost
+  become: false
+  gather_facts: false
+  tasks:
+    - name: set seed variables
+      ansible.builtin.set_fact:
+        server_ssh_port_seed: server_ssh_port_random
+
+    - name: create random but idempotent numbers
+      ansible.builtin.set_fact:
+        server_ssh_port_generated: "{{ 65535 | random(start=49152, seed=server_ssh_port_seed) }}"
+
+    - name: check connection to server on custom ssh port
+      ansible.builtin.command: nc -w 1 -v -z {{ vault_server_ip_address }} {{ server_ssh_port_generated }}
+      register: port_available
+      failed_when: false
+      changed_when: false
+
+    - name: set server ssh port
+      ansible.builtin.set_fact:
+        server_ssh_port: "{% if port_available.rc == 0 %}{{ server_ssh_port_generated }}{% else %}22{% endif %}"
+
+    - name: check connection to server under root
+      ansible.builtin.command: sshpass -e ssh -o StrictHostKeyChecking=no root@{{ vault_server_ip_address }} -p {{ server_ssh_port }} 'exit'
+      environment:
+        SSHPASS: "{{ vault_server_root_account_password }}"
+      register: root_available
+      failed_when: false
+      changed_when: false
+
+    - name: add a host to the ansible-playbook in-memory inventory | root
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ vault_server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
+        ansible_user: root
+        ansible_password: "{{ vault_server_root_account_password }}"
+      changed_when: false
+      no_log: true
+      when: root_available.rc == 0
+
+    - name: add a host to the ansible-playbook in-memory inventory | technical account
+      ansible.builtin.add_host:
+        name: server
+        ansible_host: "{{ vault_server_ip_address }}"
+        ansible_port: "{{ server_ssh_port }}"
+        ansible_user: "{{ vault_server_technical_account_username }}"
+        ansible_ssh_private_key_file: "{{ playbook_dir }}/../id_ed25519"
+        ansible_python_interpreter: /run/current-system/sw/bin/python
+      changed_when: false
+      no_log: true
+      when: root_available.rc != 0

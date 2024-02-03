@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
@@ -354,6 +354,113 @@ in
   };
 
   sops.secrets = {
+    "mattermost/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  environment = {
+    systemPackages = with pkgs; [
+      (pkgs.callPackage derivations/script.nix {
+        script_name = "mattermost-channel";
+        script_path = [
+          pkgs.bash
+          pkgs.gawk
+          pkgs.jq
+        ];
+      })
+      (pkgs.callPackage derivations/script.nix {
+        script_name = "mattermost-webhook";
+        script_path = [
+          pkgs.bash
+          pkgs.gawk
+        ];
+      })
+    ];
+  };
+
+  systemd.services = {
+    grafana-mattermost = {
+      after = [ "${CONTAINERS_BACKEND}-mattermost.service" ];
+      before = [ "${CONTAINERS_BACKEND}-grafana.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."mattermost/application/envs".path;
+      };
+      environment = {
+        MATTERMOST_ADDRESS = "${IP_ADDRESS}:8065";
+        MATTERMOST_CHANNEL_NAME = "Grafana";
+        CONTAINERS_BINARY = "${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND}";
+        MATTERMOST_TEAM = lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL;
+        DOMAIN_NAME_INTERNAL = DOMAIN_NAME_INTERNAL;
+      };
+      script = ''
+        while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping |
+          ${pkgs.gnugrep}/bin/grep '"status":"OK"'
+        do
+          ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+
+        export $(
+          /run/current-system/sw/bin/mattermost-channel.sh \
+            ${pkgs.coreutils}/bin/printenv |
+          ${pkgs.gnugrep}/bin/grep --word-regexp MATTERMOST_CHANNEL
+        )
+
+        export $(
+          /run/current-system/sw/bin/mattermost-webhook.sh \
+            ${pkgs.coreutils}/bin/printenv |
+          ${pkgs.gnugrep}/bin/grep --word-regexp MATTERMOST_WEBHOOK_ID
+        )
+
+        ${pkgs.coreutils}/bin/echo http://$MATTERMOST_ADDRESS/mattermost/hooks/$MATTERMOST_WEBHOOK_ID > /tmp/.grafana_webhook_mattermost
+      '';
+      wantedBy = [
+        "${CONTAINERS_BACKEND}-mattermost.service"
+        "${CONTAINERS_BACKEND}-grafana.service"
+      ];
+    };
+  };
+
+  sops.secrets = {
+    "telegram/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  systemd.services = {
+    grafana-telegram = {
+      before = [ "${CONTAINERS_BACKEND}-grafana.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        EnvironmentFile = config.sops.secrets."telegram/application/envs".path;
+      };
+      script = ''
+        ${pkgs.coreutils}/bin/cat > /tmp/.grafana_contact_point_telegram << EOF
+        apiVersion: 1
+
+        contactPoints:
+          - orgId: 1
+            name: telegram
+            receivers:
+              - uid: telegram_uid
+                type: telegram
+                settings:
+                  bottoken: $TELEGRAM_BOT_TOKEN
+                  chatid: "$TELEGRAM_CHAT_ID"
+                disableResolveMessage: false
+        EOF
+      '';
+      wantedBy = [ "${CONTAINERS_BACKEND}-grafana.service" ];
+    };
+  };
+
+  sops.secrets = {
     "grafana/application/envs" = {
       mode = "0400";
       owner = config.users.users.root.name;
@@ -376,7 +483,7 @@ in
           autoStart = true;
           ports = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}" ];
           volumes = let
-            datasources_yml = pkgs.writeTextFile {
+            data_sources_yml = pkgs.writeTextFile {
               name = "config.yml";
               text = ''
                 apiVersion: 1
@@ -456,6 +563,18 @@ in
                       password: $POSTGRESQL_PASSWORD
                     editable: true
 
+                  - name: Alertmanager
+                    type: alertmanager
+                    version: 1
+                    orgId: 1
+                    isDefault: false
+                    jsonData:
+                      implementation: mimir # Valid options for implementation include mimir, cortex and prometheus
+                      handleGrafanaManagedAlerts: false # Whether or not Grafana should send alert instances to this Alertmanager
+                    url: http://${IP_ADDRESS}:9093/alertmanager
+                    access: proxy # Sets the access mode, either proxy or direct (Server or Browser in the UI)
+                    editable: true
+
                   - name: GitLab-Redis
                     type: redis-datasource
                     access: proxy
@@ -528,11 +647,71 @@ in
                       foldersFromFilesStructure: true
               '';
             };
+
+            alerting_yml = pkgs.writeTextFile {
+              name = "config.yml";
+              text = ''
+                apiVersion: 1
+
+                contactPoints:
+                  - orgId: 1
+                    name: mattermost
+                    receivers:
+                      - uid: mattermost_uid
+                        type: slack
+                        settings:
+                          url: $__file{/tmp/.gf_webhook_mattermost}
+                        disableResolveMessage: false
+
+                policies:
+                  - orgId: 1
+                    receiver: grafana-default-email
+                    group_by:
+                      - grafana_folder
+                      - alertname
+                    routes:
+                      - receiver: mattermost
+                        group_by: [ ... ]
+                        mute_time_intervals:
+                          - offhours
+                          - holidays
+                        group_wait: 30s
+                        group_interval: 5m
+                        repeat_interval: 24h
+                      - receiver: telegram
+                        group_by: [ ... ]
+                        group_wait: 30s
+                        group_interval: 5m
+                        repeat_interval: 24h
+
+                muteTimes:
+                  - orgId: 1
+                    name: offhours
+                    time_intervals:
+                      - times:
+                          - start_time: 19:00
+                            end_time: 23:59
+                          - start_time: 00:00
+                            end_time: 10:00
+                        weekdays: [ monday:friday ]
+                        location: ${config.time.timeZone}
+                  - orgId: 1
+                    name: holidays
+                    time_intervals:
+                      - weekdays:
+                          - saturday
+                          - sunday
+                        location: ${config.time.timeZone}
+              '';
+            };
           in [
-            "${datasources_yml}:/etc/grafana/provisioning/datasources/config.yml:ro"
+            "${data_sources_yml}:/etc/grafana/provisioning/datasources/config.yml:ro"
             "${plugins_yml}:/etc/grafana/provisioning/plugins/config.yml:ro"
-            "/mnt/ssd/monitoring/grafana-dashboards:/var/lib/grafana/dashboards:ro"
+            "/mnt/ssd/monitoring/dashboards:/var/lib/grafana/dashboards:ro"
             "${dashboards_yml}:/etc/grafana/provisioning/dashboards/config.yml:ro"
+            "/tmp/.grafana_webhook_mattermost:/tmp/.gf_webhook_mattermost:ro"
+            "/tmp/.grafana_contact_point_telegram:/etc/grafana/provisioning/alerting/contact_point_telegram.yml:ro"
+            "${alerting_yml}:/etc/grafana/provisioning/alerting/config.yml:ro"
           ];
           environmentFiles = [
             config.sops.secrets."grafana/application/envs".path
@@ -545,7 +724,7 @@ in
             GF_SERVER_PROTOCOL = "http";
             GF_SERVER_HTTP_ADDR = "0.0.0.0";
             GF_SERVER_HTTP_PORT = "3000";
-            GF_SERVER_DOMAIN = "${DOMAIN_NAME_INTERNAL}";
+            GF_SERVER_DOMAIN = DOMAIN_NAME_INTERNAL;
             GF_SERVER_ROOT_URL = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
             GF_SERVER_ENABLE_GZIP = "true";
 
@@ -557,7 +736,7 @@ in
             GF_EXTERNAL_IMAGE_STORAGE_PROVIDER = "s3";
             GF_EXTERNAL_IMAGE_STORAGE_S3_ENDPOINT = "http://${IP_ADDRESS}:9000";
             GF_EXTERNAL_IMAGE_STORAGE_S3_PATH_STYLE_ACCESS = "true";
-            GF_EXTERNAL_IMAGE_STORAGE_S3_BUCKET = "${MINIO_BUCKET}";
+            GF_EXTERNAL_IMAGE_STORAGE_S3_BUCKET = MINIO_BUCKET;
             GF_EXTERNAL_IMAGE_STORAGE_S3_REGION = config.virtualisation.oci-containers.containers.minio.environment.MINIO_REGION;
             GF_EXTERNAL_IMAGE_STORAGE_S3_ACCESS_KEY = "$__env{MINIO_SERVICE_ACCOUNT_ACCESS_KEY}";
             GF_EXTERNAL_IMAGE_STORAGE_S3_SECRET_KEY = "$__env{MINIO_SERVICE_ACCOUNT_SECRET_KEY}";
@@ -629,7 +808,7 @@ in
   systemd.services = {
     grafana-1password = {
       after = [ "${CONTAINERS_BACKEND}-grafana.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -707,6 +886,8 @@ in
                 targets = [ "127.0.0.1:${config.virtualisation.oci-containers.containers.grafana.environment.GF_SERVER_HTTP_PORT}" ];
               }];
               metrics_path = "/metrics";
+              follow_redirects = false;
+              enable_http2 = false;
             }];
             remote_write = [{
               url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
@@ -721,7 +902,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/grafana.yml";
+              filename = "\${STATE_DIRECTORY}/positions/grafana.yml";
             };
             scrape_configs = [{
               job_name = "journal";

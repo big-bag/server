@@ -129,7 +129,7 @@ in
   systemd.services = {
     minio-1password = {
       after = [ "${CONTAINERS_BACKEND}-minio.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

@@ -30,6 +30,7 @@
       ./cadvisor.nix
       ./postgres.nix
       ./mattermost.nix
+      ./alertmanager.nix
       ./redis.nix
       ./redis-exporter.nix
       ./redisinsight.nix

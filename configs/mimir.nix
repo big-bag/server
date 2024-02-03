@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
@@ -69,8 +69,7 @@ in
                         "Action": "s3:ListBucket",
                         "Resource": [
                             "arn:aws:s3:::mimir-blocks",
-                            "arn:aws:s3:::mimir-ruler",
-                            "arn:aws:s3:::mimir-alertmanager"
+                            "arn:aws:s3:::mimir-ruler"
                         ]
                     },
                     {
@@ -82,8 +81,7 @@ in
                         ],
                         "Resource": [
                             "arn:aws:s3:::mimir-blocks/*",
-                            "arn:aws:s3:::mimir-ruler/*",
-                            "arn:aws:s3:::mimir-alertmanager/*"
+                            "arn:aws:s3:::mimir-ruler/*"
                         ]
                     }
                 ]
@@ -112,7 +110,6 @@ in
 
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-blocks
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-ruler
-            ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/mimir-alertmanager
 
             ${pkgs.minio-client}/bin/mc admin user svcacct info $ALIAS $MINIO_SERVICE_ACCOUNT_ACCESS_KEY
 
@@ -150,11 +147,23 @@ in
       config_yml = pkgs.writeTextFile {
         name = "config.yml";
         text = ''
+          # Comma-separated list of components to include in the instantiated process. The
+          # default value 'all' includes all components that are required to form a
+          # functional Grafana Mimir instance in single-binary mode. Use the '-modules'
+          # command line flag to get a list of available components, and to see which
+          # components are included with 'all'.
+          # CLI flag: -target
+          target: all
+
           # When set to true, incoming HTTP requests must specify tenant ID in HTTP
           # X-Scope-OrgId header. When set to false, tenant ID from -auth.no-auth-tenant
           # is used instead.
           # CLI flag: -auth.multitenancy-enabled
           multitenancy_enabled: false
+
+          # (advanced) Tenant ID to use when multitenancy is disabled.
+          # CLI flag: -auth.no-auth-tenant
+          no_auth_tenant: anonymous
 
           # The server block configures the HTTP and gRPC server of the launched
           # service(s).
@@ -174,6 +183,10 @@ in
             # gRPC server listen port.
             # CLI flag: -server.grpc-listen-port
             grpc_listen_port: 9095
+
+            # (advanced) Register the intrumentation handlers (/metrics etc).
+            # CLI flag: -server.register-instrumentation
+            register_instrumentation: true
 
             # (advanced) Limit on the size of a gRPC message this server can receive
             # (bytes).
@@ -260,6 +273,13 @@ in
             # CLI flag: -ruler.rule-path
             rule_path: ./data-ruler/
 
+            # Comma-separated list of URL(s) of the Alertmanager(s) to send notifications
+            # to. Each URL is treated as a separate group. Multiple Alertmanagers in HA per
+            # group can be supported by using DNS service discovery format, comprehensive of
+            # the scheme. Basic auth is supported as part of the URL.
+            # CLI flag: -ruler.alertmanager-url
+            alertmanager_url: http://127.0.0.1:9093/alertmanager/alertmanager
+
           # The ruler_storage block configures the ruler storage backend.
           ruler_storage:
             # The s3_backend block configures the connection to Amazon S3 object storage
@@ -269,29 +289,6 @@ in
               # S3 bucket name
               # CLI flag: -<prefix>.s3.bucket-name
               bucket_name: mimir-ruler
-
-          # The alertmanager block configures the alertmanager.
-          alertmanager:
-            # Directory to store Alertmanager state and temporarily configuration files. The
-            # content of this directory is not required to be persisted between restarts
-            # unless Alertmanager replication has been disabled.
-            # CLI flag: -alertmanager.storage.path
-            data_dir: ./data-alertmanager/
-
-            sharding_ring:
-              # (advanced) The replication factor to use when sharding the alertmanager.
-              # CLI flag: -alertmanager.sharding-ring.replication-factor
-              replication_factor: 1
-
-          # The alertmanager_storage block configures the alertmanager storage backend.
-          alertmanager_storage:
-            # The s3_backend block configures the connection to Amazon S3 object storage
-            # backend.
-            # The CLI flags prefix for this block configuration is: alertmanager-storage
-            s3:
-              # S3 bucket name
-              # CLI flag: -<prefix>.s3.bucket-name
-              bucket_name: mimir-alertmanager
 
           # The memberlist block configures the Gossip memberlist.
           memberlist:
@@ -304,6 +301,15 @@ in
             # specified. Defaults to 0.0.0.0
             # CLI flag: -memberlist.bind-addr
             bind_addr: [ 127.0.0.1 ]
+
+            # Port to listen on for gossip messages.
+            # CLI flag: -memberlist.bind-port
+            bind_port: 7946
+
+          usage_stats:
+            # Enable anonymous usage reporting.
+            # CLI flag: -usage-stats.enabled
+            enabled: false
 
           # The common block holds configurations that configure multiple components at a
           # time.
@@ -416,7 +422,7 @@ in
   systemd.services = {
     mimir-1password = {
       after = [ "mimir.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [

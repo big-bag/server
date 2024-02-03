@@ -81,7 +81,7 @@ in
   systemd.services = {
     redis-1password = {
       after = [ "${CONTAINERS_BACKEND}-redis.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -134,7 +134,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/redis.yml";
+              filename = "\${STATE_DIRECTORY}/positions/redis.yml";
             };
             scrape_configs = [{
               job_name = "journal";

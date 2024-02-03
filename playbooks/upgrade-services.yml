@@ -217,6 +217,7 @@
       ansible.builtin.copy:
         content: |
           {
+            one_password_max_delay = "";
             github_sops_nix_commit = "{{ github_sops_nix_commit.stdout }}";
             github_sops_nix_sha256 = "{{ github_sops_nix_sha256 }}";
             docker_image_minio = "{{ docker_image_minio }}";

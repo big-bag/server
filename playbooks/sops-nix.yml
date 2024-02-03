@@ -61,6 +61,11 @@
         mattermost_application_username_seed: mattermost_application_username_random
         mattermost_application_password_seed: mattermost_application_password_random
 
+        alertmanager_minio_access_key_seed: alertmanager_minio_access_key_random
+        alertmanager_minio_secret_key_seed: alertmanager_minio_secret_key_random
+        alertmanager_nginx_username_seed: alertmanager_nginx_username_random
+        alertmanager_nginx_password_seed: alertmanager_nginx_password_random
+
         redis_default_user_password_seed: redis_default_user_password_random
         redis_exporter_redis_password_seed: redis_exporter_redis_password_random
 
@@ -108,6 +113,11 @@
         mattermost_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_lowercase,digits,-_. length=22', seed=mattermost_application_username_seed) }}"
         mattermost_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=mattermost_application_password_seed) }}"
 
+        alertmanager_minio_access_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=alertmanager_minio_access_key_seed) }}"
+        alertmanager_minio_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=40', seed=alertmanager_minio_secret_key_seed) }}"
+        alertmanager_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=alertmanager_nginx_username_seed) }}"
+        alertmanager_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=alertmanager_nginx_password_seed) }}"
+
         redis_default_user_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,~!@#$%^&*()-_=+[]{}|;:,.<>/? length=48', seed=redis_default_user_password_seed) }}"
         redis_exporter_redis_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,<>/? length=48', seed=redis_exporter_redis_password_seed) }}"
 
@@ -133,68 +143,55 @@
         grafana_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_application_username_seed) }}"
         grafana_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_application_password_seed) }}"
 
-    - name: create a temporary file to write basic auth credentials | mimir
+    - name: create a temporary file to write basic auth credentials
       ansible.builtin.tempfile:
         path: /tmp
         prefix: basic_auth.
-        suffix: .mimir
+        suffix: .{{ item }}
         state: file
-      register: temp_file_mimir
+      loop:
+        - mimir
+        - prometheus
+        - alertmanager
+        - redisinsight
+      register: temp_file
       changed_when: false
 
-    - name: add basic auth credentials to a temporary file | mimir
+    - name: add basic auth credentials to a temporary file
       community.general.htpasswd:
-        path: "{{ temp_file_mimir.path }}"
-        name: "{{ mimir_nginx_username }}"
-        password: "{{ mimir_nginx_password }}"
+        path: "{{ item.file }}"
+        name: "{{ item.username }}"
+        password: "{{ item.password }}"
+      loop:
+        - {
+            file: '{{ temp_file.results.0.path }}',
+            username: '{{ mimir_nginx_username }}',
+            password: '{{ mimir_nginx_password }}'
+          }
+        - {
+            file: '{{ temp_file.results.1.path }}',
+            username: '{{ prometheus_nginx_username }}',
+            password: '{{ prometheus_nginx_password }}'
+          }
+        - {
+            file: '{{ temp_file.results.2.path }}',
+            username: '{{ alertmanager_nginx_username }}',
+            password: '{{ alertmanager_nginx_password }}'
+          }
+        - {
+            file: '{{ temp_file.results.3.path }}',
+            username: '{{ redisinsight_nginx_username }}',
+            password: '{{ redisinsight_nginx_password }}'
+          }
       changed_when: false
+      no_log: true
 
-    - name: read basic auth credentials from a temporary file | mimir
-      ansible.builtin.command: cat {{ temp_file_mimir.path }}
-      register: basic_auth_mimir
-      changed_when: false
-
-    - name: create a temporary file to write basic auth credentials | prometheus
-      ansible.builtin.tempfile:
-        path: /tmp
-        prefix: basic_auth.
-        suffix: .prometheus
-        state: file
-      register: temp_file_prometheus
-      changed_when: false
-
-    - name: add basic auth credentials to a temporary file | prometheus
-      community.general.htpasswd:
-        path: "{{ temp_file_prometheus.path }}"
-        name: "{{ prometheus_nginx_username }}"
-        password: "{{ prometheus_nginx_password }}"
-      changed_when: false
-
-    - name: read basic auth credentials from a temporary file | prometheus
-      ansible.builtin.command: cat {{ temp_file_prometheus.path }}
-      register: basic_auth_prometheus
-      changed_when: false
-
-    - name: create a temporary file to write basic auth credentials | redisinsight
-      ansible.builtin.tempfile:
-        path: /tmp
-        prefix: basic_auth.
-        suffix: .redisinsight
-        state: file
-      register: temp_file_redisinsight
-      changed_when: false
-
-    - name: add basic auth credentials to a temporary file | redisinsight
-      community.general.htpasswd:
-        path: "{{ temp_file_redisinsight.path }}"
-        name: "{{ redisinsight_nginx_username }}"
-        password: "{{ redisinsight_nginx_password }}"
-      changed_when: false
-
-    - name: read basic auth credentials from a temporary file | redisinsight
-      ansible.builtin.command: cat {{ temp_file_redisinsight.path }}
-      register: basic_auth_redisinsight
-      changed_when: false
+    - name: read basic auth credentials from a temporary file
+      ansible.builtin.set_fact:
+        basic_auth_mimir: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.0.path }}') }}"
+        basic_auth_prometheus: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.1.path }}') }}"
+        basic_auth_alertmanager: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.2.path }}') }}"
+        basic_auth_redisinsight: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.3.path }}') }}"
 
     - name: write secrets in plain text to a temporary file
       ansible.builtin.copy:
@@ -207,6 +204,11 @@
                 OP_SUBDOMAIN={{ vault_1password_subdomain }}
                 OP_EMAIL_ADDRESS={{ vault_1password_email_address }}
                 OP_SECRET_KEY={{ vault_1password_secret_key }}
+          telegram:
+            application:
+              envs: |
+                TELEGRAM_BOT_TOKEN={{ vault_telegram_bot_token }}
+                TELEGRAM_CHAT_ID={{ vault_telegram_chat_id }}
           minio:
             application:
               envs: |
@@ -219,7 +221,7 @@
                 MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ mimir_minio_secret_key }}
             nginx:
               file:
-                basic_auth: {{ basic_auth_mimir.stdout }}
+                basic_auth: {{ basic_auth_mimir }}
               envs: |
                 NGINX_USERNAME={{ mimir_nginx_username }}
                 NGINX_PASSWORD={{ mimir_nginx_password }}
@@ -231,7 +233,7 @@
           prometheus:
             nginx:
               file:
-                basic_auth: {{ basic_auth_prometheus.stdout }}
+                basic_auth: {{ basic_auth_prometheus }}
               envs: |
                 NGINX_USERNAME={{ prometheus_nginx_username }}
                 NGINX_PASSWORD={{ prometheus_nginx_password }}
@@ -250,6 +252,17 @@
               envs: |
                 MATTERMOST_USERNAME={{ mattermost_application_username }}
                 MATTERMOST_PASSWORD={{ mattermost_application_password }}
+          alertmanager:
+            minio:
+              envs: |
+                MINIO_SERVICE_ACCOUNT_ACCESS_KEY={{ alertmanager_minio_access_key }}
+                MINIO_SERVICE_ACCOUNT_SECRET_KEY={{ alertmanager_minio_secret_key }}
+            nginx:
+              file:
+                basic_auth: {{ basic_auth_alertmanager }}
+              envs: |
+                NGINX_USERNAME={{ alertmanager_nginx_username }}
+                NGINX_PASSWORD={{ alertmanager_nginx_password }}
           redis:
             application:
               envs: |
@@ -268,7 +281,7 @@
           redisinsight:
             nginx:
               file:
-                basic_auth: {{ basic_auth_redisinsight.stdout }}
+                basic_auth: {{ basic_auth_redisinsight }}
               envs: |
                 NGINX_USERNAME={{ redisinsight_nginx_username }}
                 NGINX_PASSWORD={{ redisinsight_nginx_password }}

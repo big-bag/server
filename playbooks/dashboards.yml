@@ -201,12 +201,12 @@
 
     - name: create a directory
       ansible.builtin.file:
-        path: /mnt/ssd/monitoring/grafana-dashboards
+        path: /mnt/ssd/monitoring/dashboards
         state: directory
 
     - name: create folders
       ansible.builtin.file:
-        path: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
+        path: /mnt/ssd/monitoring/dashboards/{{ item.path }}
         state: directory
         mode: '{{ item.mode }}'
       with_community.general.filetree: ../dashboards/
@@ -215,7 +215,7 @@
     - name: upload grafana dashboards
       ansible.builtin.template:
         src: '{{ item.src }}'
-        dest: /mnt/ssd/monitoring/grafana-dashboards/{{ item.path }}
+        dest: /mnt/ssd/monitoring/dashboards/{{ item.path }}
         mode: '{{ item.mode }}'
       with_community.general.filetree: ../dashboards/
       when: item.state == 'file'

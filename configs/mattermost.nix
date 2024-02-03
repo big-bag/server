@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
@@ -494,7 +494,7 @@ in
         "${CONTAINERS_BACKEND}-mattermost.service"
         "mattermost-configure.service"
       ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -562,7 +562,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/mattermost.yml";
+              filename = "\${STATE_DIRECTORY}/positions/mattermost.yml";
             };
             scrape_configs = [{
               job_name = "journal";

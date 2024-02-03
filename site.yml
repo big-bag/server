@@ -19,14 +19,6 @@
         group: root
       changed_when: false
 
-    - name: upload derivations
-      ansible.posix.synchronize:
-        mode: push
-        src: derivations
-        dest: /etc/nixos
-        rsync_opts: "--chown=root:root"
-      notify: apply config
-
     - name: upload nixos configuration files
       ansible.posix.synchronize:
         mode: push

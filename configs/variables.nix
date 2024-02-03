@@ -1,4 +1,5 @@
 {
+  one_password_max_delay = "39";
   github_sops_nix_commit = "d806e546f96c88cd9f7d91c1c19ebc99ba6277d9";
   github_sops_nix_sha256 = "J2409SyXROoUHYXVy9h4Pj0VU8ReLuy/mzBc9iK4DBg=";
   docker_image_minio = "minio/minio:RELEASE.2023-12-09T18-17-51Z";

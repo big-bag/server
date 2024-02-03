@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   CONTAINERS_BACKEND = config.virtualisation.oci-containers.backend;
@@ -679,6 +679,14 @@ in
     };
   };
 
+  sops.secrets = {
+    "gitlab/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
   systemd.services = {
     gitlab-application-settings = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
@@ -921,18 +929,10 @@ in
     };
   };
 
-  sops.secrets = {
-    "gitlab/application/envs" = {
-      mode = "0400";
-      owner = config.users.users.root.name;
-      group = config.users.users.root.group;
-    };
-  };
-
   systemd.services = {
     gitlab-1password = {
       after = [ "${CONTAINERS_BACKEND}-gitlab.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
@@ -987,6 +987,34 @@ in
     };
   };
 
+  sops.secrets = {
+    "mattermost/application/envs" = {
+      mode = "0400";
+      owner = config.users.users.root.name;
+      group = config.users.users.root.group;
+    };
+  };
+
+  environment = {
+    systemPackages = with pkgs; [
+      (pkgs.callPackage derivations/script.nix {
+        script_name = "mattermost-channel";
+        script_path = [
+          pkgs.bash
+          pkgs.gawk
+          pkgs.jq
+        ];
+      })
+      (pkgs.callPackage derivations/script.nix {
+        script_name = "mattermost-webhook";
+        script_path = [
+          pkgs.bash
+          pkgs.gawk
+        ];
+      })
+    ];
+  };
+
   systemd.services = {
     gitlab-integrations-mattermost-notifications = {
       after = [
@@ -1000,118 +1028,33 @@ in
           config.sops.secrets."gitlab/application/envs".path
         ];
       };
+      environment = {
+        MATTERMOST_ADDRESS = "${IP_ADDRESS}:8065";
+        MATTERMOST_CHANNEL_NAME = "GitLab";
+        CONTAINERS_BINARY = "${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND}";
+        MATTERMOST_TEAM = lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL;
+        DOMAIN_NAME_INTERNAL = DOMAIN_NAME_INTERNAL;
+        GITLAB_ADDRESS = "${IP_ADDRESS}:8181";
+      };
       script = ''
-        export MATTERMOST_ADDRESS=${IP_ADDRESS}:8065
-
         while ! ${pkgs.curl}/bin/curl --silent --request GET http://$MATTERMOST_ADDRESS/mattermost/api/v4/system/ping |
-          ${pkgs.gnugrep}/bin/grep OK
+          ${pkgs.gnugrep}/bin/grep '"status":"OK"'
         do
           ${pkgs.coreutils}/bin/echo "Waiting for Mattermost availability."
           ${pkgs.coreutils}/bin/sleep 1
         done
 
-        export MATTERMOST_TEAM=${lib.strings.stringAsChars (x: if x == "." then "-" else x) DOMAIN_NAME_INTERNAL}
-        export MATTERMOST_CHANNEL_NAME="GitLab"
-        export MATTERMOST_CHANNEL=$(
-          ${pkgs.coreutils}/bin/echo $MATTERMOST_CHANNEL_NAME |
-          ${pkgs.gawk}/bin/awk '{print tolower($0)}' |
-          ${pkgs.gnused}/bin/sed 's/ /-/g'
+        export $(
+          /run/current-system/sw/bin/mattermost-channel.sh \
+            ${pkgs.coreutils}/bin/printenv |
+          ${pkgs.gnugrep}/bin/grep --word-regexp MATTERMOST_CHANNEL
         )
 
-        case `
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel list \
-            $MATTERMOST_TEAM \
-            --local |
-          ${pkgs.gnugrep}/bin/grep $MATTERMOST_CHANNEL > /dev/null
-          ${pkgs.coreutils}/bin/echo $?
-        ` in
-          "1" )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel create \
-              --team $MATTERMOST_TEAM \
-              --name $MATTERMOST_CHANNEL \
-              --display-name "$MATTERMOST_CHANNEL_NAME" \
-              --private \
-              --local
-          ;;
-          "0" )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel rename \
-              $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
-              --display-name "$MATTERMOST_CHANNEL_NAME" \
-              --local
-
-            case `
-              ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel search \
-                --team $MATTERMOST_TEAM \
-                $MATTERMOST_CHANNEL \
-                --json \
-                --local |
-              ${pkgs.jq}/bin/jq --raw-output .type
-            ` in
-              "O" )
-                ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel modify \
-                  $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
-                  --private \
-                  --local
-                ${pkgs.coreutils}/bin/echo "'$MATTERMOST_CHANNEL' channel converted to private"
-              ;;
-              "P" )
-                ${pkgs.coreutils}/bin/echo "'$MATTERMOST_CHANNEL' channel is already private"
-              ;;
-            esac
-
-          ;;
-        esac
-
-        ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl channel users add \
-          $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
-          $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
-          --local
-
-        export MATTERMOST_WEBHOOK_NAME=$MATTERMOST_CHANNEL_NAME
-
-        case `
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
-            $MATTERMOST_TEAM \
-            --local |
-          ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME > /dev/null
-          ${pkgs.coreutils}/bin/echo $?
-        ` in
-          "1" )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook create-incoming \
-              --user $MATTERMOST_USERNAME@${DOMAIN_NAME_INTERNAL} \
-              --display-name $MATTERMOST_WEBHOOK_NAME \
-              --channel $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
-              --lock-to-channel \
-              --local
-          ;;
-          "0" )
-            export MATTERMOST_WEBHOOK_ID=$(
-              ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
-                $MATTERMOST_TEAM \
-                --local |
-              ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME |
-              ${pkgs.gawk}/bin/awk '{ print $3 }' |
-              ${pkgs.gnused}/bin/sed 's/(//g'
-            )
-            ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook modify-incoming \
-              $MATTERMOST_WEBHOOK_ID \
-              --display-name $MATTERMOST_WEBHOOK_NAME \
-              --channel $MATTERMOST_TEAM:$MATTERMOST_CHANNEL \
-              --lock-to-channel \
-              --local
-          ;;
-        esac
-
-        export MATTERMOST_WEBHOOK_ID=$(
-          ${pkgs.${CONTAINERS_BACKEND}}/bin/${CONTAINERS_BACKEND} exec mattermost mmctl webhook list \
-            $MATTERMOST_TEAM \
-            --local |
-          ${pkgs.gnugrep}/bin/grep $MATTERMOST_WEBHOOK_NAME |
-          ${pkgs.gawk}/bin/awk '{ print $3 }' |
-          ${pkgs.gnused}/bin/sed 's/(//g'
+        export $(
+          /run/current-system/sw/bin/mattermost-webhook.sh \
+            ${pkgs.coreutils}/bin/printenv |
+          ${pkgs.gnugrep}/bin/grep --word-regexp MATTERMOST_WEBHOOK_ID
         )
-
-        export GITLAB_ADDRESS=${IP_ADDRESS}:8181
 
         while ! ${pkgs.curl}/bin/curl --silent --request GET http://$GITLAB_ADDRESS/-/health |
           ${pkgs.gnugrep}/bin/grep "GitLab OK"
@@ -1420,7 +1363,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/gitlab.yml";
+              filename = "\${STATE_DIRECTORY}/positions/gitlab.yml";
             };
             scrape_configs = [{
               job_name = "journal";

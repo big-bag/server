@@ -115,7 +115,7 @@ in
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/postgres.yml";
+              filename = "\${STATE_DIRECTORY}/positions/postgres.yml";
             };
             scrape_configs = [{
               job_name = "journal";

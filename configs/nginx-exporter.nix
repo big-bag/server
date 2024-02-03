@@ -1,9 +1,11 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    (pkgs.callPackage derivations/nginx-prometheus-exporter.nix {})
-  ];
+  environment = {
+    systemPackages = with pkgs; [(
+      pkgs.callPackage derivations/nginx-prometheus-exporter.nix {}
+    )];
+  };
 
   systemd = {
     services = {
@@ -12,13 +14,14 @@
         before = [ "grafana-agent.service" ];
         serviceConfig = {
           Type = "simple";
-          ExecStart = ''/run/current-system/sw/bin/nginx-prometheus-exporter \
-            -nginx.retries=12 \
-            -nginx.retry-interval=5s \
-            -nginx.scrape-uri=http://127.0.0.1/nginx_status \
-            -nginx.timeout=1m \
-            -web.listen-address=127.0.0.1:9113 \
-            -web.telemetry-path=/metrics
+          ExecStart = ''
+            /run/current-system/sw/bin/nginx-prometheus-exporter \
+              -nginx.retries=12 \
+              -nginx.retry-interval=5s \
+              -nginx.scrape-uri=http://127.0.0.1/nginx_status \
+              -nginx.timeout=1m \
+              -web.listen-address=127.0.0.1:9113 \
+              -web.telemetry-path=/metrics
           '';
           Restart = "always";
         };
@@ -31,7 +34,15 @@
     };
   };
 
-  users.groups.nginx.members = [ "grafana-agent" ];
+  users = {
+    groups = {
+      nginx = {
+        members = [
+          "grafana-agent"
+        ];
+      };
+    };
+  };
 
   services = {
     grafana-agent = {
@@ -50,6 +61,8 @@
                 targets = [ "127.0.0.1:9113" ];
               }];
               metrics_path = "/metrics";
+              follow_redirects = false;
+              enable_http2 = false;
             }];
             remote_write = [{
               url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
@@ -64,7 +77,7 @@
               url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
             }];
             positions = {
-              filename = "/var/lib/private/grafana-agent/positions/nginx.yml";
+              filename = "\${STATE_DIRECTORY}/positions/nginx.yml";
             };
             scrape_configs = [
               {

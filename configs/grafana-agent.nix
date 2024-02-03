@@ -1,26 +1,6 @@
-{ config, pkgs, ... }:
+{ config, ... }:
 
 {
-  systemd.services = {
-    grafana-agent-prepare = {
-      before = [ "var-lib-private-grafana\\x2dagent.mount" ];
-      serviceConfig = {
-        Type = "oneshot";
-      };
-      script = "${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/monitoring";
-      wantedBy = [ "var-lib-private-grafana\\x2dagent.mount" ];
-    };
-  };
-
-  fileSystems."/var/lib/private/grafana-agent" = {
-    device = "/mnt/ssd/monitoring/grafana-agent";
-    options = [
-      "bind"
-      "x-systemd.before=grafana-agent.service"
-      "x-systemd.wanted-by=grafana-agent.service"
-    ];
-  };
-
   services = {
     grafana-agent = {
       enable = true;
@@ -32,7 +12,7 @@
         IP_ADDRESS = (import ./connection-parameters.nix).ip_address;
       in {
         metrics = {
-          wal_directory = "/var/lib/private/grafana-agent/wal";
+          wal_directory = "\${STATE_DIRECTORY}/wal";
           configs = [
             {
               name = "mimir";
@@ -50,6 +30,8 @@
                   };
                 }];
                 metrics_path = "/mimir/metrics";
+                follow_redirects = false;
+                enable_http2 = false;
               }];
               remote_write = [{
                 url = "http://${IP_ADDRESS}:9009/mimir/api/v1/push";
@@ -66,6 +48,8 @@
                   targets = [ "${IP_ADDRESS}:3100" ];
                 }];
                 metrics_path = "/metrics";
+                follow_redirects = false;
+                enable_http2 = false;
                 metric_relabel_configs = [{
                   source_labels = [ "__name__" ];
                   regex = "(go_.*)";
@@ -89,7 +73,7 @@
                 url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
               }];
               positions = {
-                filename = "/var/lib/private/grafana-agent/positions/system.yml";
+                filename = "\${STATE_DIRECTORY}/positions/system.yml";
               };
               scrape_configs = [{
                 job_name = "journal";
@@ -121,7 +105,7 @@
                 url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
               }];
               positions = {
-                filename = "/var/lib/private/grafana-agent/positions/minio.yml";
+                filename = "\${STATE_DIRECTORY}/positions/minio.yml";
               };
               scrape_configs = [{
                 job_name = "journal";
@@ -153,7 +137,7 @@
                 url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
               }];
               positions = {
-                filename = "/var/lib/private/grafana-agent/positions/mimir.yml";
+                filename = "\${STATE_DIRECTORY}/positions/mimir.yml";
               };
               scrape_configs = [{
                 job_name = "journal";
@@ -185,7 +169,7 @@
                 url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
               }];
               positions = {
-                filename = "/var/lib/private/grafana-agent/positions/loki.yml";
+                filename = "\${STATE_DIRECTORY}/positions/loki.yml";
               };
               scrape_configs = [{
                 job_name = "journal";
@@ -217,7 +201,7 @@
                 url = "http://${config.services.loki.configuration.server.http_listen_address}:${toString config.services.loki.configuration.server.http_listen_port}/loki/api/v1/push";
               }];
               positions = {
-                filename = "/var/lib/private/grafana-agent/positions/grafana-agent.yml";
+                filename = "\${STATE_DIRECTORY}/positions/grafana-agent.yml";
               };
               scrape_configs = [{
                 job_name = "journal";
@@ -266,7 +250,7 @@
             scrape_timeout = "10s";
             blackbox_config = {
               modules = {
-                ssh_banner = {
+                ssh_banner_probe = {
                   prober = "tcp";
                   timeout = "5s";
                   tcp = {
@@ -372,7 +356,7 @@
               {
                 name = "ssh";
                 address = "127.0.0.1:${toString SSH_PORT}";
-                module = "ssh_banner";
+                module = "ssh_banner_probe";
               }
               {
                 name = "minio-server";
@@ -431,6 +415,9 @@
 
   systemd.services = {
     grafana-agent = {
+      environment = {
+        STATE_DIRECTORY = "/var/lib/grafana-agent";
+      };
       serviceConfig = {
         CPUQuota = "6%";
         MemoryHigh = "1946M";

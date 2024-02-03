@@ -91,6 +91,7 @@ in
           check_port_is_open ${IP_ADDRESS} 9000
           if [ $? == 0 ]; then
             ${pkgs.minio-client}/bin/mc alias set $ALIAS http://${IP_ADDRESS}:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+
             ${pkgs.minio-client}/bin/mc mb --ignore-existing $ALIAS/${MINIO_BUCKET}
             ${pkgs.minio-client}/bin/mc version enable $ALIAS/${MINIO_BUCKET}
 
@@ -142,6 +143,10 @@ in
           http_listen_port = 3100;
           grpc_listen_address = "0.0.0.0";
           grpc_listen_port = 9096;
+        };
+        ruler = {
+          alertmanager_url = "http://127.0.0.1:9093/alertmanager/alertmanager";
+          enable_alertmanager_v2 = true;
         };
         ingester = {
           lifecycler = {
@@ -224,7 +229,7 @@ in
   systemd.services = {
     loki-1password = {
       after = [ "loki.service" ];
-      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % 36))";
+      preStart = "${pkgs.coreutils}/bin/sleep $((RANDOM % ${(import ./variables.nix).one_password_max_delay}))";
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = [
