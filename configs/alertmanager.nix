@@ -316,8 +316,8 @@ in
               return 496;
             }
           '';
-          proxyPass = "http://${IP_ADDRESS}:9093";
           basicAuthFile = config.sops.secrets."alertmanager/nginx/file/basic_auth".path;
+          proxyPass = "http://${IP_ADDRESS}:9093";
         };
       };
     };
@@ -352,7 +352,7 @@ in
         ];
       };
       environment = {
-        OP_CONFIG_DIR = "~/.config/op";
+        OP_CONFIG_DIR = "/root/.config/op";
       };
       script = ''
         set +e

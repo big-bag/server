@@ -51,8 +51,8 @@ in
             proxy_read_timeout 900;
             proxy_set_header Host $host;
           '';
-          proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
           basicAuthFile = config.sops.secrets."redisinsight/nginx/file/basic_auth".path;
+          proxyPass = "http://127.0.0.1:${config.virtualisation.oci-containers.containers.redisinsight.environment.RIPORT}/";
         };
       };
     };
@@ -86,7 +86,7 @@ in
         ];
       };
       environment = {
-        OP_CONFIG_DIR = "~/.config/op";
+        OP_CONFIG_DIR = "/root/.config/op";
       };
       script = ''
         set +e

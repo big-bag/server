@@ -91,6 +91,9 @@
         grafana_application_username_seed: grafana_application_username_random
         grafana_application_password_seed: grafana_application_password_random
 
+        windows_nginx_username_seed: windows_nginx_username_random
+        windows_nginx_password_seed: windows_nginx_password_random
+
     - name: create random but idempotent secrets
       ansible.builtin.set_fact:
         minio_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=20', seed=minio_application_username_seed) }}"
@@ -143,6 +146,9 @@
         grafana_application_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=grafana_application_username_seed) }}"
         grafana_application_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@$%^&*()-_=+[]{}|:,.<>/? length=48', seed=grafana_application_password_seed) }}"
 
+        windows_nginx_username: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=24', seed=windows_nginx_username_seed) }}"
+        windows_nginx_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits,`~!@#$%^&*()-_=+[]{}|;,.<>/? length=48', seed=windows_nginx_password_seed) }}"
+
     - name: create a temporary file to write basic auth credentials
       ansible.builtin.tempfile:
         path: /tmp
@@ -154,6 +160,7 @@
         - prometheus
         - alertmanager
         - redisinsight
+        - windows
       register: temp_file
       changed_when: false
 
@@ -183,6 +190,11 @@
             username: '{{ redisinsight_nginx_username }}',
             password: '{{ redisinsight_nginx_password }}'
           }
+        - {
+            file: '{{ temp_file.results.4.path }}',
+            username: '{{ windows_nginx_username }}',
+            password: '{{ windows_nginx_password }}'
+          }
       changed_when: false
       no_log: true
 
@@ -192,6 +204,7 @@
         basic_auth_prometheus: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.1.path }}') }}"
         basic_auth_alertmanager: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.2.path }}') }}"
         basic_auth_redisinsight: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.3.path }}') }}"
+        basic_auth_windows: "{{ lookup('ansible.builtin.file', '{{ temp_file.results.4.path }}') }}"
 
     - name: write secrets in plain text to a temporary file
       ansible.builtin.copy:
@@ -348,6 +361,13 @@
                 PASSWORD={{ grafana_application_password }}
                 POSTGRESQL_DATABASE_MATTERMOST={{ vault_mattermost_postgres_database }}
                 POSTGRESQL_DATABASE_GITLAB={{ vault_gitlab_postgres_database }}
+          windows:
+            nginx:
+              file:
+                basic_auth: {{ basic_auth_windows }}
+              envs: |
+                NGINX_USERNAME={{ windows_nginx_username }}
+                NGINX_PASSWORD={{ windows_nginx_password }}
         dest: "{{ temp_file_secrets.path }}"
       changed_when: false
 

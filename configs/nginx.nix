@@ -128,8 +128,7 @@ in
           '';
         };
       in ''
-        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/ca
-        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/nginx
+        ${pkgs.coreutils}/bin/mkdir -p /mnt/ssd/services/{ca,nginx}
         ${pkgs.coreutils}/bin/mkdir -p /tmp/nginx_client_body
 
         cd /mnt/ssd/services/ca
@@ -139,7 +138,7 @@ in
 
         if ! [ -f ca.crt ]; then
           ${pkgs.coreutils}/bin/echo "Creating Self-Signed Root CA certificate and key."
-          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_cnf} > ca.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME, $COMMON_NAME < ${ca_cnf} > ca.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -153,7 +152,7 @@ in
 
         if ! [ -f ca.pem ]; then
           ${pkgs.coreutils}/bin/echo "Creating Intermediate CA certificate and key."
-          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$COMMON_NAME < ${ca_intermediate_cnf} > ca-intermediate.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME, $COMMON_NAME < ${ca_intermediate_cnf} > ca-intermediate.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -179,7 +178,7 @@ in
 
         if ! [ -f server.crt ]; then
           ${pkgs.coreutils}/bin/echo "Creating server (Nginx) certificate and key."
-          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${server_cnf} > server.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME, $DOMAIN_NAME_INTERNAL < ${server_cnf} > server.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \
@@ -202,7 +201,7 @@ in
 
         if ! [ -f user.pfx ]; then
           ${pkgs.coreutils}/bin/echo "Creating user certificate and key."
-          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME,$DOMAIN_NAME_INTERNAL < ${user_cnf} > user.cnf
+          ${pkgs.envsubst}/bin/envsubst $ORGANIZATION_NAME, $DOMAIN_NAME_INTERNAL < ${user_cnf} > user.cnf
           ${pkgs.openssl}/bin/openssl req \
             -new \
             -nodes \

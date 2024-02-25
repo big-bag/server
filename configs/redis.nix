@@ -90,7 +90,7 @@ in
         ];
       };
       environment = {
-        OP_CONFIG_DIR = "~/.config/op";
+        OP_CONFIG_DIR = "/root/.config/op";
       };
       script = ''
         set +e

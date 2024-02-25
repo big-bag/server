@@ -26,8 +26,8 @@ in
             "127.0.0.1:9001:9001"
           ];
           volumes = [
-            "/mnt/hdd/data-stores/minio/data:/data:rw"
-            "/mnt/hdd/data-stores/minio/config:/config:rw"
+            "/mnt/ssd/data-stores/minio/data:/data:rw"
+            "/mnt/ssd/data-stores/minio/config:/config:rw"
           ];
           environmentFiles = [ config.sops.secrets."minio/application/envs".path ];
           environment = {
@@ -138,7 +138,7 @@ in
         ];
       };
       environment = {
-        OP_CONFIG_DIR = "~/.config/op";
+        OP_CONFIG_DIR = "/root/.config/op";
       };
       script = ''
         set +e

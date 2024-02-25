@@ -7,8 +7,8 @@
 {
   imports =
     let
-      SOPS_NIX_COMMIT = (import ./variables.nix).github_sops_nix_commit;
-      SOPS_NIX_SHA256 = (import ./variables.nix).github_sops_nix_sha256;
+      SOPS_NIX_COMMIT_ID = (import ./variables.nix).sops_nix_commit_id;
+      SOPS_NIX_COMMIT_HASH = (import ./variables.nix).sops_nix_commit_hash;
     in
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
@@ -16,8 +16,8 @@
       ./technical-account.nix
       ./disks.nix
       "${builtins.fetchTarball {
-        url = "https://github.com/Mic92/sops-nix/archive/${SOPS_NIX_COMMIT}.tar.gz";
-        sha256 = "${SOPS_NIX_SHA256}";
+        url = "https://github.com/Mic92/sops-nix/archive/${SOPS_NIX_COMMIT_ID}.tar.gz";
+        sha256 = "${SOPS_NIX_COMMIT_HASH}";
       }}/modules/sops"
       ./nginx.nix
       ./minio.nix
@@ -38,11 +38,24 @@
       ./postgres-exporter.nix
       ./pgadmin.nix
       ./grafana.nix
+      ./windows.nix
     ];
 
-  # Use the systemd-boot EFI boot loader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  # Change requires restart.
+  boot = {
+    # Use the systemd-boot EFI boot loader.
+    loader.systemd-boot.enable = true;
+    loader.efi.canTouchEfiVariables = true;
+
+    extraModprobeConfig = ''
+      options kvm_intel nested=1
+    '';
+
+    kernelParams = [
+      "systemd.unified_cgroup_hierarchy=0"
+      "intel_iommu=on"
+    ];
+  };
 
   # networking.hostName = "nixos"; # Define your hostname.
   # Pick only one of the below networking options.
@@ -52,16 +65,31 @@
   # Set your time zone.
   time.timeZone = "Europe/Moscow";
 
-  networking.timeServers = [
-    "0.ru.pool.ntp.org"
-    "1.ru.pool.ntp.org"
-    "2.ru.pool.ntp.org"
-    "3.ru.pool.ntp.org"
-  ];
+  networking = {
+    timeServers = [
+      "0.ru.pool.ntp.org"
+      "1.ru.pool.ntp.org"
+      "2.ru.pool.ntp.org"
+      "3.ru.pool.ntp.org"
+    ];
 
-  services.timesyncd.extraConfig = ''
-    FallbackNTP=0.nixos.pool.ntp.org 1.nixos.pool.ntp.org 2.nixos.pool.ntp.org 3.nixos.pool.ntp.org
-  '';
+    bridges = {
+      br0 = {
+        interfaces = [ "enp3s0" ];
+      };
+    };
+
+    useDHCP = false;
+
+    interfaces = {
+      enp3s0 = {
+        useDHCP = false;
+      };
+      br0 = {
+        useDHCP = true;
+      };
+    };
+  };
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
@@ -142,13 +170,19 @@
 
   # List services that you want to enable:
 
-  # Enable the OpenSSH daemon.
-  services.openssh = {
-    enable = true;
-    settings.PermitRootLogin = "no";
-    # BEGIN ANSIBLE MANAGED BLOCK SSH PORT
-    ports = [ (import ./connection-parameters.nix).ssh_port ];
-    # END ANSIBLE MANAGED BLOCK SSH PORT
+  services = {
+    timesyncd.extraConfig = ''
+      FallbackNTP=0.nixos.pool.ntp.org 1.nixos.pool.ntp.org 2.nixos.pool.ntp.org 3.nixos.pool.ntp.org
+    '';
+
+    # Enable the OpenSSH daemon.
+    openssh = {
+      enable = true;
+      settings.PermitRootLogin = "no";
+      # BEGIN ANSIBLE MANAGED BLOCK SSH PORT
+      ports = [ (import ./connection-parameters.nix).ssh_port ];
+      # END ANSIBLE MANAGED BLOCK SSH PORT
+    };
   };
 
   # Open ports in the firewall.
@@ -163,6 +197,16 @@
     };
     docker = {
       enable = true;
+    };
+    libvirtd = {
+      enable = true;
+      qemu = {
+        runAsRoot = false;
+        verbatimConfig = ''
+          bridge_helper = "${pkgs.qemu}/libexec/qemu-bridge-helper"
+        '';
+      };
+      allowedBridges = [ "br0" ];
     };
   };
 

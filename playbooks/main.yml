@@ -39,7 +39,3 @@
   tags:
     - prepare
     - upgrade
-
-- name: include a play to define start delay for 1password services
-  ansible.builtin.import_playbook: 1password-delay.yml
-  tags: always

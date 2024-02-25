@@ -90,8 +90,8 @@
         path: /etc/nixos/configuration.nix
         insertafter: 'settings.PermitRootLogin\s=\s".*";'
         block: |2
-              ports = [ (import ./connection-parameters.nix).ssh_port ];
-        marker: "    # {mark} ANSIBLE MANAGED BLOCK SSH PORT"
+                ports = [ (import ./connection-parameters.nix).ssh_port ];
+        marker: "      # {mark} ANSIBLE MANAGED BLOCK SSH PORT"
       notify: apply config
 
   handlers:

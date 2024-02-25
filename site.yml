@@ -3,6 +3,9 @@
   ansible.builtin.import_playbook: playbooks/main.yml
   tags: never
 
+- name: include a play to define start delay for 1password services
+  ansible.builtin.import_playbook: playbooks/1password-delay.yml
+
 - name: include a play to create secrets
   ansible.builtin.import_playbook: playbooks/sops-nix.yml
 

@@ -269,6 +269,8 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
         ansible-playbook site.yml --tags upgrade
     ```
 
+11. upload Windows ISO image to `/mnt/hdd/libvirt/iso` directory on server
+
 </details>
 
 # Configuring a server
@@ -288,5 +290,23 @@ Boot from installation ISO image (Minimal, 64-bit Intel/AMD):
 2. import certificates in Firefox: Preferences -> Privacy & Security -> Security -> Certificates -> View Certificates...
    * import certificate authority: Authorities -> Import... -> ca.pem (choose `Trust this CA to identify websites.`)
    * import user certificate for authentication: Your Certificates -> Import... -> user.pfx (leave the password field blank and click Log in)
+
+3. install guest agent and tools on Windows
+   * virtio-win -> guest-agent\qemu-ga-x86_64.msi
+   * virtio-win -> virtio-win-guest-tools.exe
+   * https://github.com/billziss-gh/winfsp/releases (install Core)
+     * configure and start service
+       ```
+       sc config VirtioFsSvc binPath="C:\Program Files\Virtio-Win\VioFS\virtiofs.exe" start=auto depend=VirtioFsDrv
+       sc start VirtioFsSvc
+       ```
+   * host-share -> spice-guest-tools-latest.exe
+   * host-share -> grafana-agent-installer.exe
+     * configure and start service
+       ```
+       sc config "Grafana Agent" binpath="\"C:\Program Files\Grafana Agent\grafana-agent-windows-amd64.exe\" -config.file=\"Z:\agent-config.yaml\" -config.expand-env -server.http.address=\"127.0.0.1:12345\" -server.grpc.address=\"127.0.0.1:12346\""
+       sc stop "Grafana Agent"
+       sc start "Grafana Agent"
+       ```
 
 </details>

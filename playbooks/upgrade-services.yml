@@ -1,89 +1,119 @@
 ---
+- name: include a play to define start delay for 1password services
+  ansible.builtin.import_playbook: 1password-delay.yml
+
 - name: upgrade services
   hosts: localhost
   become: false
   gather_facts: false
-  vars:
-    docker_hub_repository_minio: minio/minio
-    docker_hub_repository_mattermost: mattermost/mattermost-team-edition
-    docker_hub_repository_redis: redis/redis-stack-server
-    docker_hub_repository_redisinsight: redislabs/redisinsight
-    docker_hub_repository_gitlab: gitlab/gitlab-ce
-    docker_hub_repository_pgadmin: dpage/pgadmin4
-    docker_hub_repository_grafana: grafana/grafana-oss
   tasks:
+    # ------------------- github repositories ------------------- #
 
-    # ------------------- sops-nix ------------------- #
-
-    - name: find latest commit | sops-nix
+    - name: find latest tag (1/2)
       ansible.builtin.shell: |
-        git ls-remote --exit-code https://github.com/Mic92/sops-nix.git HEAD |
-          awk '{print $1}'
-      register: github_sops_nix_commit
+        git ls-remote --tags --exit-code --sort=-version:refname \
+          https://github.com/{{ item.owner }}/{{ item.repo }}.git {{ item.pattern }} |
+            head -n 1 |
+            sed -E 's|.*refs/tags/(.+)|\1|'
+      loop:
+        - {
+            owner: nginxinc,
+            repo: nginx-prometheus-exporter,
+            pattern: 'v[0-9]*.[0-9]*.[0-9]*'
+          }
+        - {
+            owner: novnc,
+            repo: websockify,
+            pattern: 'v[0-9]*.[0-9]*.[0-9]*'
+          }
+      register: tag_version
       changed_when: false
 
-    - name: find sha256 of latest commit | sops-nix (1/2)
+    - name: find latest tag (2/2)
+      ansible.builtin.set_fact:
+        nginx_prometheus_exporter_tag: "{{ tag_version.results.0.stdout | replace('v', '') | replace('^{}', '') }}"
+        websockify_tag: "{{ tag_version.results.1.stdout | replace('v', '') | replace('^{}', '') }}"
+
+    - name: find commit id
+      ansible.builtin.shell: |
+        git ls-remote --heads --tags --exit-code \
+          https://github.com/{{ item.owner }}/{{ item.repo }}.git {{ item.pattern }} |
+            awk '{print $1}'
+      loop:
+        - {
+            owner: Mic92,
+            repo: sops-nix,
+            pattern: refs/heads/master
+          }
+        - {
+            owner: novnc,
+            repo: websockify,
+            pattern: 'refs/tags/{{ tag_version.results.1.stdout }}'
+          }
+        - {
+            owner: eyeos,
+            repo: spice-web-client,
+            pattern: refs/heads/master
+          }
+      register: commit_id
+      changed_when: false
+
+    - name: find commit hash (1/2)
       ansible.builtin.command: |
         nix \
           --extra-experimental-features nix-command \
           shell -f '<nixpkgs>' nix-prefetch-github -c nix-prefetch-github \
-          --json --rev {{ github_sops_nix_commit.stdout }} Mic92 sops-nix
-      register: github_sops_nix_sha256_json
+          --json --rev {{ item.commit_id }} {{ item.owner }} {{ item.repo }}
+      loop:
+        - {
+            owner: Mic92,
+            repo: sops-nix,
+            commit_id: '{{ commit_id.results.0.stdout }}'
+          }
+        - {
+            owner: novnc,
+            repo: websockify,
+            commit_id: '{{ commit_id.results.1.stdout }}'
+          }
+        - {
+            owner: eyeos,
+            repo: spice-web-client,
+            commit_id: '{{ commit_id.results.2.stdout }}'
+          }
+      register: commit_hash_json
       delegate_to: server
       changed_when: false
       become: false
 
-    - name: find sha256 of latest commit | sops-nix (2/2)
+    - name: find commit hash (2/2)
       ansible.builtin.set_fact:
-        github_sops_nix_sha256: "{{ github_sops_nix_sha256_json.stdout |
-                                    from_json |
-                                    community.general.json_query('hash') |
-                                    regex_replace('^sha256-(.*)$', '\\1')
-                                }}"
+        sops_nix_commit_hash: "{{ commit_hash_json.results.0.stdout | from_json | community.general.json_query('hash') | regex_replace('^sha256-(.*)$', '\\1') }}"
+        websockify_commit_hash: "{{ commit_hash_json.results.1.stdout | from_json | community.general.json_query('hash') }}"
+        spice_web_client_commit_hash: "{{ commit_hash_json.results.2.stdout | from_json | community.general.json_query('hash') }}"
 
     # ------------------- nginx-prometheus-exporter ------------------- #
 
-    - name: find latest tag | nginx-prometheus-exporter
-      ansible.builtin.shell: |
-        git -c 'versionsort.suffix=-' ls-remote --tags --sort='-version:refname' --exit-code \
-          https://github.com/nginxinc/nginx-prometheus-exporter.git 'v[0-9].[0-9][0-9].[0-9]' |
-            head -n 1 |
-            sed -E 's|.*refs/tags/(.+)|\1|' |
-            sed 's|v||'
-      register: github_nginx_exporter_tag
-      changed_when: false
-
-    - name: find sha256 of latest release | nginx-prometheus-exporter (1/2)
+    - name: find release hash | nginx-prometheus-exporter (1/2)
       ansible.builtin.command: |
         nix-prefetch-url \
-          https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ github_nginx_exporter_tag.stdout }}/nginx-prometheus-exporter_{{ github_nginx_exporter_tag.stdout }}_linux_amd64.tar.gz \
+          https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ nginx_prometheus_exporter_tag }}/nginx-prometheus-exporter_{{ nginx_prometheus_exporter_tag }}_linux_amd64.tar.gz \
           --type sha256
-      register: github_nginx_exporter_hash
+      register: nginx_prometheus_exporter_release_hash_sha256
       delegate_to: server
       changed_when: false
       become: false
 
-    - name: find sha256 of latest release | nginx-prometheus-exporter (2/2)
+    - name: find release hash | nginx-prometheus-exporter (2/2)
       ansible.builtin.command: |
         nix \
           --extra-experimental-features nix-command \
-          hash to-sri --type sha256 {{ github_nginx_exporter_hash.stdout }}
-      register: github_nginx_exporter_sha256
+          hash to-sri --type sha256 {{ nginx_prometheus_exporter_release_hash_sha256.stdout }}
+      register: nginx_prometheus_exporter_release_hash
       delegate_to: server
       changed_when: false
       become: false
 
     # ------------------- docker images ------------------- #
-
-    - name: split docker repository name
-      ansible.builtin.set_fact:
-        docker_hub_repo_split_minio: "{{ docker_hub_repository_minio.split('/') }}"
-        docker_hub_repo_split_mattermost: "{{ docker_hub_repository_mattermost.split('/') }}"
-        docker_hub_repo_split_redis: "{{ docker_hub_repository_redis.split('/') }}"
-        docker_hub_repo_split_redisinsight: "{{ docker_hub_repository_redisinsight.split('/') }}"
-        docker_hub_repo_split_gitlab: "{{ docker_hub_repository_gitlab.split('/') }}"
-        docker_hub_repo_split_pgadmin: "{{ docker_hub_repository_pgadmin.split('/') }}"
-        docker_hub_repo_split_grafana: "{{ docker_hub_repository_grafana.split('/') }}"
 
     - name: find digest of latest docker image
       ansible.builtin.shell: |
@@ -95,28 +125,28 @@
           .digest'
       loop:
         - {
-            namespace: '{{ docker_hub_repo_split_minio.0 }}',
-            repository: '{{ docker_hub_repo_split_minio.1 }}'
+            namespace: minio,
+            repository: minio
           }
         - {
-            namespace: '{{ docker_hub_repo_split_redis.0 }}',
-            repository: '{{ docker_hub_repo_split_redis.1 }}'
+            namespace: redis,
+            repository: redis-stack-server
           }
         - {
-            namespace: '{{ docker_hub_repo_split_redisinsight.0 }}',
-            repository: '{{ docker_hub_repo_split_redisinsight.1 }}'
+            namespace: redislabs,
+            repository: redisinsight
           }
         - {
-            namespace: '{{ docker_hub_repo_split_gitlab.0 }}',
-            repository: '{{ docker_hub_repo_split_gitlab.1 }}'
+            namespace: gitlab,
+            repository: gitlab-ce
           }
         - {
-            namespace: '{{ docker_hub_repo_split_pgadmin.0 }}',
-            repository: '{{ docker_hub_repo_split_pgadmin.1 }}'
+            namespace: dpage,
+            repository: pgadmin4
           }
         - {
-            namespace: '{{ docker_hub_repo_split_grafana.0 }}',
-            repository: '{{ docker_hub_repo_split_grafana.1 }}'
+            namespace: grafana,
+            repository: grafana-oss
           }
       register: docker_image_digest
       changed_when: false
@@ -130,8 +160,8 @@
           .name | select(. | test("{{ item.filter }}"))'
       loop:
         - {
-            namespace: '{{ docker_hub_repo_split_minio.0 }}',
-            repository: '{{ docker_hub_repo_split_minio.1 }}',
+            namespace: minio,
+            repository: minio,
             digest: "{{ docker_image_digest.results.0.stdout | replace('\"','') }}",
             # find tags which looks like:
             # RELEASE.2023-08-16T20-17-30Z
@@ -139,40 +169,40 @@
             filter: '[A-Z]\\.[0-9]+-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Z]\\.?[a-z]?\\.?[0-9a-z]?'
           }
         - {
-            namespace: '{{ docker_hub_repo_split_redis.0 }}',
-            repository: '{{ docker_hub_repo_split_redis.1 }}',
+            namespace: redis,
+            repository: redis-stack-server,
             digest: "{{ docker_image_digest.results.1.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 7.2.0-v6-x86_64
             filter: '[0-9]\\.[0-9]\\.[0-9]-[0-9a-z]+-[0-9a-z_]'
           }
         - {
-            namespace: '{{ docker_hub_repo_split_redisinsight.0 }}',
-            repository: '{{ docker_hub_repo_split_redisinsight.1 }}',
+            namespace: redislabs,
+            repository: redisinsight,
             digest: "{{ docker_image_digest.results.2.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 1.14.0
             filter: '[0-9]\\.[0-9]+\\.[0-9]'
           }
         - {
-            namespace: '{{ docker_hub_repo_split_gitlab.0 }}',
-            repository: '{{ docker_hub_repo_split_gitlab.1 }}',
+            namespace: gitlab,
+            repository: gitlab-ce,
             digest: "{{ docker_image_digest.results.3.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 16.2.4-ce.0
             filter: '[0-9]\\.[0-9]\\.[0-9]-[a-z]+\\.[0-9]'
           }
         - {
-            namespace: '{{ docker_hub_repo_split_pgadmin.0 }}',
-            repository: '{{ docker_hub_repo_split_pgadmin.1 }}',
+            namespace: dpage,
+            repository: pgadmin4,
             digest: "{{ docker_image_digest.results.4.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 7.5
             filter: '[0-9]\\.[0-9]'
           }
         - {
-            namespace: '{{ docker_hub_repo_split_grafana.0 }}',
-            repository: '{{ docker_hub_repo_split_grafana.1 }}',
+            namespace: grafana,
+            repository: grafana-oss,
             digest: "{{ docker_image_digest.results.5.stdout | replace('\"','') }}",
             # find tags which looks like:
             # 10.2.1
@@ -190,8 +220,8 @@
               .name' | sort -V | tail -n 1
       loop:
         - {
-            namespace: '{{ docker_hub_repo_split_mattermost.0 }}',
-            repository: '{{ docker_hub_repo_split_mattermost.1 }}',
+            namespace: mattermost,
+            repository: mattermost-team-edition,
             # find tags which looks like:
             # 9.1.1
             filter: '[0-9]\\.[0-9]\\.[0-9]',
@@ -204,30 +234,41 @@
 
     - name: set docker image
       ansible.builtin.set_fact:
-        docker_image_minio: "{{ docker_hub_repository_minio }}:{{ docker_image_tag_by_digest.results.0.stdout | replace('\"','') }}"
-        docker_image_mattermost: "{{ docker_hub_repository_mattermost }}:{{ docker_image_tag_by_filter.results.0.stdout | replace('\"','') }}"
-        docker_image_redis: "{{ docker_hub_repository_redis }}:{{ docker_image_tag_by_digest.results.1.stdout | replace('\"','') }}"
-        docker_image_redisinsight: "{{ docker_hub_repository_redisinsight }}:{{ docker_image_tag_by_digest.results.2.stdout | replace('\"','') }}"
-        docker_image_gitlab: "{{ docker_hub_repository_gitlab }}:{{ docker_image_tag_by_digest.results.3.stdout | replace('\"','') }}"
-        docker_image_pgadmin: "{{ docker_hub_repository_pgadmin }}:{{ docker_image_tag_by_digest.results.4.stdout | replace('\"','') }}"
-        docker_image_grafana: "{{ docker_hub_repository_grafana }}:{{ docker_image_tag_by_digest.results.5.stdout | replace('\"','') }}"
+        docker_image_tag_minio: "{{ docker_image_tag_by_digest.results.0.stdout | replace('\"','') }}"
+        docker_image_tag_mattermost: "{{ docker_image_tag_by_filter.results.0.stdout | replace('\"','') }}"
+        docker_image_tag_redis: "{{ docker_image_tag_by_digest.results.1.stdout | replace('\"','') }}"
+        docker_image_tag_redisinsight: "{{ docker_image_tag_by_digest.results.2.stdout | replace('\"','') }}"
+        docker_image_tag_gitlab: "{{ docker_image_tag_by_digest.results.3.stdout | replace('\"','') }}"
+        docker_image_tag_pgadmin: "{{ docker_image_tag_by_digest.results.4.stdout | replace('\"','') }}"
+        docker_image_tag_grafana: "{{ docker_image_tag_by_digest.results.5.stdout | replace('\"','') }}"
 
     # NOTE: File can be saved directly on server
     - name: update variables
       ansible.builtin.copy:
         content: |
           {
-            one_password_max_delay = "";
-            github_sops_nix_commit = "{{ github_sops_nix_commit.stdout }}";
-            github_sops_nix_sha256 = "{{ github_sops_nix_sha256 }}";
-            docker_image_minio = "{{ docker_image_minio }}";
-            github_nginx_exporter_tag = "{{ github_nginx_exporter_tag.stdout }}";
-            github_nginx_exporter_sha256 = "{{ github_nginx_exporter_sha256.stdout }}";
-            docker_image_mattermost = "{{ docker_image_mattermost }}";
-            docker_image_redis = "{{ docker_image_redis }}";
-            docker_image_redisinsight = "{{ docker_image_redisinsight }}";
-            docker_image_gitlab = "{{ docker_image_gitlab }}";
-            docker_image_pgadmin = "{{ docker_image_pgadmin }}";
-            docker_image_grafana = "{{ docker_image_grafana }}";
+            one_password_max_delay = "{{ one_password_max_delay }}";
+
+            sops_nix_commit_id = "{{ commit_id.results.0.stdout }}";
+            sops_nix_commit_hash = "{{ sops_nix_commit_hash }}";
+
+            docker_image_minio = "minio/minio:{{ docker_image_tag_minio }}";
+
+            nginx_prometheus_exporter_tag = "{{ nginx_prometheus_exporter_tag }}";
+            nginx_prometheus_exporter_release_hash = "{{ nginx_prometheus_exporter_release_hash.stdout }}";
+
+            docker_image_mattermost = "mattermost/mattermost-team-edition:{{ docker_image_tag_mattermost }}";
+            docker_image_redis = "redis/redis-stack-server:{{ docker_image_tag_redis }}";
+            docker_image_redisinsight = "redislabs/redisinsight:{{ docker_image_tag_redisinsight }}";
+            docker_image_gitlab = "gitlab/gitlab-ce:{{ docker_image_tag_gitlab }}";
+            docker_image_pgadmin = "dpage/pgadmin4:{{ docker_image_tag_pgadmin }}";
+            docker_image_grafana = "grafana/grafana-oss:{{ docker_image_tag_grafana }}";
+
+            websockify_tag = "{{ websockify_tag }}";
+            websockify_commit_id = "{{ commit_id.results.1.stdout }}";
+            websockify_commit_hash = "{{ websockify_commit_hash }}";
+
+            spice_web_client_commit_id = "{{ commit_id.results.2.stdout }}";
+            spice_web_client_commit_hash = "{{ spice_web_client_commit_hash }}";
           }
         dest: ../configs/variables.nix

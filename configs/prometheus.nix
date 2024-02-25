@@ -174,8 +174,8 @@ in
               return 496;
             }
           '';
-          proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
           basicAuthFile = config.sops.secrets."prometheus/nginx/file/basic_auth".path;
+          proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
         };
       };
     };
@@ -209,7 +209,7 @@ in
         ];
       };
       environment = {
-        OP_CONFIG_DIR = "~/.config/op";
+        OP_CONFIG_DIR = "/root/.config/op";
       };
       script = ''
         set +e
